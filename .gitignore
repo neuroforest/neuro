@@ -1,0 +1,8 @@
+# Bytecode
+__pycache__/
+*.py[cod]
+
+# Dirs
+/neuro.egg-info
+/.idea
+/data/test/output
