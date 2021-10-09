@@ -13,7 +13,7 @@ class Path:
 		name = PathInfo.get_name(self.path)
 		if mode == "pure":
 			return name.split(".", 1)[0]
-		elif mode == "fulle":
+		elif mode == "full":
 			return name
 		else:
 			logging.error(f"Mode {mode} is not supported.")
