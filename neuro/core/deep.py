@@ -80,7 +80,7 @@ class Moment(NeuroObject):
 		return time_str
 
 	def to_prog(self):
-		time_format = "%Y%m%d_%H%M%S"
+		time_format = "%Y%m%d%H%M%S"
 		time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)
 		return time_str
 
