@@ -188,6 +188,7 @@ class TextCsv(Text):
         for row in self.get_rows():
             key_value = row[key_index]
             if key_value in key_list:
+                logging.error(f"Double key: {key_value}")
                 return False
             else:
                 key_list.append(key_value)
@@ -201,7 +202,7 @@ class TextCsv(Text):
         except StopIteration:
             pass
 
-    def sort_by(self, header):
+    def sort_by(self, header, reverse=False):
         header_list = self.get_header()
         if header not in header_list:
             raise exceptions.InvalidHeader
@@ -221,7 +222,7 @@ class TextCsv(Text):
                 new_row.append(i)
             float_lol.append(new_row)
 
-        sorted_rows = sorted(float_lol, key=operator.itemgetter(index))
+        sorted_rows = sorted(float_lol, key=operator.itemgetter(index), reverse=reverse)
         sorted_rows.insert(0, header_list)
         self.write(sorted_rows)
 
@@ -230,8 +231,10 @@ class TextCsv(Text):
 
         if header_key in self.header and self.is_identifier(header_key):
             key_index = self.header.index(header_key)
+        elif not self.is_identifier(header_key):
+            logging.error("Not identifier")
         else:
-            logging.debug(f"Key: {header_key}, Header: {self.header}, CSV: {self.path}")
+            logging.error(f"Key: {header_key}, Header: {self.header}, CSV: {self.path}")
             raise ValueError
 
         data_dict = dict()
