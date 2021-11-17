@@ -50,8 +50,11 @@ class TestNeuroTid:
 	def test_to_text(self):
 		neuro_tid = self.get_test_neuro_tid()
 		text = neuro_tid.to_text(neuro_tid.fields)
-		hash_value = get_hash(text)
-		assert hash_value == "b452074fa2535957ab4c078e51ccf6cf915db145"
+		result_text_path = get_test_file("results/tiddler_text.txt")
+		with open(result_text_path) as f:
+			result_text = f.read()
+
+		assert result_text == text
 
 	def test_get_tid_file_name(self):
 		from neuro.core.tid import NeuroTid
@@ -85,10 +88,8 @@ class TestNeuroTW:
 	def test_from_html(self):
 		from neuro.core.tid import NeuroTW
 		tw_html_path = get_test_file("input/tw.html")
-		with open(tw_html_path) as f:
-			tw_html = f.read()
 
-		neuro_tw = NeuroTW.from_html(tw_html)
+		neuro_tw = NeuroTW.from_html(tw_html_path)
 		assert len(neuro_tw.neuro_tids) == 4
 		assert neuro_tw.__contains__("$:/isEncrypted")
 		assert neuro_tw.neuro_tids.neuro_index["$:/isEncrypted"]["object"]["text"] == "\nno\n"
