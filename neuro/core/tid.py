@@ -72,7 +72,10 @@ class NeuroTid(NeuroNode):
 			raise TypeError(f"HTML type not supported: {type(html)}")
 
 		tid_fields = div_element.attrs
-		tid_title = tid_fields["title"]
+		try:
+			tid_title = tid_fields["title"]
+		except KeyError:
+			logging.error(html)
 
 		neuro_tid = cls(tid_title)
 		neuro_tid.fields = tid_fields
@@ -141,6 +144,9 @@ class NeuroTid(NeuroNode):
 
 		if tid_text:
 			text += f"\n{tid_text}"
+		else:
+			# Remove redundant \n
+			text = text[:-1]
 
 		return text
 
@@ -246,6 +252,26 @@ class NeuroTids(list):
 		super().remove(neuro_tid)
 		del self.neuro_index[tid_title]
 
+	def write_dir(self, dir_path):
+		os.makedirs(dir_path, exist_ok=True)
+		for neuro_tid in self:
+			tid_file_title = neuro_tid.get_tid_file_name(neuro_tid.title)
+			tid_text = neuro_tid.to_text(neuro_tid.fields)
+			if "type" in neuro_tid.fields:
+				text_parts = tid_text.split("\n\n", 1)
+				if len(text_parts) == 2:
+					real_text = text_parts[1]
+				else:
+					real_text = ""
+
+				with open(f"{dir_path}/{tid_file_title}.meta", mode="w+") as f:
+					f.write(text_parts[0])
+				with open(f"{dir_path}/{tid_file_title}", mode="w+") as f:
+					f.write(real_text)
+			else:
+				with open(f"{dir_path}/{tid_file_title}.tid", mode="w+") as f:
+					f.write(tid_text)
+
 
 class NeuroTW(TextHtml):
 	"""
@@ -260,7 +286,10 @@ class NeuroTW(TextHtml):
 
 	@classmethod
 	def from_html(cls, html):
-		if isinstance(html, Soup):
+		if isinstance(html, str):
+			with open(html) as f:
+				tw_soup = Soup(f, "html.parser")
+		elif isinstance(html, Soup):
 			tw_soup = html
 		elif bool(Soup(html, "html.parser").find()):
 			tw_soup = Soup(html, "html.parser")
@@ -271,7 +300,7 @@ class NeuroTW(TextHtml):
 
 		# Collect tiddlers
 		store_area_div = tw_soup.find(id="storeArea")
-		tiddler_divs = store_area_div.findAll("div")
+		tiddler_divs = store_area_div.find_all("div", recursive=False)
 		for tiddler_div in tiddler_divs:
 			neuro_tid = NeuroTid.from_html(tiddler_div)
 			neuro_tw.neuro_tids.append(neuro_tid)

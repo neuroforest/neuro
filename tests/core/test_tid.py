@@ -8,7 +8,7 @@ import pytest
 
 from neuro.utils import exceptions
 
-from ..helper import get_test_file, get_hash
+from ..helper import get_test_file
 
 
 class TestNeuroTid:

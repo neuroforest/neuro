@@ -1,10 +1,9 @@
 """
 Unit tests of the module neuro.core.files.text
 """
+import deepdiff
 import filecmp
 import json
-
-import deepdiff
 import pytest
 
 from ..helper import get_test_file, get_hash
