@@ -6,3 +6,4 @@ __pycache__/
 /neuro.egg-info
 /.idea
 /data/test/output
+/temp
