@@ -9,7 +9,7 @@ import sys
 import psutil
 
 
-NF_DIR = os.path.join("~", "neuroforest")
+NF_DIR = os.path.join(os.path.expanduser("~"), "neuroforest")
 PORT = 8080
 URL = "127.0.0.1"
 
