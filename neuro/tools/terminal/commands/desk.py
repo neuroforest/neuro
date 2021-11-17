@@ -65,12 +65,11 @@ def handle_args(args):
 
 @click.command("desk", short_help="NeuroForest desktop.")
 @click.argument("action", required=True)
-@click.argument("keyword", required=False)
+@click.argument("keyword", required=False, default="")
 @pass_environment
 def cli(ctx, action, keyword):
 	if action == "build":
-		if keyword:
-			handle_args(keyword)
+		handle_args(keyword)
 		build()
 	elif action == "close":
 		close()
