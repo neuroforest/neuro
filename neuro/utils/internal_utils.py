@@ -9,7 +9,7 @@ import sys
 import psutil
 
 
-NF_DIR = str(os.path.dirname(__file__).split("/neuro/utils")[0]).rsplit("/", 1)[0]
+NF_DIR = "~/Projects/NeuroForest"
 PORT = 8080
 URL = "127.0.0.1"
 
