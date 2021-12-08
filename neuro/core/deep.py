@@ -5,6 +5,7 @@ The deepest objects upon which the platform relies.
 import datetime
 import glob
 import logging
+import math
 import os
 import pathlib
 import shutil
@@ -219,6 +220,19 @@ class File(NeuroObject):
 		else:
 			return os.path.splitext(self.path)[0].split("/")[-1]
 
+	def get_size(self):
+		"""
+		Return file size as human readable string.
+		Inspired by: https://stackoverflow.com/a/14822210
+		"""
+		if self.size == 0:
+			return "0B"
+		size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+		i = int(math.floor(math.log(self.size, 1024)))
+		p = math.pow(1024, i)
+		s = round(self.size / p, 2)
+		return "%s %s" % (s, size_name[i])
+
 	def get_stat(self):
 		stat = os.stat(self.path)
 		return stat
@@ -395,8 +409,8 @@ class Dir(NeuroObject):
 	def get_title(self):
 		return "dir" + str(self.inode)
 
-	def get_files(self):
-		file_paths = self.get_all_paths(mode="file")
+	def get_files(self, file_ext=None):
+		file_paths = self.get_all_paths(mode="file", file_ext=file_ext)
 		return file_paths
 
 	def is_empty(self):
