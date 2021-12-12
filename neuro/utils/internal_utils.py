@@ -25,7 +25,7 @@ def get_path(keyword):
 		"design": "design",
 		"data": "neuro/data",
 		"desktop": "desktop",
-		"neuro": "neuro/neuro",
+		"neuro": "neuro",
 		"nf": "",
 		"nw": "desktop/output/linux64/TiddlyDesktop-linux64-v0.0.14/nw",
 		"plugins": "tw/plugins",
