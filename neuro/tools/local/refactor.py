@@ -1,34 +1,36 @@
 """
 Refactor local directories and update the wiki accordingly.
 """
-
+import os
 import logging
 from tqdm import tqdm
 
 from neuro.core.deep import Dir
-from neuro.core.files.text import Text
+
+logging.basicConfig(level=logging.INFO)
 
 
-def update_tiddlers(src_path, dst_path, tiddlers_path):
+def update_tiddlers(old, new, tiddlers_path):
 	"""
-	:param src_path:
-	:param dst_path:
+	:param old:
+	:param new:
 	:param tiddlers_path:
 	"""
-	count = 0
-	text_paths = Dir.get_files(Dir(tiddlers_path))
-	for text_path in tqdm(text_paths):
-		text_file = Text(text_path)
-		text = text_file.get_text()
-		text_file.close()
-		new_text = text.replace(src_path, dst_path)
-		if text != new_text:
-			text_file = Text(text_path, mode="w")
-			text_file.write(new_text)
-			text_file.close()
-			count += 1
+	# Perform full-text search
+	command = f"grep -rnw {tiddlers_path} -e '{old}'"
+	fts_result = os.popen(command).read()
+	fts_lines = fts_result.split("\n")[:-1]
 
-	logging.info(f"Tiddler files updated: {count}")
+	# Perform full-text replace in affected files
+	for fts_line in tqdm(fts_lines):
+		tiddler_path = tuple(fts_line.split(":", 1))[0]
+		with open(tiddler_path) as f:
+			text = f.read()
+		new_text = text.replace(old, new)
+		with open(tiddler_path, "w") as f:
+			f.write(new_text)
+
+	logging.info(f"{len(fts_lines)} tiddlers affected")
 
 
 def refactor_path(src_path, dst_path, tiddlers_path):
@@ -46,7 +48,7 @@ def refactor_path(src_path, dst_path, tiddlers_path):
 		logging.error(f"Not a directory: {src_path}")
 		return
 
-	# Update paths in tiddler files
+	# Full text update in the wiki
 	update_tiddlers(src_path, dst_path, tiddlers_path)
 
 	# Move locally
