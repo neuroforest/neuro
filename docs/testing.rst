@@ -1,7 +1,7 @@
 Testing
 =======
 
-The tests are in the folder ``test``.
+The tests are in the folder ``tests``.
 
 The data is in the folder ``data/tests``. There are 3 subdirectories:
 
