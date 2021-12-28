@@ -14,7 +14,7 @@ def get_test_file(file_name, exists=True, multi=False):
 	"""
 	Get a test file according to glob file path expansion.
 	:param file_name:
-	:param exists:
+	:param exists: does file have to exist
 	:param multi:
 	:return:
 	"""

@@ -71,7 +71,7 @@ class Text(File):
 
     def get_text(self):
         """
-        Return the string of text
+        Return the string of text.
         """
         if isinstance(self.file, io.TextIOWrapper):
             try:
