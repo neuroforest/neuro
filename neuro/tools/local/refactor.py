@@ -36,7 +36,6 @@ def update_tiddlers(old, new, tiddlers_path):
 def refactor_path(src_path, dst_path, tiddlers_path):
 	"""
 	Refactor a local path both in the file system and in NeuroStorage.
-
 	:param src_path:
 	:param dst_path:
 	:param tiddlers_path:
@@ -47,6 +46,15 @@ def refactor_path(src_path, dst_path, tiddlers_path):
 	except FileNotFoundError:
 		logging.error(f"Not a directory: {src_path}")
 		return
+
+	# Handle symlinks
+	symlinks = os.popen("find ~ -type l").read()[:-1].split("\n")
+	for symlink in symlinks:
+		symlink_target = os.readlink(symlink)
+		if src_path in symlink_target:
+			new_symlink_target = symlink_target.replace(src_path, dst_path)
+			os.system(f"rm {symlink}")
+			os.system(f"ln -s {new_symlink_target} {symlink}")
 
 	# Full text update in the wiki
 	update_tiddlers(src_path, dst_path, tiddlers_path)
