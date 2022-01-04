@@ -11,4 +11,5 @@ pytest-cov == 2.12.1
 python-magic == 0.4.22
 requests == 2.22.0
 setuptools == 45.2.0
+tqdm == 4.61.0
 wheel == 0.34.2
