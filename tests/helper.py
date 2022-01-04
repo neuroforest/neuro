@@ -2,12 +2,21 @@
 Helper function and classes used by various tests.
 """
 
+import filecmp
 import glob
 import hashlib
 import io
 import logging
 import os
 import sys
+
+
+def are_dirs_identical(dir1, dir2):
+	cmp_object = filecmp.dircmp(dir1, dir2)
+	if not cmp_object.diff_files:
+		return True
+	else:
+		return False
 
 
 def get_test_file(file_name, exists=True, multi=False):

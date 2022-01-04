@@ -3,7 +3,8 @@ Refactor local directories and update the wiki accordingly.
 """
 import os
 import logging
-from tqdm import tqdm
+import shlex
+import tqdm
 
 from neuro.core.deep import Dir
 
@@ -17,12 +18,13 @@ def update_tiddlers(old, new, tiddlers_path):
 	:param tiddlers_path:
 	"""
 	# Perform full-text search
-	command = f"grep -rnw {tiddlers_path} -e '{old}'"
+	old_safe_quoted = shlex.quote(old)
+	command = f"grep -rn {tiddlers_path} -e {old_safe_quoted}"
 	fts_result = os.popen(command).read()
 	fts_lines = fts_result.split("\n")[:-1]
 
 	# Perform full-text replace in affected files
-	for fts_line in tqdm(fts_lines):
+	for fts_line in tqdm.tqdm(fts_lines):
 		tiddler_path = tuple(fts_line.split(":", 1))[0]
 		with open(tiddler_path) as f:
 			text = f.read()
