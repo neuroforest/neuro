@@ -20,3 +20,12 @@ class InvalidHeader(BaseException):
 
 class MissingTitle(BaseException):
 	pass
+
+
+# NETWORK
+class InvalidURL(BaseException):
+	pass
+
+
+class UnhandledStatusCode(BaseException):
+	pass
