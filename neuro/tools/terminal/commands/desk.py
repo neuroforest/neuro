@@ -57,19 +57,37 @@ def run():
 	subprocess.Popen(internal_utils.get_path("nw"), stdout=null, stderr=null)
 
 
-def handle_args(args):
+def copy_plugin(plugin_name):
+	tw_plugins_path = internal_utils.get_path("tw") + "/plugins/neuroforest"
+	plugin_path = internal_utils.get_path(plugin_name)
+	command = f"rsync -a --delete {plugin_path} {tw_plugins_path}"
+	os.system(command)
+
+
+def handle_keyword(keyword):
+	"""
+	Handle the keyword that is used by main.js desktop file.
+	:param keyword:
+	:return:
+	"""
 	file_path = internal_utils.NF_DIR + "/desktop/args.txt"
 	with open(file_path, mode="w+", encoding="utf-8") as f:
-		f.write(args)
+		f.write(keyword)
 
 
 @click.command("desk", short_help="NeuroForest desktop.")
 @click.argument("action", required=True)
 @click.argument("keyword", required=False, default="")
+@click.option("--core", "-c", is_flag=True)
+@click.option("--front", "-f", is_flag=True)
 @pass_environment
-def cli(ctx, action, keyword):
+def cli(ctx, action, keyword, core, front):
 	if action == "build":
-		handle_args(keyword)
+		if core:
+			copy_plugin("tw5-plugin-core")
+		if front:
+			copy_plugin("tw5-plugin-front")
+		handle_keyword(keyword)
 		build()
 	elif action == "close":
 		close()
