@@ -1,31 +1,32 @@
 class FileNotWiki(BaseException):
-	pass
+    pass
 
 
 class InternalError(BaseException):
-	pass
+    pass
 
 
 class ScopeError(BaseException):
-	pass
+    pass
 
 
 class TiddlerDoesNotExist(BaseException):
-	pass
+    pass
 
 
 class InvalidHeader(BaseException):
-	pass
+    pass
 
 
 class MissingTitle(BaseException):
-	pass
+    pass
 
 
 # NETWORK
 class InvalidURL(BaseException):
-	pass
+    pass
 
 
 class UnhandledStatusCode(BaseException):
-	pass
+    pass
+

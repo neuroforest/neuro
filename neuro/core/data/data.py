@@ -1,10 +1,10 @@
 def is_float(s):
-	result = False
+    result = False
 
-	try:
-		float(s)
-		result = True
-	except ValueError:
-		pass
+    try:
+        float(s)
+        result = True
+    except ValueError:
+        pass
 
-	return result
+    return result

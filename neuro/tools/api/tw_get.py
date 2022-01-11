@@ -11,119 +11,119 @@ from neuro.utils import exceptions
 
 
 def all_tiddlers():
-	api = tw_api.get_api()
-	if not api:
-		return None
+    api = tw_api.get_api()
+    if not api:
+        return None
 
-	print("Collecting ... from {}".format(api.url))
-	response = api.get("/recipes/default/tiddlers.json")
-	return response["parsed"]
+    print("Collecting ... from {}".format(api.url))
+    response = api.get("/recipes/default/tiddlers.json")
+    return response["parsed"]
 
 
 def is_tiddler(tid_title):
-	"""
-	Checks if the tiddler is accessible through the API.
+    """
+    Checks if the tiddler is accessible through the API.
 
-	:param tid_title:
-	:return: bool
-	"""
+    :param tid_title:
+    :return: bool
+    """
 
-	try:
-		tiddler(tid_title)
-		return True
-	except exceptions.TiddlerDoesNotExist:
-		return False
+    try:
+        tiddler(tid_title)
+        return True
+    except exceptions.TiddlerDoesNotExist:
+        return False
 
 
 def rendered_tiddler(tid_title):
-	api = tw_api.get_api()
-	if not api:
-		return None
+    api = tw_api.get_api()
+    if not api:
+        return None
 
-	parsed_response = api.get("/{}".format(tid_title), content_type="text/html")
-	path = os.path.abspath("temp.html")
-	url = "file://" + path
+    parsed_response = api.get("/{}".format(tid_title), content_type="text/html")
+    path = os.path.abspath("temp.html")
+    url = "file://" + path
 
-	with open(path, "w", encoding="utf-8") as f:
-		f.write(parsed_response)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(parsed_response)
 
-	# Opening the rendered tiddler in the web browser.
-	webbrowser.open(url)
+    # Opening the rendered tiddler in the web browser.
+    webbrowser.open(url)
 
 
 def server_status():
-	api = tw_api.get_api()
-	if not api:
-		return None
+    api = tw_api.get_api()
+    if not api:
+        return None
 
-	parsed_response = api.get("/status")
-	return parsed_response
+    parsed_response = api.get("/status")
+    return parsed_response
 
 
 def tiddler(tid_title, **kwargs):
-	"""
-	Returns tiddler data.
-	:param tid_title:
-	:return: tid
-	"""
-	api = tw_api.get_api(**kwargs)
-	if not api:
-		return None
-	response = api.get(f"/neuro/tiddlers/{tid_title}")
-	if response["status_code"] == 404:
-		raise exceptions.TiddlerDoesNotExist(tid_title)
+    """
+    Returns tiddler data.
+    :param tid_title:
+    :return: tid
+    """
+    api = tw_api.get_api(**kwargs)
+    if not api:
+        return None
+    response = api.get(f"/neuro/tiddlers/{tid_title}")
+    if response["status_code"] == 404:
+        raise exceptions.TiddlerDoesNotExist(tid_title)
 
-	return response["parsed"]
+    return response["parsed"]
 
 
 def tw_fields(fields=None, tw_filter=None):
-	api = tw_api.get_api()
-	if not api:
-		return None
+    api = tw_api.get_api()
+    if not api:
+        return None
 
-	url = "/neuro/fields.json"
-	params = dict()
-	if fields:
-		params["fields"] = fields
-	if tw_filter:
-		params["filter"] = tw_filter
-	parsed_response = api.get(url, params=params)
-	return parsed_response
+    url = "/neuro/fields.json"
+    params = dict()
+    if fields:
+        params["fields"] = fields
+    if tw_filter:
+        params["filter"] = tw_filter
+    parsed_response = api.get(url, params=params)
+    return parsed_response
 
 
 def tw_index(tw_filter=None):
-	"""
-	Return a list of objects representing tiddler including shadow.
-	{
-		"tmap.id": "gkqo50qg803yjqeg95y",
-		"tags": ["tag1", "long tag 2"],
-		"title": "Example"
-	}
-	:param tw_filter:
-	:return:
-	:rtype: list
-	"""
-	api = tw_api.get_api()
-	if not api:
-		return None
+    """
+    Return a list of objects representing tiddler including shadow.
+    {
+        "tmap.id": "gkqo50qg803yjqeg95y",
+        "tags": ["tag1", "long tag 2"],
+        "title": "Example"
+    }
+    :param tw_filter:
+    :return:
+    :rtype: list
+    """
+    api = tw_api.get_api()
+    if not api:
+        return None
 
-	url = "/neuro/index.json"
-	params = dict()
-	if tw_filter:
-		params["filter"] = tw_filter
-	parsed_response = api.get(url, params=params)
-	return parsed_response
+    url = "/neuro/index.json"
+    params = dict()
+    if tw_filter:
+        params["filter"] = tw_filter
+    parsed_response = api.get(url, params=params)
+    return parsed_response
 
 
 def wiki():
-	"""
-	Returns the full wiki html.
-	:return:
-	"""
-	api = tw_api.get_api()
-	if not api:
-		return None
+    """
+    Returns the full wiki html.
+    :return:
+    """
+    api = tw_api.get_api()
+    if not api:
+        return None
 
-	logging.info(f"Collecting wiki HTML from {api.url}")
-	tw_html = api.get("/")["parsed"]
-	return tw_html
+    logging.info(f"Collecting wiki HTML from {api.url}")
+    tw_html = api.get("/")["parsed"]
+    return tw_html
