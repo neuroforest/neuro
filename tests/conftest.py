@@ -2,7 +2,7 @@ import os
 import shutil
 
 
-output_path = os.path.abspath("data/test/output")
+output_path = os.path.abspath("resources/test/output")
 
 
 def pytest_sessionstart(session):

@@ -23,12 +23,12 @@ def get_path(keyword):
 	keyword_index = {
 		"archive": "storage/archive",
 		"design": "design",
-		"data": "neuro/data",
 		"desktop": "desktop",
 		"neuro": "neuro",
 		"nf": "",
 		"nw": "desktop/output/linux64/TiddlyDesktop-linux64-v0.0.14/nw",
 		"plugins": "tw/plugins",
+		"resources": "neuro/resources",
 		"tests": "neuro/tests",
 		"tiddlers": "storage/tiddlers",
 		"tw": "tw",

@@ -27,7 +27,7 @@ def get_test_file(file_name, exists=True, multi=False):
 	:param multi:
 	:return:
 	"""
-	test_data_dir = os.path.abspath("data/test")  # IMPORTANT: must be in dir
+	test_data_dir = os.path.abspath("resources/test")  # IMPORTANT: must be in dir
 	if exists:
 		file_paths = sorted(glob.glob(f"{test_data_dir}/*{file_name}*"))
 		if len(file_paths) == 1:
