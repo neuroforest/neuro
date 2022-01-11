@@ -1,0 +1,19 @@
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+
+SELECT DISTINCT ?item ?labelSL ?labelEN ?gbifID ?iNaturalistID ?taxonRank ?parentTaxon
+{
+  ?item wdt:P225 "_organism_".
+  OPTIONAL {?item rdfs:label ?labelSL filter (lang(?labelSL) = "sl").}
+  OPTIONAL {?item rdfs:label ?labelEN filter (lang(?labelEN) = "en").}
+  OPTIONAL {?item wdt:P846 ?gbifID.}
+  OPTIONAL {?item wdt:P3151 ?iNaturalistID.}
+  OPTIONAL {
+    ?item wdt:P105 ?taxon.
+    ?taxon rdfs:label ?taxonRank filter (lang(?taxonRank) = "en").
+  }
+  OPTIONAL {
+    ?item wdt:P171 ?parent.
+    ?parent wdt:P225 ?parentTaxon.
+  }
+}
