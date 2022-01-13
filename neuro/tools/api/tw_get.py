@@ -76,7 +76,13 @@ def tiddler(tid_title, **kwargs):
     return response["parsed"]
 
 
-def tw_fields(fields=None, tw_filter=None):
+def tw_fields(fields: list, tw_filter: str):
+    """
+    Filter tiddlers by `tw_filter` and extract `fields`.
+    :param fields:
+    :param tw_filter:
+    :return:
+    """
     api = tw_api.get_api()
     if not api:
         return None
@@ -87,7 +93,7 @@ def tw_fields(fields=None, tw_filter=None):
         params["fields"] = fields
     if tw_filter:
         params["filter"] = tw_filter
-    parsed_response = api.get(url, params=params)
+    parsed_response = api.get(url, params=params)["parsed"]
     return parsed_response
 
 
