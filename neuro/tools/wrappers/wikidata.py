@@ -15,11 +15,11 @@ FIELD_MAP = {
 }
 
 
-def get_query(file_name, params):
+def get_query(file_name, params: dict = None):
     """
     Get a Wikidata query from `resources` according to file name.
     :param file_name:
-    :params: dict
+    :param params: dict
     :return: string
     """
     folder_name = internal_utils.get_path("wd_queries")
@@ -28,8 +28,9 @@ def get_query(file_name, params):
         query = f.read()
 
     # Parameter substitution
-    for parameter, value in params.items():
-        query = query.replace(f"_{parameter}_", value)
+    if params:
+        for parameter, value in params.items():
+            query = query.replace(f"_{parameter}_", value)
 
     return query
 
@@ -79,3 +80,7 @@ def get_taxon_data(taxon_name: str):
             data[field_neuro] = bindings[field_wikidata]["value"]
 
     return data
+
+
+if __name__ == "__main__":
+    q = get_query("test")
