@@ -1,1 +1,14 @@
-{"hsa-miR-4516":{"targetscan":{"miRNA":"hsa-miR-4516","PositionintheUTR":"98-104","seedmatch":"7mer-m8","context++score":"-0.21","context++scorepercentile":"97","weightedcontext++score":"-0.00","conservedbranchlength":"0.000","Pct":"N/A"}}}
+{
+  "hsa-miR-4516": {
+	"targetscan": {
+	  "miRNA": "hsa-miR-4516",
+	  "PositionintheUTR": "98-104",
+	  "seedmatch": "7mer-m8",
+	  "context++score": "-0.21",
+	  "context++scorepercentile": "97",
+	  "weightedcontext++score": "-0.00",
+	  "conservedbranchlength": "0.000",
+	  "Pct": "N/A"
+	}
+  }
+}
