@@ -41,22 +41,14 @@ class NeuroNode(NeuroBit):
 
 
 class NeuroTid(NeuroNode):
-    """
-    Represent the custom Tiddler implementation with some obligatory
-    information:
-        - tmap.id (from NeuroBit)
-        - title
-        - text
-        - type
-
-    Intended to be displayed.
-
-    """
-    def __init__(self, tid_title, tmap_id=None, **kwargs):
+    def __init__(self, tid_title="", tmap_id=None, **kwargs):
         super().__init__(uuid=tmap_id, **kwargs)
         self.fields = dict()
         self.title = tid_title
         self.text = str()
+
+    def __bool__(self):
+        return bool(self.title)
 
     def __str__(self):
         return f"<NeuroTid title=\"{self.title}\">"
