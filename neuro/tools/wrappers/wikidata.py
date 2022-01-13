@@ -2,7 +2,7 @@ import logging
 import requests
 
 from neuro.utils import internal_utils
-from neuro.core.data.dict import  DictUtils
+
 
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 FIELD_MAP = {
@@ -11,21 +11,26 @@ FIELD_MAP = {
     "trans.eng": "labelEN",
     "inat.taxon.id": "iNaturalistID",
     "gbif.taxon.id": "gbifID",
-    "taxon.parent": "parentTaxon",
     "name": "taxonName"
 }
 
 
-def get_query(file_name):
+def get_query(file_name, params):
     """
     Get a Wikidata query from `resources` according to file name.
     :param file_name:
+    :params: dict
     :return: string
     """
     folder_name = internal_utils.get_path("wd_queries")
     query_file = f"{folder_name}/{file_name}.rq"
     with open(query_file) as f:
         query = f.read()
+
+    # Parameter substitution
+    for parameter, value in params.items():
+        query = query.replace(f"_{parameter}_", value)
+
     return query
 
 
@@ -44,15 +49,18 @@ def send_query(query: str, wikidata_sparql_url: str = WIKIDATA_SPARQL_URL):
     return res.json()
 
 
-def get_taxon_data(taxon_name):
+def get_taxon_data(taxon_name: str):
     """
     Get taxon data form WikiData and convert it to tiddler format.
     :param taxon_name:
     :return: intermediate tiddler-like dictionary
     """
-    query_template = get_query("organism")
-    wikidata_query = query_template.replace("_organism_", taxon_name)
-    res = send_query(wikidata_query)
+    if not taxon_name:
+        logging.warning("Taxon name not given.")
+        return False
+
+    query = get_query("organism", {"organism": taxon_name})
+    res = send_query(query)
 
     if not res["results"]["bindings"]:
         logging.warning(f"Data for taxon not found: {taxon_name}")
