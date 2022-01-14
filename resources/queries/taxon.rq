@@ -1,9 +1,11 @@
+# Get taxon data from scientific name query template
+
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 
 SELECT DISTINCT ?item ?labelSL ?labelEN ?gbifID ?iNaturalistID ?taxonRank ?parentTaxon
 {
-  ?item wdt:P225 "_organism_".
+  ?item wdt:P225 "_taxon_".
   OPTIONAL {?item rdfs:label ?labelSL filter (lang(?labelSL) = "sl").}
   OPTIONAL {?item rdfs:label ?labelEN filter (lang(?labelEN) = "en").}
   OPTIONAL {?item wdt:P846 ?gbifID.}

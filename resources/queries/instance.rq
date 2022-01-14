@@ -1,0 +1,10 @@
+# Get all the instances of an entity query template
+
+PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+
+SELECT  ?item ?itemLabel
+WHERE {
+  ?item wdt:P31 wd:_entity_ .
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+}

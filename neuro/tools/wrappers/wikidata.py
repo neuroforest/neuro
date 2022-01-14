@@ -60,7 +60,7 @@ def get_taxon_data(taxon_name: str):
         logging.warning("Taxon name not given.")
         return False
 
-    query = get_query("organism", {"organism": taxon_name})
+    query = get_query("taxon", {"taxon": taxon_name})
     res = send_query(query)
 
     if not res["results"]["bindings"]:
@@ -80,7 +80,3 @@ def get_taxon_data(taxon_name: str):
             data[field_neuro] = bindings[field_wikidata]["value"]
 
     return data
-
-
-if __name__ == "__main__":
-    q = get_query("test")
