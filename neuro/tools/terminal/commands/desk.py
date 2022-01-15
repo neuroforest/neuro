@@ -58,7 +58,7 @@ def run():
 
 
 def copy_plugin(plugin_name):
-    tw_plugins_path = internal_utils.get_path("tw") + "/plugins/neuroforest"
+    tw_plugins_path = internal_utils.get_path("tw5") + "/plugins/neuroforest"
     plugin_path = internal_utils.get_path(plugin_name)
     command = f"rsync -a --delete {plugin_path} {tw_plugins_path}"
     os.system(command)

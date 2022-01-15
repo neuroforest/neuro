@@ -35,7 +35,7 @@ def determine_scope(resource_path):
         "design",
         "desktop",
         "neuro",
-        "tw"
+        "tw5"
     ]
 
     scope = dict()

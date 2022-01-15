@@ -31,7 +31,7 @@ def get_path(keyword):
         "resources": "neuro/resources",
         "tests": "neuro/tests",
         "tiddlers": "storage/tiddlers",
-        "tw": "tw",
+        "tw5": "tw5",
         "tw-com": "tw/editions/tw5.com/tiddlers",
         "tiddlywiki.js": "tw/tiddlywiki.js",
         "tw5-plugin-core": "tw5-plugin-core/source/core",
