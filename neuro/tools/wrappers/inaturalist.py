@@ -1,6 +1,7 @@
 import csv
 import json
 import logging
+import multiprocessing
 import requests
 import urllib.parse
 
@@ -69,7 +70,7 @@ def get_taxon_tid(taxon_id):
                 neuro_code = row[2][1:-1]
                 break
         if not neuro_code:
-            print(f"Taxon not found: {taxon_rank}")
+            print(f"Taxon not found: {taxon_data['rank']} ({taxon_rank})")
             return NeuroTid()
 
     tid_title = f"{neuro_code} {taxon_name}"
@@ -86,13 +87,16 @@ def get_taxon_tids(taxon_id):
     taxon_data = get_taxon(taxon_id)
     ancestor_taxon_ids = taxon_data["ancestor_ids"]
     neuro_tids = NeuroTids()
-    for ancestor_taxon_id in ancestor_taxon_ids:
-        neuro_tid = get_taxon_tid(ancestor_taxon_id)
-        if neuro_tid:
-            neuro_tids.append(neuro_tid)
+
+    # Recruit a pool of workers, every worker making a request for ancestor taxon
+    p = multiprocessing.Pool(processes=len(ancestor_taxon_ids))
+    with p:
+        neuro_tid_list = p.map(get_taxon_tid, ancestor_taxon_ids)
+    neuro_tid_list.append(get_taxon_tid(taxon_id))
+
+    for neuro_tid in neuro_tid_list:
+        if not neuro_tid:
+            continue
+        neuro_tids.append(neuro_tid)
 
     return neuro_tids
-
-
-if __name__ == "__main__":
-    get_taxon_tids(57489)
