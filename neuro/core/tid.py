@@ -9,49 +9,47 @@ import re
 from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
 
-from neuro.utils import oop_utils,exceptions
-from neuro.core.deep import Edges,NeuroBit
+from neuro.core.deep import Edges, NeuroNode
 from neuro.core.data.dict import DictUtils
-from neuro.core.files.text import TextHtml,  TextJson
-
-
-class NeuroNode(NeuroBit):
-    """
-    NeuroNode represents the specific position of a node inside primary tree
-    and the NeuroForest platform.
-    """
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.edges = kwargs.get("edges", Edges())
-
-    def display(self, modes=None):
-        """
-        Display the node data in the terminal.
-        :param modes: set of modes
-        :return:
-        """
-        # Default modes.
-        if not modes:
-            modes = {"no_func", "simple"}
-
-        attrs_keys = oop_utils.get_attr_keys(self, modes=modes)
-
-        attrs = {k: self[k] for k in attrs_keys}
-        DictUtils.display(attrs)
+from neuro.core.files.text import TextHtml, TextJson
+from neuro.utils import oop_utils, exceptions
 
 
 class NeuroTid(NeuroNode):
-    def __init__(self, tid_title="", tmap_id=None, **kwargs):
-        super().__init__(uuid=tmap_id, **kwargs)
-        self.fields = dict()
+    """
+    NeuroTid is a Python representation of tiddler, that is an element of
+    NeuroForest platoform.
+    There are 3 fundamental object properties:
+        - uuid - inherited from NeuroNode
+        - title - tiddler title, also serves as identifier
+        - fields - a dictionary of all fields, some with special handling:
+            - tags - list
+    """
+    def __init__(self, tid_title="", fields=None, **kwargs):
+        super().__init__(**kwargs)
         self.title = tid_title
-        self.text = str()
+        if fields and isinstance(fields, dict):
+            self.fields = fields
+        else:
+            self.fields = dict()
 
     def __bool__(self):
         return bool(self.title)
 
     def __str__(self):
         return f"<NeuroTid title=\"{self.title}\">"
+
+    def add_tag(self, tags):
+        if "tags" in self.fields:
+            if not isinstance(self.fields["tags"], list):
+                logging.error("Incorrect data type of field `tags`, should be list.")
+                return
+        else:
+            self.fields["tags"] = list()
+        if isinstance(tags, str):
+            self.fields["tags"].append(tags)
+        elif isinstance(tags, list):
+            self.fields["tags"].extend(tags)
 
     @classmethod
     def from_html(cls, html):
@@ -64,16 +62,14 @@ class NeuroTid(NeuroNode):
             raise TypeError(f"HTML type not supported: {type(html)}")
 
         tid_fields = div_element.attrs
+        tid_fields["text"] = div_element.text
         try:
             tid_title = tid_fields["title"]
+            neuro_tid = cls(tid_title, tid_fields)
+            return neuro_tid
         except KeyError:
-            logging.error(html)
-
-        neuro_tid = cls(tid_title)
-        neuro_tid.fields = tid_fields
-        neuro_tid.title = tid_title
-        neuro_tid.text = div_element.text
-        return neuro_tid
+            logging.error(f"No title in HTML: {html}")
+            return cls()
 
     @classmethod
     def from_tiddler(cls, tiddler):
@@ -90,12 +86,26 @@ class NeuroTid(NeuroNode):
             tid_title = tiddler["title"]
         except KeyError:
             raise exceptions.MissingTitle()
-        neuro_tid = cls(tid_title)
-        neuro_tid.title = tiddler["title"]
-        if "text" in tiddler:
-            neuro_tid.text = tiddler["text"]
-        neuro_tid.fields = tiddler
+        neuro_tid = cls(tid_title, tiddler)
         return neuro_tid
+
+    def add_fields(self, fields, override=False):
+        """
+        Add fields to neuro_tid.
+
+        Similar to NeuroBit.extend_fields.
+
+        :param fields: dict
+        :param override: override existing fields
+        :return:
+        """
+        for field_name, field_value in fields.items():
+            if field_name in self.fields:
+                if override and self.fields != field_value:
+                    logging.warning(f"Overriding field: {field_name}  - {self.fields[field_name]} -> {field_value}")
+                    self.fields[field_name] = field_value
+            else:
+                self.fields[field_name] = field_value
 
     @staticmethod
     def get_tid_file_name(tid_title):
@@ -114,10 +124,6 @@ class NeuroTid(NeuroNode):
             tid_file_name = tid_file_name[:200]
 
         return tid_file_name
-
-    def index_text(self):
-        if not self.text:
-            logging.info("Nothing to index.")
 
     @staticmethod
     def to_text(fields):
@@ -183,12 +189,14 @@ class NeuroTid(NeuroNode):
 
 class NeuroTids(list):
     """
-    It a graph where every node is a NeuroTid object and they are linked together
-    by usidng NeureEdges object.
+    A collection of NeuroTid instances. This class exhibits functionality of
+    list and dict data types.
     """
-    def __init__(self, *args):
+    def __init__(self, neuro_tids=None, *args):
         super().__init__(*args)
-        self.neuro_index = dict()
+        self.object_index = dict()
+        if neuro_tids:
+            self.extend(neuro_tids)
 
     def __str__(self):
         nt_strs = list()
@@ -197,23 +205,13 @@ class NeuroTids(list):
         list_str = "[\n\t" + "\n\t".join(nt_strs) + "\n]"
         return list_str
 
+    def __repr__(self):
+        return self.__str__()
+
     def __contains__(self, tid_title):
-        return tid_title in self.neuro_index
+        return tid_title in self.object_index
 
-    @classmethod
-    def from_json(cls, json_path):
-        """
-        :param json_path:
-        """
-        neuro_tids = cls()
-        tiddlers = TextJson(json_path).dict["tiddlers"]
-        for tiddler in tiddlers:
-            neuro_tid = NeuroTid.from_tiddler({**tiddlers[tiddler], **{"title": tiddler}})
-            neuro_tids.append(neuro_tid)
-
-        return neuro_tids
-
-    def append(self, neuro_tid):
+    def append(self, neuro_tid: NeuroTid):
         if not isinstance(neuro_tid, NeuroTid):
             return
 
@@ -228,8 +226,18 @@ class NeuroTids(list):
 
         # Writing.
         super().append(neuro_tid)
-        self.neuro_index[neuro_tid.title] = neuro_tid.fields
-        self.neuro_index[neuro_tid.title]["object"] = neuro_tid
+        self.object_index[neuro_tid.title] = neuro_tid
+
+    def chain(self, initial_tag=""):
+        """
+        Chain the NeuroTids by setting `tags` and `neuro.primary` fields.
+        :return:
+        """
+        current_tag = initial_tag
+        for neuro_tid in self:
+            neuro_tid.add_tag(current_tag)
+            neuro_tid.fields["neuro.primary"] = current_tag
+            current_tag = neuro_tid.title
 
     def extend(self, neuro_tid_list):
         for neuro_tid in neuro_tid_list:
@@ -239,12 +247,16 @@ class NeuroTids(list):
         if tid_title not in self:
             raise ValueError(f"Tiddler {tid_title} not found.")
 
-        index_item = self.neuro_index[tid_title]
-        neuro_tid = index_item["object"]
+        neuro_tid = self.object_index[tid_title]
         super().remove(neuro_tid)
-        del self.neuro_index[tid_title]
+        del self.object_index[tid_title]
 
     def write_dir(self, dir_path):
+        """
+        Write NeuroTids to tid text files.
+        :param dir_path: absolute pathname to directory
+        :return:
+        """
         os.makedirs(dir_path, exist_ok=True)
         for neuro_tid in self:
             tid_file_title = neuro_tid.get_tid_file_name(neuro_tid.title)

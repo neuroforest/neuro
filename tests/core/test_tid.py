@@ -21,11 +21,27 @@ class TestNeuroTid:
         neuro_tid = NeuroTid.from_html(tiddler_html)
         return neuro_tid
 
+    def test_add_tag(self):
+        from neuro.core.tid import NeuroTid
+        neuro_tid = NeuroTid("test")
+
+        # There should be not `tags` field by default
+        with pytest.raises(KeyError):
+            neuro_tid.fields["tags"]
+
+        # Test adding a tag
+        neuro_tid.add_tag("test_tag")
+        assert neuro_tid.fields["tags"][0] == "test_tag"
+
+        # Test adding tag list
+        neuro_tid.add_tag(["test_tag1", "test_tag2"])
+        assert len(neuro_tid.fields["tags"]) == 3
+
     def test_from_html(self):
         from neuro.core.tid import NeuroTid
         neuro_tid = self.get_test_neuro_tid()
 
-        assert neuro_tid.text.endswith("%#@&^&(_(+€€\n")
+        assert neuro_tid.fields["text"].endswith("%#@&^&(_(+€€\n")
 
         with pytest.raises(TypeError):
             NeuroTid.from_html("test")
@@ -68,7 +84,27 @@ class TestNeuroTid:
 
 
 class TestNeuroTids:
-    def test_contain(self):
+    def test_list(self):
+        from neuro.core.tid import NeuroTid, NeuroTids
+
+        # Test function NeuroBits.extend and NeuroBits.append
+        neuro_tid_3 = NeuroTid("test3")
+        neuro_tids = NeuroTids([
+            NeuroTid("test1"),
+            NeuroTid("test2"),
+            neuro_tid_3
+        ])
+        assert len(neuro_tids) == 3
+        assert "test2" in neuro_tids
+        assert neuro_tids.index(neuro_tid_3) == 2
+
+        # Test function NeuroBits.remove
+        neuro_tids.remove("test2")
+        assert "test2" not in neuro_tids
+        assert len(neuro_tids) == 2
+        assert len(neuro_tids) == len(neuro_tids.object_index)
+
+    def test_chain(self):
         from neuro.core.tid import NeuroTid, NeuroTids
         neuro_tids = NeuroTids()
         neuro_tids.extend([
@@ -76,13 +112,25 @@ class TestNeuroTids:
             NeuroTid("test2"),
             NeuroTid("test3")
         ])
+        neuro_tids.chain()
+        neuro_tid_2 = neuro_tids[1]
+        assert neuro_tid_2.fields["neuro.primary"] == "test1"
+        assert "test1" in neuro_tid_2.fields["tags"]
 
-        assert len(neuro_tids) == 3
-        assert "test2" in neuro_tids
-
-        neuro_tids.remove("test2")
-        assert "test2" not in neuro_tids
-
+    def test_itegrity(self):
+        """
+        Ensure the property `neuro
+        :return:
+        """
+        from neuro.core.tid import NeuroTid, NeuroTids
+        neuro_tids = NeuroTids()
+        neuro_tids.extend([
+            NeuroTid("test1"),
+            NeuroTid("test2"),
+            NeuroTid("test3")
+        ])
+        neuro_tids[1].fields["text"] = "Positive."
+        assert neuro_tids.object_index["test2"].fields["text"] == "Positive."
 
 class TestNeuroTW:
     def test_from_html(self):
@@ -92,4 +140,4 @@ class TestNeuroTW:
         neuro_tw = NeuroTW.from_html(tw_html_path)
         assert len(neuro_tw.neuro_tids) == 4
         assert neuro_tw.__contains__("$:/isEncrypted")
-        assert neuro_tw.neuro_tids.neuro_index["$:/isEncrypted"]["object"]["text"] == "\nno\n"
+        assert neuro_tw.neuro_tids.object_index["$:/isEncrypted"].fields["text"] == "\nno\n"

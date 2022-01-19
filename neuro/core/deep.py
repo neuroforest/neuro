@@ -454,34 +454,19 @@ class Symlink(NeuroObject):
         self.target = new_target
 
 
-class NeuroBit(NeuroObject):
+class NeuroNode(NeuroObject):
     """
-    NAME ETYMOLOGY:
-    The bit is a basic unit of information in information theory,
-    computing, and digital communications. (Wikipedia 2019)
-    Therefore: The NeuroBit in the basic unit of information in
-    the NeuroForest ecosystem.
-
-    Highly reusable information entity characterized by universally
-    specific tmap_id.
-
-    Usage examples:
-        - describing the NeuroNode attribute specs
-
+    NeuroNode represents the specific position of a node inside primary tree
+    and the NeuroForest platform.
     """
     def __init__(self, **kwargs):
         # Setup the data infrastructure.
         self.uuid = kwargs.get("uuid", str())
-        self.fields = dict()
-        # Getting basic data.
         self.set_id()
-        self.extend_fields(kwargs)
-
-        # Optional data.
-        self.name = str()
+        self.edges = kwargs.get("edges", Edges())
 
     def __eq__(self, other):
-        if isinstance(other, NeuroBit):
+        if isinstance(other, NeuroNode):
             return other.uuid == self.uuid
         else:
             return NotImplemented
@@ -496,18 +481,7 @@ class NeuroBit(NeuroObject):
         setattr(self, key, value)
 
     def __str__(self):
-        if self.name:
-            return self.name
-        else:
-            super().__str__()
-
-    @staticmethod
-    def get_now():
-        """
-        Automatically set created time.
-        :return:
-        """
-        return Moment(form="now")
+        return str(self.uuid)
 
     def set_id(self):
         """
@@ -515,12 +489,6 @@ class NeuroBit(NeuroObject):
         """
         if not self.uuid:
             self.uuid = uuid.uuid4().hex
-        else:
-            # tmap.id conversion
-            self.uuid = self.uuid.replace("-", "")
-
-    def extend_fields(self, obj):
-        self.fields = {**self.fields, **obj}
 
     def to_dict(self):
         attrs = oop_utils.get_attr_keys(self)
@@ -538,9 +506,21 @@ class NeuroBit(NeuroObject):
                 method_dict[attr_name] = attr_dict[attr_name]
         return method_dict
 
-    def display(self):
-        attr_dict = self.to_dict()
-        DictUtils.display(attr_dict)
+    def display(self, modes=None):
+        """
+        Display the node data in the terminal.
+        :param modes: set of modes
+        :return:
+        """
+        # Default modes.
+        if not modes:
+            modes = {"no_func", "simple"}
+
+        attrs_keys = oop_utils.get_attr_keys(self, modes=modes)
+
+        attrs = {k: self[k] for k in attrs_keys}
+        DictUtils.display(attrs)
+
 
 
 class Edge(NeuroObject):
