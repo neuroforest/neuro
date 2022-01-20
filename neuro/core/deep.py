@@ -193,8 +193,11 @@ class File(NeuroObject):
     def __exit__(self, exc_type, exc_value, traceback):
         logging.error("Exit not implemented")
 
+    def __repr__(self, **kwargs):
+        return oop_utils.represent(self, **kwargs)
+
     def display(self, **kwargs):
-        oop_utils.display(self, **kwargs)
+        print(self.__repr__())
 
     def display_mtime(self):
         print("The file {} was last modified:  {}".format(self.get_name(), self.mtime))
@@ -288,6 +291,9 @@ class Dir(NeuroObject):
         self.owner = str()
         self.collect(**kwargs)
 
+    def __repr__(self, **kwargs):
+        return oop_utils.represent(self, **kwargs)
+
     def collect(self, **kwargs):
         """
         Collecting directory data.
@@ -306,7 +312,7 @@ class Dir(NeuroObject):
             self.__setattr__(key, attr_val)
 
     def display(self, **kwargs):
-        oop_utils.display(self, **kwargs)
+        print(self.__repr__())
 
     def get_all_paths(self, file_ext=None, mode="def"):
         """
@@ -477,6 +483,21 @@ class NeuroNode(NeuroObject):
     def __hash__(self):
         return int(self.uuid, 16)
 
+    def __repr__(self, modes=None):
+        """
+        Display the node data in the terminal.
+        :param modes: set of modes
+        :return:
+        """
+        # Default modes.
+        if not modes:
+            modes = {"no_func", "simple"}
+
+        attrs_keys = oop_utils.get_attr_keys(self, modes=modes)
+
+        attrs = {k: self[k] for k in attrs_keys}
+        return DictUtils.represent(attrs)
+
     def __setitem__(self, key, value):
         setattr(self, key, value)
 
@@ -506,21 +527,8 @@ class NeuroNode(NeuroObject):
                 method_dict[attr_name] = attr_dict[attr_name]
         return method_dict
 
-    def display(self, modes=None):
-        """
-        Display the node data in the terminal.
-        :param modes: set of modes
-        :return:
-        """
-        # Default modes.
-        if not modes:
-            modes = {"no_func", "simple"}
-
-        attrs_keys = oop_utils.get_attr_keys(self, modes=modes)
-
-        attrs = {k: self[k] for k in attrs_keys}
-        DictUtils.display(attrs)
-
+    def display(self):
+        print(self.__repr__())
 
 
 class Edge(NeuroObject):

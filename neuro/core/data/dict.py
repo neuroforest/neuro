@@ -35,12 +35,14 @@ class DictUtils:
         return d
 
     @staticmethod
-    def display(d, level=0):
+    def represent(d, level=0):
         """
-        Displays a dictionary neatly.
-        :param d: dictionary to be displayed
-        :param level
+        Returns a string used for dictionary representation.
+        This is a recursive function.
+        :param d: dictionary
+        :param level of indent
         """
+        representation_string = str()
         # Determine the size f key values.
         max_len = 0
         for key in d:
@@ -54,15 +56,17 @@ class DictUtils:
 
             pretty_key = str("{:<" + str(max_len + 3) + "}").format(str(key) + " :")
             if type(val) == dict:
-                print(level * "    ", pretty_key, end="\n")
-                DictUtils.display(val, level=level + 1)
+                representation_string += f"{level * '    '}{pretty_key}\n"
+                representation_string += DictUtils.represent(val, level=level + 1)
             elif type(val) == list:
-                print(level * "    ", pretty_key, "[", end="\n")
+                representation_string += f"{level * '    '}{pretty_key}[\n"
                 for i in val:
-                    print((level + 1) * "    ", i, end="\n")
-                print(level * "    ", "]")
+                    representation_string += f"{(level + 1) * '    '}{i}\n"
+                representation_string += f"{level * '    '}]\n"
             else:
-                print(level * "    ", pretty_key, val)
+                representation_string += f"{level * '    '}{pretty_key}{val}\n"
+
+        return representation_string
 
     @staticmethod
     def merge_dicts(decrescendo_dicts: list):

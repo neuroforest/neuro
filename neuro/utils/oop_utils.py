@@ -52,13 +52,13 @@ def get_attr_keys(obj, modes=None):
     return attr_keys
 
 
-def display(obj, level=0, modes=None):
+def represent(obj, level=0, modes=None):
     """
-    Display the node data in the terminal.
+    Return a string used for object representation.
     :param obj: object, practically any python object
-    :param level:
+    :param level: level of indentation
     :param modes: set of modes (see function get_attr_keys)
-    :return:
+    :return: representation string
     """
 
     def get_max_size(li):
@@ -70,6 +70,7 @@ def display(obj, level=0, modes=None):
         return max_len
 
     # Setting th default mode.
+    representation_string = str()
     attrs = dict()
     attr_keys = get_attr_keys(obj, modes=modes)
 
@@ -99,7 +100,9 @@ def display(obj, level=0, modes=None):
         pretty_key = str("{:<" + str(key_len + 2) + "}").format(str(attr_key) + ":")
         if (hasattr(attr_val, "display") and attr_key != "__class__") or \
                 (isinstance(attr_val, dict) and attr_val):
-            print(level*"  ", pretty_key)
-            display(attr_val, modes=modes, level=level+1)
+            representation_string += f"{level*'  '}{pretty_key}\n"
+            representation_string += represent(attr_val, modes=modes, level=level + 1)
         else:
-            print(level*"  ", pretty_key, attr_val)
+            representation_string += f"{level*'  '}{pretty_key}{attr_val}"
+
+    return representation_string
