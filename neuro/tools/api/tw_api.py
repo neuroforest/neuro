@@ -53,7 +53,7 @@ class API:
         if self.response.status_code == 204:
             return True
         else:
-            DictUtils.display(self.response.__dict__)
+            print(DictUtils.represent(self.response.__dict__))
             return False
 
     def get(self, path, **kwargs):

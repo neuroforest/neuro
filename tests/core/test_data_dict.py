@@ -14,13 +14,17 @@ class TestDictUtils:
             json_text = f.read()
         self.test_dict = json.loads(json_text)
 
-    def test_display(self):
+    def test_display_string(self):
         from neuro.core.data.dict import DictUtils
         self.get_test_dict()
-        with Capturing() as output:
-            DictUtils.display(self.test_dict)
+        display_string = DictUtils.represent(self.test_dict)
 
-        assert get_hash(output.__str__()) == "d37fd89bd289a48031a0b77d8d665800926a1cb6"
+        print(display_string)
+        result_path = get_test_file("results/display-string.txt")
+        with open(result_path) as f:
+            result_text = f.read()
+
+        assert display_string == result_text
 
     def test_dict_merge(self):
         from neuro.core.data.dict import DictUtils

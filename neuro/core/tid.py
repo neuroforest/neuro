@@ -9,16 +9,15 @@ import re
 from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
 
-from neuro.core.deep import Edges, NeuroNode
-from neuro.core.data.dict import DictUtils
-from neuro.core.files.text import TextHtml, TextJson
+from neuro.core.deep import NeuroNode
+from neuro.core.files.text import TextHtml
 from neuro.utils import oop_utils, exceptions
 
 
 class NeuroTid(NeuroNode):
     """
     NeuroTid is a Python representation of tiddler, that is an element of
-    NeuroForest platoform.
+    NeuroForest platform.
     There are 3 fundamental object properties:
         - uuid - inherited from NeuroNode
         - title - tiddler title, also serves as identifier
@@ -38,6 +37,27 @@ class NeuroTid(NeuroNode):
 
     def __str__(self):
         return f"<NeuroTid title=\"{self.title}\">"
+
+    def __repr__(self):
+        return f"\n{self.__str__()}\n{super().__repr__()}"
+
+    def add_fields(self, fields, override=False):
+        """
+        Add fields to neuro_tid.
+
+        Similar to NeuroBit.extend_fields.
+
+        :param fields: dict
+        :param override: override existing fields
+        :return:
+        """
+        for field_name, field_value in fields.items():
+            if field_name in self.fields:
+                if override and self.fields != field_value:
+                    logging.warning(f"Overriding field: {field_name}  - {self.fields[field_name]} -> {field_value}")
+                    self.fields[field_name] = field_value
+            else:
+                self.fields[field_name] = field_value
 
     def add_tag(self, tags):
         if "tags" in self.fields:
@@ -89,24 +109,6 @@ class NeuroTid(NeuroNode):
         neuro_tid = cls(tid_title, tiddler)
         return neuro_tid
 
-    def add_fields(self, fields, override=False):
-        """
-        Add fields to neuro_tid.
-
-        Similar to NeuroBit.extend_fields.
-
-        :param fields: dict
-        :param override: override existing fields
-        :return:
-        """
-        for field_name, field_value in fields.items():
-            if field_name in self.fields:
-                if override and self.fields != field_value:
-                    logging.warning(f"Overriding field: {field_name}  - {self.fields[field_name]} -> {field_value}")
-                    self.fields[field_name] = field_value
-            else:
-                self.fields[field_name] = field_value
-
     @staticmethod
     def get_tid_file_name(tid_title):
         """
@@ -148,6 +150,24 @@ class NeuroTid(NeuroNode):
 
         return text
 
+    def to_tiddler(self, only_true=True):
+        # Extracting data.
+        tiddler_keys = oop_utils.get_attr_keys(self, modes={"simple", "no_func"})
+        tiddler = dict()
+        for key in tiddler_keys:
+            val = self[key]
+
+            if isinstance(val, set):
+                val = list(val)
+
+            tiddler[key] = val
+
+        # Removing false values.
+        if only_true:
+            tiddler = {key: val for key, val in tiddler.items() if val}
+
+        return tiddler
+
     def write(self, fields=None, directory="", path=""):
         """Write to tid text file."""
         if not fields:
@@ -167,24 +187,6 @@ class NeuroTid(NeuroNode):
 
         with open(path, "w+", encoding="utf-8") as f:
             f.write(text)
-
-    def to_tiddler(self, only_true=True):
-        # Extracting data.
-        tiddler_keys = oop_utils.get_attr_keys(self, modes={"simple", "no_func"})
-        tiddler = dict()
-        for key in tiddler_keys:
-            val = self[key]
-
-            if isinstance(val, set):
-                val = list(val)
-
-            tiddler[key] = val
-
-        # Removing false values.
-        if only_true:
-            tiddler = {key: val for key, val in tiddler.items() if val}
-
-        return tiddler
 
 
 class NeuroTids(list):
@@ -206,13 +208,17 @@ class NeuroTids(list):
         return list_str
 
     def __repr__(self):
-        return self.__str__()
+        representation_string = str()
+        for i in self:
+            representation_string += i.__repr__()
+        return representation_string
 
     def __contains__(self, tid_title):
         return tid_title in self.object_index
 
     def append(self, neuro_tid: NeuroTid):
         if not isinstance(neuro_tid, NeuroTid):
+            logging.error(f"Cannot append object of type {type(neuro_tid)}")
             return
 
         # Checking for conflicts.
