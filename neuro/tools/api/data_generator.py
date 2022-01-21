@@ -35,7 +35,7 @@ def generate_dataset(tw_filter, fields, dataset_path, allow_empty=False):
                 row_tuple += "",
         rows.append(row_tuple)
 
-    with open(dataset_path, "w+") as f:
+    with open(dataset_path, "w+", newline="", encoding="utf-8") as f:
         csv_writer = csv.writer(f)
         csv_writer.writerows(rows)
 
