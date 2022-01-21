@@ -68,12 +68,15 @@ def tiddler(tid_title, **kwargs):
     """
     api = tw_api.get_api(**kwargs)
     if not api:
-        return None
+        raise exceptions.NoAPI()
     response = api.get(f"/neuro/tiddlers/{tid_title}")
-    if response["status_code"] == 404:
-        raise exceptions.TiddlerDoesNotExist(tid_title)
 
-    return response["parsed"]
+    if response["status_code"] == 200:
+        return response["parsed"]
+    elif response["status_code"] == 404:
+        raise exceptions.TiddlerDoesNotExist(tid_title)
+    else:
+        raise exceptions.UnhandledStatusCode(response["status_code"])
 
 
 def tw_fields(fields: list, tw_filter: str):
