@@ -41,3 +41,12 @@ class TestWikiData:
         result = data["results"]["bindings"][0]
         assert result["label"]["xml:lang"] == "en"
         assert result["label"]["value"] == "test"
+
+
+class TestGbif:
+    @pytest.mark.integration
+    def test_request_get(self):
+        from neuro.tools.wrappers import gbif
+        taxon_data = gbif.get_taxon("2597892")
+        assert taxon_data["species"] == "Penicillium digitatum"
+        assert taxon_data["familyKey"] == 3563703
