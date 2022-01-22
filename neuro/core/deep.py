@@ -496,7 +496,7 @@ class NeuroNode(NeuroObject):
         attrs_keys = oop_utils.get_attr_keys(self, modes=modes)
 
         attrs = {k: self[k] for k in attrs_keys}
-        return DictUtils.represent(attrs)
+        return DictUtils.represent(attrs, display=False)
 
     def __setitem__(self, key, value):
         setattr(self, key, value)
