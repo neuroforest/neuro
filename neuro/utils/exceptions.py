@@ -30,3 +30,7 @@ class InvalidURL(BaseException):
 class UnhandledStatusCode(BaseException):
     pass
 
+
+class NoAPI(BaseException):
+    pass
+

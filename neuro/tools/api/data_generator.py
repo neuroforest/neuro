@@ -55,3 +55,7 @@ def generate_dataset_taxon_ranks():
     for field in fields:
         if not text_csv.is_identifier(field):
             logging.error(f"Column not identifier: {field}")
+
+
+if __name__ == "__main__":
+    generate_dataset_taxon_ranks()
