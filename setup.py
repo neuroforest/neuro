@@ -2,14 +2,16 @@ from setuptools import setup
 
 setup(
     name="neuro",
-    version="1.0",
+    version="1.1.0",
     packages=[
         "neuro.core",
         "neuro.core.data",
         "neuro.core.files",
         "neuro.tools.api",
+        "neuro.tools.local",
         "neuro.tools.terminal",
         "neuro.tools.terminal.commands",
+        "neuro.tools.wrappers",
         "neuro.utils"],
     include_package_data=True,
     entry_points="""
