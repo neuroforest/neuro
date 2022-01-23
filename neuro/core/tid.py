@@ -41,19 +41,19 @@ class NeuroTid(NeuroNode):
     def __repr__(self):
         return f"\n{self.__str__()}\n{super().__repr__()}"
 
-    def add_fields(self, fields, override=False):
+    def add_fields(self, fields, overwrite=False):
         """
         Add fields to neuro_tid.
 
         Similar to NeuroBit.extend_fields.
 
         :param fields: dict
-        :param override: override existing fields
+        :param overwrite: override existing fields
         :return:
         """
         for field_name, field_value in fields.items():
             if field_name in self.fields:
-                if override and self.fields != field_value:
+                if overwrite and self.fields != field_value:
                     logging.warning(f"Overriding field: {field_name}  - {self.fields[field_name]} -> {field_value}")
                     self.fields[field_name] = field_value
             else:
@@ -244,6 +244,9 @@ class NeuroTids(list):
             neuro_tid.add_tag(current_tag)
             neuro_tid.fields["neuro.primary"] = current_tag
             current_tag = neuro_tid.title
+
+    def display(self):
+        print(self.__repr__())
 
     def extend(self, neuro_tid_list):
         for neuro_tid in neuro_tid_list:

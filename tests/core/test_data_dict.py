@@ -17,7 +17,7 @@ class TestDictUtils:
     def test_display_string(self):
         from neuro.core.data.dict import DictUtils
         self.get_test_dict()
-        display_string = DictUtils.represent(self.test_dict)
+        display_string = DictUtils.represent(self.test_dict, display=False)
 
         print(display_string)
         result_path = get_test_file("results/display-string.txt")

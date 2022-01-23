@@ -19,7 +19,7 @@ def tiddler(api_tiddler, **kwargs):
         return None
 
     tiddler_json = json.dumps(api_tiddler)
-    response = api.put("/recipes/default/tiddlers/" + api_tiddler["title"], data=tiddler_json)
+    response = api.put("/neuro/tiddlers/" + api_tiddler["title"], data=tiddler_json)
     if response.status_code == 204:
         logging.debug(f"Put '{api_tiddler['title']}'")
     else:
@@ -30,3 +30,11 @@ def tiddler(api_tiddler, **kwargs):
             f"reason: {response.reason}")
 
     return response
+
+
+def neuro_tid(nt):
+    tid = nt.fields
+    tid["title"] = nt.title
+    if "neuro.id" not in tid:
+        tid["neuro.id"] = nt.uuid
+    tiddler(tid)
