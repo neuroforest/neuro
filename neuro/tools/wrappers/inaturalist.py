@@ -59,22 +59,27 @@ def get_taxon_tid(taxon_id):
 
     # Select title.
     taxon_name = taxon_data["name"]
-    taxon_rank = taxon_data["rank_level"]
+    taxon_rank_level = taxon_data["rank_level"]
+    taxon_rank = taxon_data["rank"]
     taxon_ranks_path = internal_utils.get_path("resources") + "/data/taxon-ranks.csv"
     with open(taxon_ranks_path) as f:
         csv_reader = csv.reader(f)
         header = next(csv_reader)  # Assume name,inat.rank.level,encoding
         neuro_code = str()
         for row in csv_reader:
-            if str(taxon_rank) == row[1] and taxon_data["rank"] == row[0]:
+            if str(taxon_rank_level) == row[1] and taxon_rank == row[0]:
                 neuro_code = row[2][1:-1]
                 break
-        if not neuro_code:
-            print(f"Taxon not found: {taxon_data['rank']} ({taxon_rank})")
+        if not neuro_code and taxon_rank_level != 100:
+            print(f"Taxon not found: {taxon_data['rank']} ({taxon_rank_level})")
             return NeuroTid()
-
     tid_title = f"{neuro_code} {taxon_name}"
+
     neuro_tid = NeuroTid(tid_title)
+    neuro_tid.add_fields({
+        "neuro.role": f"taxon.{taxon_rank}",
+        "inat.taxon.id": taxon_id
+    })
     return neuro_tid
 
 

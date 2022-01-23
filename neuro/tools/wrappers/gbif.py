@@ -8,6 +8,7 @@ import requests
 import urllib.parse
 
 from neuro.core import tid
+from neuro.core.data.dict import DictUtils
 from neuro.utils import exceptions, internal_utils
 
 
@@ -20,7 +21,6 @@ FIELD_MAP = {
 def request_get(endpoint):
     gbif_api = f"https://api.gbif.org/v1/"
     url = urllib.parse.urljoin(gbif_api, endpoint)
-
     res = requests.get(url)
     status_code = res.status_code
     if status_code == 200:
@@ -37,7 +37,25 @@ def get_taxon(taxon_id):
     return taxon_data
 
 
+def search_by_name(scientific_name):
+    params = {"name": scientific_name}
+    endpoint = f"species/match?{urllib.parse.urlencode(params)}"
+    response_text = request_get(endpoint)
+    taxon_data = json.loads(response_text)
+    if "usageKey" in taxon_data:
+        return taxon_data["usageKey"]
+    else:
+        return False
+
+
 def collect_fields(data, field_list, transform=False):
+    """
+    Collect fields from data returned.
+    :param data:
+    :param field_list:
+    :param transform:
+    :return:
+    """
     if transform:
         fields = dict()
         for gbif_field in field_list:
@@ -62,7 +80,10 @@ def get_taxon_tid(taxon_id):
     taxon_data = get_taxon(taxon_id)
 
     # Select title.
-    taxon_name = taxon_data["canonicalName"]
+    try:
+        taxon_name = taxon_data["canonicalName"]
+    except KeyError:
+        taxon_name = taxon_data["scientificName"]
     taxon_rank = taxon_data["rank"].lower()
     taxon_ranks_path = internal_utils.get_path("resources") + "/data/taxon-ranks.csv"
     with open(taxon_ranks_path) as f:
