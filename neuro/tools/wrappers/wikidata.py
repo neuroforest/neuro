@@ -6,7 +6,6 @@ from neuro.utils import internal_utils
 
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 FIELD_MAP = {
-    "taxon": "taxonRank",
     "trans.slv": "labelSL",
     "trans.eng": "labelEN",
     "inat.taxon.id": "iNaturalistID",
@@ -58,14 +57,14 @@ def get_taxon_data(taxon_name: str):
     """
     if not taxon_name:
         logging.warning("Taxon name not given.")
-        return False
+        return {}
 
     query = get_query("taxon", {"taxon": taxon_name})
     res = send_query(query)
 
     if not res["results"]["bindings"]:
-        logging.warning(f"Data for taxon not found: {taxon_name}")
-        return False
+        logging.info(f"Data for taxon not found: {taxon_name}")
+        return {}
     else:
         bindings = res["results"]["bindings"][0]
 
