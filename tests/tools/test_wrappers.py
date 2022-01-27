@@ -4,7 +4,7 @@ Unit tests for the package .
 import pytest
 import json
 
-from ..helper import get_test_file, get_resource_path
+from ..helper import get_test_file, get_path
 
 
 def get_inaturalist_mocks():
@@ -36,7 +36,7 @@ class TestWikiData:
     @pytest.mark.integration
     def test_query(self):
         from neuro.tools.wrappers import wikidata
-        query_path = get_resource_path("queries/test.rq")
+        query_path = get_path("resources/queries/test.rq")
         with open(query_path) as f:
             query = f.read()
         data = wikidata.send_query(query)
