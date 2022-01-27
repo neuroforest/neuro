@@ -19,10 +19,9 @@ def are_dirs_identical(dir1, dir2):
         return False
 
 
-def get_resource_path(file_subpath):
-    resources_dir = os.path.abspath("resources")  # IMPORTANT: must be in dir
-    resource_path = f"{resources_dir}/{file_subpath}"
-    return resource_path
+def get_path(file_subpath):
+    path = f"{os.path.abspath('.')}/{file_subpath}"  # IMPORTANT: must be in dir
+    return path
 
 
 def get_test_file(file_name, exists=True, multi=False):
