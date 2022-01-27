@@ -25,7 +25,7 @@ class TestNeuroTid:
         from neuro.core.tid import NeuroTid
         neuro_tid = NeuroTid("test")
 
-        # There should be not `tags` field by default
+        # There should not be `tags` field by default
         with pytest.raises(KeyError):
             neuro_tid.fields["tags"]
 
@@ -63,15 +63,6 @@ class TestNeuroTid:
         with pytest.raises(exceptions.MissingTitle):
             NeuroTid.from_tiddler(tiddler)
 
-    def test_to_text(self):
-        neuro_tid = self.get_test_neuro_tid()
-        text = neuro_tid.to_text(neuro_tid.fields)
-        result_text_path = get_test_file("results/tiddler_text.txt")
-        with open(result_text_path) as f:
-            result_text = f.read()
-
-        assert result_text == text
-
     def test_get_tid_file_name(self):
         from neuro.core.tid import NeuroTid
         test_tid_title_1 = "$:/core/modules/utils/filesystem.js"
@@ -81,6 +72,29 @@ class TestNeuroTid:
         test_tid_title_2 = "tiddler <|>|~|test\\:|\"|"
         tid_file_name_2 = NeuroTid.get_tid_file_name(test_tid_title_2)
         assert tid_file_name_2 == "tiddler ______test_____"
+
+    def test_item_handling(self):
+        """
+        Test special methods __contains__, __delitem__, __getitem__
+        and __setitem__.
+        """
+        from neuro.core.tid import NeuroTid
+        neuro_tid = NeuroTid("test")
+        assert "test" not in neuro_tid
+        assert "title" in neuro_tid
+        neuro_tid["test"] = "Lorem"
+        assert "test" in neuro_tid
+        del neuro_tid["test"]
+        assert neuro_tid.fields == {}
+
+    def test_to_text(self):
+        neuro_tid = self.get_test_neuro_tid()
+        text = neuro_tid.to_text(neuro_tid.fields)
+        result_text_path = get_test_file("results/tiddler_text.txt")
+        with open(result_text_path) as f:
+            result_text = f.read()
+
+        assert result_text == text
 
 
 class TestNeuroTids:
@@ -131,6 +145,7 @@ class TestNeuroTids:
         ])
         neuro_tids[1].fields["text"] = "Positive."
         assert neuro_tids.object_index["test2"].fields["text"] == "Positive."
+
 
 class TestNeuroTW:
     def test_from_html(self):
