@@ -35,11 +35,39 @@ class NeuroTid(NeuroNode):
     def __bool__(self):
         return bool(self.title)
 
-    def __str__(self):
-        return f"<NeuroTid title=\"{self.title}\">"
+    def __delitem__(self, key):
+        if key in self:
+            del self.fields[key]
+
+    def __getitem__(self, key):
+        if key in ["title", "edges", "uuid", "fields"]:
+            return super().__getitem__(key)
+        else:
+            return self.fields[key]
+
+    def __contains__(self, key):
+        d = {
+            **self.fields,
+            "edges": self.edges,
+            "title": self.title,
+            "uuid": self.uuid
+        }
+        if key in d:
+            return True
+        else:
+            return False
 
     def __repr__(self):
         return f"\n{self.__str__()}\n{super().__repr__()}"
+
+    def __setitem__(self, key, value):
+        if key in ["title", "edges", "uuid", "fields"]:
+            super().__setitem__(key, value)
+        else:
+            self.fields[key] = value
+
+    def __str__(self):
+        return f"<NeuroTid title=\"{self.title}\">"
 
     def add_fields(self, fields, overwrite=False):
         """

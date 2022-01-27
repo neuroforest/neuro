@@ -483,17 +483,12 @@ class NeuroNode(NeuroObject):
     def __hash__(self):
         return int(self.uuid, 16)
 
-    def __repr__(self, modes=None):
+    def __repr__(self):
         """
         Display the node data in the terminal.
-        :param modes: set of modes
         :return:
         """
-        # Default modes.
-        if not modes:
-            modes = {"no_func", "simple"}
-
-        attrs_keys = oop_utils.get_attr_keys(self, modes=modes)
+        attrs_keys = oop_utils.get_attr_keys(self, modes={"no_func", "simple"})
 
         attrs = {k: self[k] for k in attrs_keys}
         return DictUtils.represent(attrs, display=False)
