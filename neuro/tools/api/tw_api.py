@@ -93,10 +93,12 @@ class API:
         }
         logging.debug(f"Put arguments:\n\tPath: {path}\n\tKwargs: {kwargs}")
 
+        params = kwargs.get("params", dict())
         self.response = requests.put(
             full_url,
             data=kwargs.get("data", {}),
-            headers=headers)
+            headers=headers,
+            params=params)
 
         return self.response
 
