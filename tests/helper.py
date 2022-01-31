@@ -11,6 +11,9 @@ import os
 import sys
 
 
+PORT = 8088
+
+
 def are_dirs_identical(dir1, dir2):
     cmp_object = filecmp.dircmp(dir1, dir2)
     if not cmp_object.diff_files:
