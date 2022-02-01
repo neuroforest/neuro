@@ -21,10 +21,12 @@ def pytest_sessionstart(session):
         global PROCESS
         PROCESS = subprocess.Popen([
             "node",
-            "../tw5/tiddlywiki.js",
-            "../tw5/editions/neuro-test",
+            "tw5/tiddlywiki.js",
+            "tw5/editions/neuro-test",
             "--listen",
-            f"port={PORT}"
+            f"port={PORT}",
+            "readers=(anon)",
+            "writers=(anon)"
         ], stdout=subprocess.DEVNULL)
 
 

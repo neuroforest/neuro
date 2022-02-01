@@ -100,7 +100,7 @@ def tw_fields(fields: list, tw_filter: str):
     return parsed_response
 
 
-def tw_index(tw_filter=None):
+def tw_index(tw_filter=None, **kwargs):
     """
     Return a list of objects representing tiddler including shadow.
     {
@@ -112,7 +112,7 @@ def tw_index(tw_filter=None):
     :return:
     :rtype: list
     """
-    api = tw_api.get_api()
+    api = tw_api.get_api(**kwargs)
     if not api:
         return None
 
