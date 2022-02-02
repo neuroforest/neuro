@@ -79,14 +79,14 @@ def tiddler(tid_title, **kwargs):
         raise exceptions.UnhandledStatusCode(response["status_code"])
 
 
-def tw_fields(fields: list, tw_filter: str):
+def tw_fields(fields: list, tw_filter: str, **kwargs):
     """
     Filter tiddlers by `tw_filter` and extract `fields`.
     :param fields:
     :param tw_filter:
     :return:
     """
-    api = tw_api.get_api()
+    api = tw_api.get_api(**kwargs)
     if not api:
         return None
 
@@ -120,8 +120,8 @@ def tw_index(tw_filter=None, **kwargs):
     params = dict()
     if tw_filter:
         params["filter"] = tw_filter
-    parsed_response = api.get(url, params=params)
-    return parsed_response
+    response = api.get(url, params=params)
+    return response["parsed"]
 
 
 def wiki():
