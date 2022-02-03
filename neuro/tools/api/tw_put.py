@@ -32,9 +32,9 @@ def tiddler(api_tiddler, **kwargs):
     return response
 
 
-def neuro_tid(nt):
+def neuro_tid(nt, **kwargs):
     tid = nt.fields
     tid["title"] = nt.title
     if "neuro.id" not in tid:
         tid["neuro.id"] = nt.uuid
-    tiddler(tid)
+    tiddler(tid, **kwargs)
