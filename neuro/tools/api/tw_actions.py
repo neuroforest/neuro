@@ -32,15 +32,15 @@ def rename_tiddler(old_title, new_title, **kwargs):
     return response
 
 
-def replace_text(old_text, new_text, tw_filter):
-    api = tw_api.get_api()
+def replace_text(old_text, new_text, tw_filter="", **kwargs):
+    api = tw_api.get_api(**kwargs)
     if not api:
         return None
 
     params = {
         "oldText": old_text,
         "newText": new_text,
-        "filter": tw_filter
+        "tw_filter": tw_filter
     }
     response = api.put(f"/neuro/action/replace", params=params)
     if response.status_code == 200:

@@ -14,4 +14,4 @@ from neuro.tools.api import tw_actions
 @click.argument("tw_filter", default="")
 @pass_environment
 def cli(ctx, old_text, new_text, tw_filter):
-    tw_actions.replace_text(old_text, new_text, tw_filter)
+    tw_actions.replace_text(old_text, new_text, tw_filter=tw_filter)

@@ -50,3 +50,35 @@ class TestTwPut:
         tw_put.neuro_tid(neuro_tid, port=PORT)
         tiddler = tw_get.tiddler("test_put_neuro_tid", port=PORT)
         assert tiddler["text"] == text
+
+
+class TestTwActions:
+    @pytest.mark.integration
+    def test_merge(self):
+        from neuro.tools.api import tw_actions, tw_get
+        r = tw_actions.merge_tiddlers(["merge1", "merge2"], port=PORT)
+        assert r.status_code == 204
+        assert not tw_get.is_tiddler("merge1", port=PORT)
+        merged_tiddler = tw_get.tiddler("merge2", port=PORT)
+        assert merged_tiddler["text"] == "merge2"
+
+    @pytest.mark.integration
+    def test_rename(self):
+        from neuro.tools.api import tw_actions, tw_get
+        r = tw_actions.rename_tiddler("rename1", "rename2", port=PORT)
+        assert r.reason == "OK"
+        assert r.status_code == 204
+        assert not tw_get.is_tiddler("rename1", port=PORT)
+        renamed_tiddler = tw_get.tiddler("rename2", port=PORT)
+        assert renamed_tiddler["text"] == "rename1"
+
+    def test_replace(self):
+        from neuro.tools.api import tw_actions, tw_get
+        r = tw_actions.replace_text("replace1", "replace2", port=8088)
+        assert r.reason == "1 tiddlers affected"
+        assert r.status_code == 200
+        replaced_tiddler = tw_get.tiddler("replace1", port=PORT)
+        assert replaced_tiddler["text"] == "replace2"
+        r = tw_actions.replace_text("replace1uncommontext", "replace2", port=8088)
+        assert r.status_code == 500
+        assert r.reason == "0 matches"
