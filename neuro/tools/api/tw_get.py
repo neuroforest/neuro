@@ -20,7 +20,7 @@ def all_tiddlers():
     return response["parsed"]
 
 
-def is_tiddler(tid_title):
+def is_tiddler(tid_title, **kwargs):
     """
     Checks if the tiddler is accessible through the API.
 
@@ -29,7 +29,7 @@ def is_tiddler(tid_title):
     """
 
     try:
-        tiddler(tid_title)
+        tiddler(tid_title, **kwargs)
         return True
     except exceptions.TiddlerDoesNotExist:
         return False
