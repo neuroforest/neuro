@@ -2,8 +2,8 @@ from neuro.tools.api import tw_api
 from neuro.tools.terminal import style
 
 
-def merge_tiddlers(title_list):
-    api = tw_api.get_api()
+def merge_tiddlers(title_list, **kwargs):
+    api = tw_api.get_api(**kwargs)
     if not api:
         return None
 
@@ -14,10 +14,11 @@ def merge_tiddlers(title_list):
     response = api.put(f"/neuro/action/merge", params=params)
     if response.status_code != 204:
         print(f"Error: {response.reason}")
+    return response
 
 
-def rename_tiddler(old_title, new_title):
-    api = tw_api.get_api()
+def rename_tiddler(old_title, new_title, **kwargs):
+    api = tw_api.get_api(**kwargs)
     if not api:
         return None
 
@@ -28,6 +29,7 @@ def rename_tiddler(old_title, new_title):
     response = api.put(f"/neuro/action/rename", params=params)
     if response.status_code != 204:
         print(f"Error: {response.reason}")
+    return response
 
 
 def replace_text(old_text, new_text, tw_filter):
@@ -45,3 +47,4 @@ def replace_text(old_text, new_text, tw_filter):
         print(style.SUCCESS, response.reason)
     else:
         print(style.FAIL, response.reason)
+    return response

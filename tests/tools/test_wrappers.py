@@ -40,6 +40,7 @@ class TestWikiData:
         with open(query_path) as f:
             query = f.read()
         data = wikidata.send_query(query)
+        assert data
         result = data["results"]["bindings"][0]
         assert result["label"]["xml:lang"] == "en"
         assert result["label"]["value"] == "test"
