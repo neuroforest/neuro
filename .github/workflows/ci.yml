@@ -13,8 +13,7 @@ jobs:
           python-version: '3.8'
           architecture: 'x64'
       - run: |
-          git submodule update --init --recursive
-          git submodule update --merge --remote
+          git submodule update --remote --init
           pip install -r requirements.txt
           pip install .
           pytest
