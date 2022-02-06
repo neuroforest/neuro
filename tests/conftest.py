@@ -17,6 +17,11 @@ def pytest_sessionstart(session):
     shutil.rmtree(output_path, ignore_errors=True)
     os.makedirs(output_path)
 
+    # Restore submodules
+    os.system("git submodule update --remote --init ")
+    os.system("git submodule foreach git checkout -f origin/develop")
+    os.system("git submodule foreach git clean -fd")
+
     if session.config.option.markexpr in ["", "integration"]:
         global PROCESS
         PROCESS = subprocess.Popen([
@@ -27,7 +32,7 @@ def pytest_sessionstart(session):
             f"port={PORT}",
             "readers=(anon)",
             "writers=(anon)"
-        ], stdout=subprocess.DEVNULL)
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def pytest_sessionfinish(session, exitstatus):
