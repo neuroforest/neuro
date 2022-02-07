@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="neuro",
-    version="1.1.0",
+    version="1.1.1",
     packages=[
         "neuro.core",
         "neuro.core.data",
