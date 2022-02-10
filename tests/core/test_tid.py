@@ -153,6 +153,6 @@ class TestNeuroTW:
         tw_html_path = get_test_file("input/tw.html")
 
         neuro_tw = NeuroTW.from_html(tw_html_path)
-        assert len(neuro_tw.neuro_tids) == 4
+        assert len(neuro_tw.neuro_tids) == 7
         assert neuro_tw.__contains__("$:/isEncrypted")
         assert neuro_tw.neuro_tids.object_index["$:/isEncrypted"].fields["text"] == "\nno\n"

@@ -4,6 +4,7 @@ Refactor local directories and update the wiki accordingly.
 import os
 import logging
 import shlex
+import subprocess
 import tqdm
 
 from neuro.core.deep import Dir
@@ -63,3 +64,14 @@ def refactor_path(src_path, dst_path, tiddlers_path):
 
     # Move locally
     src_dir.move(dst_path)
+
+
+def transform(html_wiki, wiki_folder):
+    p = subprocess.Popen([
+        "node",
+        "tw5/tiddlywiki.js",
+        wiki_folder,
+        "--load",
+        html_wiki])
+    p.wait()
+    p.kill()
