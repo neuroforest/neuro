@@ -161,7 +161,7 @@ class File(NeuroObject):
     :raises FileNotFoundError:
     """
     def __new__(cls, path="", mode="r"):
-        if path and not os.path.isfile(path) and mode == "r":
+        if path and not os.path.exists(path) and mode == "r":
             raise FileNotFoundError(path)
         return super().__new__(cls)
 
@@ -274,21 +274,12 @@ class File(NeuroObject):
             self.__setattr__(key, attr_val)
 
 
-class Dir(NeuroObject):
-    def __new__(cls, dir_path):
-        if not os.path.isdir(dir_path):
-            raise FileNotFoundError(dir_path)
-        return super().__new__(cls)
-
+class Dir(File):
     def __init__(self, dir_path, **kwargs):
-        self.path = dir_path
+        super().__init__(dir_path)
         self.subdirs = list()
         self.subfiles = list()
         self.files = list()
-        self.atime, self.ctime, self.mtime = tuple(Moment(form="now") for i in range(3))
-        self.inode = int()
-        self.size = int()
-        self.owner = str()
         self.collect(**kwargs)
 
     def __repr__(self, **kwargs):
@@ -378,6 +369,9 @@ class Dir(NeuroObject):
         else:
             logging.error(f"Mode {mode} is not supported.")
             return []
+
+    def get_item_number(self, file_ext):
+        return len(os.listdir(self.path))
 
     def get_latest_file(self, mode="def", recursive=True, mime_major=None):
         """
