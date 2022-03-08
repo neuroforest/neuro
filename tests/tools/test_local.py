@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 
-from ..helper import get_test_file, are_dirs_identical
+from ..helper import get_test_file, are_dirs_identical, get_path
 
 
 class TestRefactor:
@@ -15,7 +15,8 @@ class TestRefactor:
     def test_create_wikifolder(self):
         from neuro.tools.local import refactor
         output_tiddlers = get_test_file("output/cwf", exists=False)
-        refactor.create_wikifolder(output_tiddlers)
+        tw_info_template = get_path("resources/templates/tiddlywiki.info")
+        refactor.create_wikifolder(output_tiddlers, tw_info_template=tw_info_template)
         assert os.path.isfile(output_tiddlers + "/tiddlywiki.info")
 
     def test_update_tiddlers(self):

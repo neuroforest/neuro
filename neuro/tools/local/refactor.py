@@ -15,7 +15,10 @@ logging.basicConfig(level=logging.INFO)
 
 
 def create_wikifolder(wf_path, **kwargs):
-    tw_info_template = internal_utils.get_path("templates") + "/tiddlywiki.info"
+    if "tw_info_template" in kwargs:
+        tw_info_template = kwargs.get("tw_info_template")
+    else:
+        tw_info_template = internal_utils.get_path("templates") + "/tiddlywiki.info"
     with open(tw_info_template) as f:
         tw_info = json.load(f)
     for key in kwargs:
