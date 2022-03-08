@@ -29,6 +29,7 @@ def get_path(keyword):
         "nw": "desktop/output/linux64/TiddlyDesktop-linux64-v0.0.14/nw",
         "plugins": "tw/plugins",
         "resources": "neuro/resources",
+        "templates": "neuro/resources/templates",
         "tests": "neuro/tests",
         "tiddlers": "storage/tiddlers",
         "tw5": "tw5",

@@ -12,6 +12,12 @@ class TestRefactor:
     """
     Unit tests for the module neuro.tools.local.refactor.
     """
+    def test_create_wikifolder(self):
+        from neuro.tools.local import refactor
+        output_tiddlers = get_test_file("output/cwf", exists=False)
+        refactor.create_wikifolder(output_tiddlers)
+        assert os.path.isfile(output_tiddlers + "/tiddlywiki.info")
+
     def test_update_tiddlers(self):
         from neuro.tools.local import refactor
         input_tiddlers = get_test_file("input/tiddlers1")

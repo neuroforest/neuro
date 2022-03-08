@@ -1,15 +1,30 @@
 """
 Refactor local directories and update the wiki accordingly.
 """
+import json
 import os
 import logging
 import shlex
 import subprocess
 import tqdm
 
-from neuro.core.deep import Dir
+from neuro.core.deep import Dir, File
+from neuro.utils import internal_utils
 
 logging.basicConfig(level=logging.INFO)
+
+
+def create_wikifolder(wf_path, **kwargs):
+    tw_info_template = internal_utils.get_path("templates") + "/tiddlywiki.info"
+    with open(tw_info_template) as f:
+        tw_info = json.load(f)
+    for key in kwargs:
+        tw_info[key] = kwargs.get(key)
+
+    os.makedirs(wf_path)
+    tw_info_path = wf_path + "/tiddlywiki.info"
+    with open(tw_info_path, "w+") as f:
+        json.dump(tw_info, f, indent=4)
 
 
 def update_tiddlers(old, new, tiddlers_path):
@@ -66,10 +81,10 @@ def refactor_path(src_path, dst_path, tiddlers_path):
     src_dir.move(dst_path)
 
 
-def transform(html_wiki, wiki_folder):
+def transform(html_wiki, wiki_folder, tw5="tw5/tiddlywiki.js"):
     p = subprocess.Popen([
         "node",
-        "tw5/tiddlywiki.js",
+        tw5,
         wiki_folder,
         "--load",
         html_wiki])
