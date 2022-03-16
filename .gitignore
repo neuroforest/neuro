@@ -5,5 +5,6 @@ __pycache__/
 # Dirs
 /neuro.egg-info
 /.idea
+/.pytest_cache
 /resources/test/output
 /temp
