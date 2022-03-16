@@ -25,7 +25,7 @@ class TestRefactor:
         output_tiddlers = get_test_file("output/tiddlers1", exists=False)
         result_tiddlers = get_test_file("results/tiddlers1")
         shutil.copytree(input_tiddlers, output_tiddlers)
-        old = "isrubgbaprugbh;43o;ronf;84\n\n$OY("
+        old = "isru[bgbaprugbh;43o;ronf;84\n\n$OY("
         new = "new text"
         refactor.update_tiddlers(old, new, output_tiddlers)
 
