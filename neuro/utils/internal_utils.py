@@ -35,8 +35,8 @@ def get_path(keyword):
         "tw5": "tw5",
         "tw-com": "tw/editions/tw5.com/tiddlers",
         "tiddlywiki.js": "tw/tiddlywiki.js",
-        "tw5-plugin-core": "tw5-plugin-core/source/core",
-        "tw5-plugin-front": "tw5-plugin-front/source/front",
+        "tw5-plugin-core": "tw5-plugins/source/core",
+        "tw5-plugin-front": "tw5-plugins/source/front",
         "wd_queries": "neuro/resources/queries"
     }
 
