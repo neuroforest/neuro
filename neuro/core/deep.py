@@ -55,6 +55,11 @@ class Moment(NeuroObject):
 
     @classmethod
     def from_string(cls, datetime_string, datetime_format):
+        """
+        :param datetime_string:
+        :param datetime_format: refer to https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
+        :return:
+        """
         try:
             dt = datetime.datetime.strptime(datetime_string, datetime_format)
             dt = dt.replace(tzinfo=datetime.timezone.utc)
