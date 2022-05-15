@@ -9,12 +9,14 @@ kingdom,70,`.bt-k`
 order,40,`.bt-o`
 parvorder,34.5,`.bt-op`
 phylum,60,`.bt-p`
+section,13,`.bt-x`
 species,10,`.bt-s`
 subclass,47,`.bt-cs`
 subfamily,27,`.bt-fs`
 subgenus,15,`.bt-gs`
 suborder,37,`.bt-os`
 subphylum,57,`.bt-ps`
+subsection,12,`.bt-xs`
 subspecies,3,`.bt-ss`
 subtribe,24,`.bt-ts`
 superclass,53,`.bt-cr`
