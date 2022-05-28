@@ -31,7 +31,8 @@ OBLIGATORY_TAXA = [
 REPLACE = {
     ".bt-k Bacteria": [".bt-d Bacteria", "taxon.domain"],
     ".bt-k Viruses": [".bt-d Viridae", "taxon.domain"],
-    ".bt-p Actinobacteriota": [".bt-p Actinobacteria", "taxon.phylum"]
+    ".bt-p Actinobacteriota": [".bt-p Actinobacteria", "taxon.phylum"],
+    ".bt-p Miozoa": [".bt-p Myzozoa", "taxon.phylum"]
 }
 
 
@@ -130,7 +131,7 @@ def cli(ctx, taxon_name):
     # Put relevant into the wiki
     if relevant:
         for neuro_tid in relevant:
-            if components.bool_prompt(f"Put tiddler {neuro_tid.title}?"):
+            if components.bool_prompt(f"Put tiddler \"{neuro_tid.title}\"?"):
                 tw_put.neuro_tid(neuro_tid)
     else:
         print("Nothing to add.")
