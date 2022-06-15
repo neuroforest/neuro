@@ -32,6 +32,9 @@ class TestTwGet:
         assert len(tw_fields) > 0
         assert all([True if set(d.keys()).issubset(set(fields)) else False for d in tw_fields])
 
+        tw_fields = tw_get.tw_fields(["title"], "[search:title:literal,casesensitive[thisistest]]", port=PORT)
+        assert tw_fields == [{"title": "thisistest"}]
+
 
 class TestTwPut:
     @pytest.mark.integration
