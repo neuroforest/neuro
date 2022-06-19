@@ -70,13 +70,12 @@ class Moment(NeuroObject):
 
         return cls(unix)
 
-    def to_tid_val(self):
-        time_format = "%Y%m%d%H%M%S%f"
-        time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)[:-3]
+    def to_format(self, time_format):
+        time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)
         return time_str
 
-    def to_tw_utc(self):
-        time_format = "%Y-%m-%dT%H:%M:%S.%Z"
+    def to_prog(self):
+        time_format = "%Y%m%d%H%M%S"
         time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)
         return time_str
 
@@ -85,8 +84,13 @@ class Moment(NeuroObject):
         time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)
         return time_str
 
-    def to_prog(self):
-        time_format = "%Y%m%d%H%M%S"
+    def to_tid_val(self):
+        time_format = "%Y%m%d%H%M%S%f"
+        time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)[:-3]
+        return time_str
+
+    def to_tw_utc(self):
+        time_format = "%Y-%m-%dT%H:%M:%S.%Z"
         time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)
         return time_str
 

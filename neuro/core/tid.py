@@ -1,17 +1,18 @@
 """
 Object associated with TiddlyWiki5 and related data.
 """
-
+import json
 import logging
 import os
 import re
+import subprocess
 
 from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
 
 from neuro.core.deep import NeuroNode
 from neuro.core.files.text import TextHtml
-from neuro.utils import oop_utils, exceptions
+from neuro.utils import oop_utils, exceptions, internal_utils, network_utils
 
 
 class NeuroTid(NeuroNode):
@@ -347,3 +348,68 @@ class NeuroTW(TextHtml):
             neuro_tw.neuro_tids.append(neuro_tid)
 
         return neuro_tw
+
+
+class NeuroWF:
+    """
+    Wrapper for WikiFolder.
+    """
+    def __init__(self, wf_path, exists=True):
+        """
+        Initialize and verify WikiFolder
+        :param wf_path: WikiFolder path
+        :param exists: should the WikiFolder already exist
+        """
+        self.process: subprocess.Popen
+        self.wf_path = wf_path
+        if exists:
+            tiddlywiki_info = f"{wf_path}/tiddlywiki.info"
+            tiddlers = f"{wf_path}/tiddlers"
+            if not os.path.isdir(wf_path):
+                raise exceptions.FileNotWiki(f"Not a directory: {wf_path}")
+            if not os.path.isdir(tiddlers):
+                raise exceptions.FileNotWiki(f"No directory found: {tiddlers}")
+
+            if not os.path.isfile(tiddlywiki_info):
+                raise exceptions.FileNotWiki("No tiddlywiki.info file found.")
+            with open(tiddlywiki_info) as f:
+                try:
+                    json.load(f)
+                except ValueError:
+                    raise exceptions.FileNotWiki("File tiddlywiki.info could not be parsed as JSON.")
+        else:
+            if os.path.isdir(wf_path):
+                raise FileExistsError
+            self.create()
+
+    def create(self, **kwargs):
+        """
+        Create new WikiFolder.
+        """
+        if "tw_info_template" in kwargs:
+            tw_info_template = kwargs.get("tw_info_template")
+        else:
+            tw_info_template = internal_utils.get_path("templates") + "/tiddlywiki.info"
+        with open(tw_info_template) as f:
+            tw_info = json.load(f)
+        for key in kwargs:
+            tw_info[key] = kwargs.get(key)
+
+        os.makedirs(self.wf_path)
+        tw_info_path = self.wf_path + "/tiddlywiki.info"
+        with open(tw_info_path, "w+") as f:
+            json.dump(tw_info, f, indent=4)
+
+    def open(self, tw5="tw5/tiddlywiki.js", port=8099):
+        self.process = subprocess.Popen([
+            "node",
+            tw5,
+            self.wf_path,
+            "--listen",
+            f"port={port}"
+        ], stdout=subprocess.DEVNULL, close_fds=True)
+
+        network_utils.wait_for_socket("127.0.0.1", port)
+
+    def close(self):
+        self.process.kill()
