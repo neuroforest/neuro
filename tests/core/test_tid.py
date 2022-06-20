@@ -8,7 +8,7 @@ import pytest
 
 from neuro.utils import exceptions
 
-from ..helper import get_test_file
+from ..helper import get_test_file, get_path
 
 
 class TestNeuroTid:
@@ -169,5 +169,6 @@ class TestNeuroWF:
         with pytest.raises(exceptions.FileNotWiki):
             NeuroWF(wf_path_nonexistent)
 
-        wf_nonexistent = NeuroWF(wf_path_nonexistent, exists=False)
+        tw_info_template = get_path("resources/templates/tiddlywiki.info")
+        wf_nonexistent = NeuroWF(wf_path_nonexistent, exists=False, tw_info_template=tw_info_template)
         assert isinstance(wf_nonexistent, NeuroWF)

@@ -354,7 +354,7 @@ class NeuroWF:
     """
     Wrapper for WikiFolder.
     """
-    def __init__(self, wf_path, exists=True):
+    def __init__(self, wf_path, exists=True, **kwargs):
         """
         Initialize and verify WikiFolder
         :param wf_path: WikiFolder path
@@ -380,7 +380,7 @@ class NeuroWF:
         else:
             if os.path.isdir(wf_path):
                 raise FileExistsError
-            self.create()
+            self.create(**kwargs)
 
     def create(self, **kwargs):
         """
