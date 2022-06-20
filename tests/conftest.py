@@ -2,6 +2,8 @@ import os
 import subprocess
 import shutil
 
+from neuro.utils import network_utils
+
 from .helper import PORT
 
 
@@ -33,6 +35,8 @@ def pytest_sessionstart(session):
             "readers=(anon)",
             "writers=(anon)"
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    network_utils.wait_for_socket("127.0.0.1", PORT)
 
 
 def pytest_sessionfinish(session, exitstatus):

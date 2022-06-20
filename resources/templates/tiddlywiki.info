@@ -2,7 +2,9 @@
     "description": "Wiki",
     "plugins": [
         "tiddlywiki/tiddlyweb",
-        "tiddlywiki/filesystem"
+        "tiddlywiki/filesystem",
+        "neuroforest/core",
+        "neuroforest/front"
     ],
     "themes": [
         "tiddlywiki/vanilla",
