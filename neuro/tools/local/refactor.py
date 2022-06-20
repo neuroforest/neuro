@@ -14,22 +14,6 @@ from neuro.tools.terminal import style
 logging.basicConfig(level=logging.INFO)
 
 
-def create_wikifolder(wf_path, **kwargs):
-    if "tw_info_template" in kwargs:
-        tw_info_template = kwargs.get("tw_info_template")
-    else:
-        tw_info_template = internal_utils.get_path("templates") + "/tiddlywiki.info"
-    with open(tw_info_template) as f:
-        tw_info = json.load(f)
-    for key in kwargs:
-        tw_info[key] = kwargs.get(key)
-
-    os.makedirs(wf_path)
-    tw_info_path = wf_path + "/tiddlywiki.info"
-    with open(tw_info_path, "w+") as f:
-        json.dump(tw_info, f, indent=4)
-
-
 def update_tiddlers(old, new, tiddlers_path):
     """
     :param old:
@@ -87,6 +71,13 @@ def refactor_path(src_path, dst_path, tiddlers_path):
 
 
 def transform(html_wiki, wiki_folder, tw5="tw5/tiddlywiki.js"):
+    """
+    Convert HTML wiki to wikifolder.
+    :param html_wiki:
+    :param wiki_folder: path to established wikifolder with tiddlywiki.info file
+    :param tw5:
+    :return:
+    """
     p = subprocess.Popen([
         "node",
         tw5,

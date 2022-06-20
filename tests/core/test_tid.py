@@ -156,3 +156,18 @@ class TestNeuroTW:
         assert len(neuro_tw.neuro_tids) == 7
         assert neuro_tw.__contains__("$:/isEncrypted")
         assert neuro_tw.neuro_tids.object_index["$:/isEncrypted"].fields["text"] == "\nno\n"
+
+
+class TestNeuroWF:
+    def test_init(self):
+        from neuro.core.tid import NeuroWF
+        wf_path = get_test_file("input/wikifolder")
+        wf_path_nonexistent = get_test_file("output/nonexistent", exists=False)
+        wf = NeuroWF(wf_path)
+        assert isinstance(wf, NeuroWF)
+
+        with pytest.raises(exceptions.FileNotWiki):
+            NeuroWF(wf_path_nonexistent)
+
+        wf_nonexistent = NeuroWF(wf_path_nonexistent, exists=False)
+        assert isinstance(wf_nonexistent, NeuroWF)
