@@ -3,6 +3,7 @@ Command `neuro taxon <taxon_name>`, where the argument taxon_name is
 the scientific name of the taxon.
 """
 import logging
+import os.path
 
 import click
 import halo
@@ -32,7 +33,8 @@ REPLACE = {
     ".bt-k Bacteria": [".bt-d Bacteria", "taxon.domain"],
     ".bt-k Viruses": [".bt-d Viridae", "taxon.domain"],
     ".bt-p Actinobacteriota": [".bt-p Actinobacteria", "taxon.phylum"],
-    ".bt-p Miozoa": [".bt-p Myzozoa", "taxon.phylum"]
+    ".bt-p Miozoa": [".bt-p Myzozoa", "taxon.phylum"],
+    ".bt-o Caudata": [".bt-o Urodela", "taxon.order"]
 }
 
 
@@ -46,14 +48,13 @@ def filter_neuro_tids(neuro_tids):
         # Replace certain titles
         tid_title = neuro_tid.title
         if tid_title in REPLACE:
-            neuro_tid.title = REPLACE[tid_title]
-            neuro_tid.fields["neuro.role"] = REPLACE[tid_title]
-        tid_title = neuro_tid.title = neuro_tid.title
+            neuro_tid.title = REPLACE[tid_title][0]
+            neuro_tid.fields["neuro.role"] = REPLACE[tid_title][1]
+        tid_title = neuro_tid.title
 
         if neuro_tid.fields["neuro.role"] in OBLIGATORY_TAXA:
             filtered_neuro_tids.append(neuro_tid)
         else:
-            # Not implemented - later irrelevant
             if tw_get.is_tiddler(tid_title):
                 tiddler = tw_get.tiddler(tid_title)
                 neuro_tid.add_fields(tiddler, overwrite=False)
@@ -80,8 +81,9 @@ def get_wikidata_data(taxon_name):
 
 @click.command("taxon", short_help="Organism.")
 @click.argument("taxon_name", required=True, nargs=-1)
+@click.option("-l", "--local", default="")
 @pass_environment
-def cli(ctx, taxon_name):
+def cli(ctx, taxon_name, local):
     """
     Command `neuro taxon <taxon_name>`
     By running this command taxon-specific web scraping is performed
@@ -93,6 +95,7 @@ def cli(ctx, taxon_name):
 
     :param ctx:
     :param taxon_name: scientific name of the taxon
+    :param local: path to local organism file tree
     :return:
     """
     spinner = halo.Halo(text="Gathering taxon data...", spinner="dots")
@@ -134,4 +137,20 @@ def cli(ctx, taxon_name):
             if components.bool_prompt(f"Put tiddler \"{neuro_tid.title}\"?"):
                 tw_put.neuro_tid(neuro_tid)
     else:
-        print("Nothing to add.")
+        print("No additions to NeuroWiki.")
+
+    # Create local file tree
+    local_relevant = [neuro_tid for neuro_tid in neuro_tids if neuro_tid.fields["neuro.role"] in OBLIGATORY_TAXA]
+    added = False
+    if local_relevant and local:
+        current_path = local
+        for neuro_tid in local_relevant:
+            name = neuro_tid.title.split(" ", 1)[1].replace(" ", "_")
+            current_path = f"{current_path}/{name}"
+            if not os.path.isdir(current_path):
+                added = True
+                subpath = current_path.replace(f"{local}/", "")
+                if components.bool_prompt(f"Establish subpath \"{subpath}\"?"):
+                    os.mkdir(current_path)
+    if not added:
+        print("No additions to local file system.")
