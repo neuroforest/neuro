@@ -42,7 +42,7 @@ def update_tiddlers(old, new, tiddlers_path):
 
 def refactor_path(src_path, dst_path, tiddlers_path):
     """
-    Refactor a local path both in the file system and in NeuroStorage.
+    Refactor a local path both in the file system and in NeuroWiki.
     :param src_path:
     :param dst_path:
     :param tiddlers_path:
