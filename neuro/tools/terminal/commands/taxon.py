@@ -152,5 +152,7 @@ def cli(ctx, taxon_name, local):
                 subpath = current_path.replace(f"{local}/", "")
                 if components.bool_prompt(f"Establish subpath \"{subpath}\"?"):
                     os.mkdir(current_path)
+                else:
+                    break
     if not added:
         print("No additions to local file system.")
