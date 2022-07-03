@@ -6,6 +6,7 @@ import logging
 import os
 import webbrowser
 
+from neuro.core.tid import NeuroTid
 from neuro.tools.api import tw_api
 from neuro.utils import exceptions
 
@@ -33,6 +34,15 @@ def is_tiddler(tid_title, **kwargs):
         return True
     except exceptions.TiddlerDoesNotExist:
         return False
+
+
+def neuro_tid(tid_title):
+    t = tiddler(tid_title)
+    if t:
+        nt = NeuroTid.from_tiddler(t)
+        return nt
+    else:
+        return NeuroTid(tid_title)
 
 
 def rendered_tiddler(tid_title):
