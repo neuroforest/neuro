@@ -75,24 +75,17 @@ class Moment(NeuroObject):
         return time_str
 
     def to_prog(self):
-        time_format = "%Y%m%d%H%M%S"
-        time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)
-        return time_str
+        return self.to_format("%Y%m%d%H%M%S")
 
     def to_slv(self):
-        time_format = "%d.%m.%Y %H:%M:%S"
-        time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)
-        return time_str
+        return self.to_format("%d.%m.%Y %H:%M:%S")
 
     def to_tid_val(self):
-        time_format = "%Y%m%d%H%M%S%f"
-        time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)[:-3]
-        return time_str
+        return self.to_format("%Y%m%d%H%M%S%f")
 
-    def to_tw_utc(self):
-        time_format = "%Y-%m-%dT%H:%M:%S.%Z"
-        time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)
-        return time_str
+    def to_iso(self):
+        iso_date = datetime.datetime.fromtimestamp(self.unix).isoformat()
+        return iso_date
 
 
 class GeoLocation(NeuroObject):
