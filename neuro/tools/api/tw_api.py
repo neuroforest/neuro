@@ -9,16 +9,11 @@ import urllib.parse
 
 import requests
 
-from neuro.utils import internal_utils
+from neuro.utils import internal_utils, network_utils
 from neuro.core.data.dict import DictUtils
 
 
 TW_INDEX = dict()
-
-
-def is_port_in_use(port):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('localhost', port)) == 0
 
 
 class API:
@@ -34,7 +29,7 @@ class API:
         Opens the connection to the file.
         :return:
         """
-        if not is_port_in_use(self.port):
+        if not network_utils.is_port_in_use(self.port):
             msg = f"Port {self.port} is not running locally."
             logging.warning(f"Refused to connect to API: {msg}")
             self.status = "unavailable"

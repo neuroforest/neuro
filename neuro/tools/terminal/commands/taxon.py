@@ -9,7 +9,7 @@ import click
 import halo
 
 from neuro.core import tid
-from neuro.tools.api import tw_get, tw_put
+from neuro.tools.api import tw_api, tw_get, tw_put
 from neuro.tools.wrappers import gbif, inaturalist, wikidata
 
 from neuro.tools.terminal import components
@@ -91,13 +91,16 @@ def cli(ctx, taxon_name, local):
     taxon, its full taxon chain is added to the NeuroForest wiki.
 
     :Example:
-    ➜ neuro taxon Carlito syrichta
+    $ neuro taxon Carlito syrichta
 
     :param ctx:
     :param taxon_name: scientific name of the taxon
     :param local: path to local organism file tree
     :return:
     """
+    if not tw_api.get_api():
+        return
+
     spinner = halo.Halo(text="Gathering taxon data...", spinner="dots")
     spinner.start()
     taxon_name = " ".join(taxon_name).strip()
