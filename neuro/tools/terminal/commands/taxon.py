@@ -3,6 +3,7 @@ Command `neuro taxon <taxon_name>`, where the argument taxon_name is
 the scientific name of the taxon.
 """
 import logging
+import subprocess
 import os.path
 
 import click
@@ -79,16 +80,64 @@ def get_wikidata_data(taxon_name):
     return data
 
 
+def integrate_wiki_filesystem(local):
+    if not local:
+        print("Error: no local filesystem root provided")
+        return
+
+    # Find unintegrated taxa
+    tw_filter = "[prefix[.bt-]!has[local]]"
+    tw_fields = ["title", "neuro.role"]
+    fields_list = tw_get.tw_fields(tw_fields, tw_filter)
+
+    def has_taxon_integrity(taxon_fields):
+        if "neuro.role" not in taxon_fields:
+            print(f"Error: tiddler {fields['title']} has no field 'neuro.role'")
+            return False
+        else:
+            return True
+
+    # Filter according to data integrity and obligatory taxa
+    fields_list = [fields for fields in fields_list if has_taxon_integrity(fields)]
+    fields_list = [fields for fields in fields_list if fields["neuro.role"] in OBLIGATORY_TAXA]
+
+    fail_count = 0
+    for fields in fields_list:
+        taxon_name = "_".join(fields["title"].split(" ")[1:])
+        p = subprocess.Popen(["find", local, "-type", "d", "-name", taxon_name], stdout=subprocess.PIPE)
+        p.wait()
+        path = p.communicate()[0].decode("utf-8")[:-1]
+        p.kill()
+
+        if not path:
+            fail_count += 1
+            continue
+        elif path.count("\n") > 0:
+            fail_count += 1
+            print(f"{style.FAIL} Multiple directories named '{taxon_name}'")
+            continue
+
+        path = f"file://{path}"
+        res = tw_put.fields({"title": fields["title"], "local": path})
+        if res.status_code == 204:
+            print(f"{style.SUCCESS} {taxon_name.replace('_', ' ')}")
+        else:
+            print(f"{style.FAIL} {taxon_name.replace('_', ' ')}")
+
+    print(f"Path not resolved for {fail_count} items")
+
+
 @click.command("taxon", short_help="Organism.")
-@click.argument("taxon_name", required=True, nargs=-1)
+@click.argument("taxon_name", nargs=-1)
 @click.option("-l", "--local", default="")
+@click.option("-i", "--integrate", is_flag=True)
 @pass_environment
-def cli(ctx, taxon_name, local):
+def cli(ctx, taxon_name, local, integrate):
     """
-    Command `neuro taxon <taxon_name>`
+    Command `neuro taxon <taxon_name>`.
     By running this command taxon-specific web scraping is performed
     to gather data from WikiData, iNaturalist and GBIF. Besides the requested
-    taxon, its full taxon chain is added to the NeuroForest wiki.
+    taxon, its full taxon chain is added to the NeuroWiki.
 
     :Example:
     $ neuro taxon Carlito syrichta
@@ -96,10 +145,19 @@ def cli(ctx, taxon_name, local):
     :param ctx:
     :param taxon_name: scientific name of the taxon
     :param local: path to local organism file tree
+    :param integrate: integrate NeuroWiki with local filesystem
     :return:
     """
     if not tw_api.get_api():
         return
+
+    # Handle integration of NeuroWiki with local filesystem
+    if integrate:
+        integrate_wiki_filesystem(local)
+        return
+
+    if not taxon_name:
+        print("Error: no taxon name given")
 
     spinner = halo.Halo(text="Gathering taxon data...", spinner="dots")
     spinner.start()
