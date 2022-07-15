@@ -180,7 +180,7 @@ class File(NeuroObject):
             self.set_basic(**kwargs)
 
     def __enter__(self):
-        logging.error("Enter not implemented")
+        return self
 
     def __eq__(self, other):
         """
@@ -193,7 +193,7 @@ class File(NeuroObject):
         ])
 
     def __exit__(self, exc_type, exc_value, traceback):
-        logging.error("Exit not implemented")
+        pass
 
     def __repr__(self, **kwargs):
         return oop_utils.represent(self, **kwargs)
