@@ -3,8 +3,9 @@ __pycache__/
 *.py[cod]
 
 # Dirs
-/neuro.egg-info
 /.idea
 /.pytest_cache
+/build
+/neuro.egg-info
 /resources/test/output
 /temp
