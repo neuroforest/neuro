@@ -411,5 +411,14 @@ class NeuroWF:
 
         network_utils.wait_for_socket("127.0.0.1", port)
 
-    def close(self):
+    def close(self, port=8099):
         self.process.kill()
+        # This impairs performance
+        if network_utils.is_port_in_use(port):
+            p = subprocess.Popen([
+                "npx",
+                "kill-port",
+                str(port)
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            p.wait()
+            p.kill()
