@@ -2,8 +2,10 @@ import csv
 import json
 import logging
 import multiprocessing
-import requests
+import sys
 import urllib.parse
+
+import requests
 
 from neuro.core.tid import NeuroTid, NeuroTids
 from neuro.utils import exceptions, internal_utils
@@ -90,6 +92,8 @@ def get_taxon_tids(taxon_id):
     :return:
     """
     taxon_data = get_taxon(taxon_id)
+    if not taxon_data:
+        return NeuroTids()
     ancestor_taxon_ids = taxon_data["ancestor_ids"]
     neuro_tids = NeuroTids()
 

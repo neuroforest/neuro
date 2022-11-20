@@ -176,6 +176,9 @@ def cli(ctx, taxon_name, local, integrate):
     elif "inat.taxon.id" in data:
         inaturalist_taxon_id = data["inat.taxon.id"]
         neuro_tids = inaturalist.get_taxon_tids(inaturalist_taxon_id)
+        if not neuro_tids:
+            spinner.stop_and_persist(symbol=style.FAIL, text=f"{taxon_name}: Incorrect iNaturalist ID on WikiData")
+            return
         neuro_tids[-1].add_fields(data)
         neuro_tids = filter_neuro_tids(neuro_tids)
         spinner.stop_and_persist(symbol=style.SUCCESS, text=f"{taxon_name}: iNaturalist data")
