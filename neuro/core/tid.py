@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 
 from bs4 import BeautifulSoup as Soup
@@ -382,7 +383,19 @@ class NeuroWF:
                 raise FileExistsError
             self.create(**kwargs)
 
-    def create(self, **kwargs):
+    def close(self, port=8099):
+        self.process.kill()
+        # This impairs performance
+        if network_utils.is_port_in_use(port):
+            p = subprocess.Popen([
+                "npx",
+                "kill-port",
+                str(port)
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            p.wait()
+            p.kill()
+
+    def create(self, tid_folder=None, **kwargs):
         """
         Create new WikiFolder.
         """
@@ -400,6 +413,9 @@ class NeuroWF:
         with open(tw_info_path, "w+") as f:
             json.dump(tw_info, f, indent=4)
 
+        if tid_folder:
+            shutil.copytree(tid_folder, f"{self.wf_path}/tiddlers")
+
     def open(self, tw5="tw5/tiddlywiki.js", port=8099):
         self.process = subprocess.Popen([
             "node",
@@ -410,15 +426,3 @@ class NeuroWF:
         ], stdout=subprocess.DEVNULL, close_fds=True)
 
         network_utils.wait_for_socket("127.0.0.1", port)
-
-    def close(self, port=8099):
-        self.process.kill()
-        # This impairs performance
-        if network_utils.is_port_in_use(port):
-            p = subprocess.Popen([
-                "npx",
-                "kill-port",
-                str(port)
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            p.wait()
-            p.kill()
