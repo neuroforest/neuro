@@ -2,6 +2,8 @@
 Invoke NeuroForest wiki function $tw.wiki.nfReplace.
 """
 import os
+import sys
+
 import click
 
 from neuro.tools.api import tw_actions
@@ -9,6 +11,19 @@ from neuro.tools.local import refactor
 from neuro.utils import internal_utils
 
 from neuro.tools.terminal.cli import pass_environment
+
+
+def check_text(old_text, new_text):
+    fail = False
+    if any([x for x in old_text if x in "[{|}]"]):
+        fail = True
+    if any([x for x in new_text if x in "[{|}]"]):
+        fail = True
+
+    if fail:
+        print("Error: Forbidden character in arguments, avoid [ { | } ] "
+              "or use option '-l' | '--local'")
+        sys.exit()
 
 
 @click.command("replace", short_help="")
@@ -23,4 +38,5 @@ def cli(ctx, old_text, new_text, tw_filter, local):
         refactor.update_tiddlers(old_text, new_text, tiddler_path)
         os.system("neuro desk build")
     else:
+        check_text(old_text, new_text)
         tw_actions.replace_text(old_text, new_text, tw_filter=tw_filter)
