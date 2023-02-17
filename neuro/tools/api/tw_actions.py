@@ -19,6 +19,21 @@ def merge_tiddlers(title_list, **kwargs):
     return response
 
 
+def open_tiddler(title, **kwargs):
+    api = tw_api.get_api(**kwargs)
+    if not api:
+        return None
+
+    params = {
+        "title": title
+    }
+
+    response = api.put("/neuro/action/open", params=params)
+    if response.status_code != 204:
+        print(f"Error: {response.reason}")
+    return response
+
+
 def rename_tiddler(old_title, new_title, **kwargs):
     api = tw_api.get_api(**kwargs)
     if not api:
