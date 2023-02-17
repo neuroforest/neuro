@@ -2,8 +2,9 @@
 Open a tiddler in NeuroWiki.
 """
 
-import click
 import os
+
+import click
 
 from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.api import tw_actions
@@ -13,6 +14,6 @@ from neuro.tools.api import tw_actions
 @click.argument("title", required=True)
 @pass_environment
 def cli(ctx, title):
-    tw_actions.open_tiddler(title)
-    os.system("wmctrl -a NeuroWiki")
-
+    response = tw_actions.open_tiddler(title)
+    if response.status_code == 204:
+        os.system("wmctrl -a NeuroWiki")
