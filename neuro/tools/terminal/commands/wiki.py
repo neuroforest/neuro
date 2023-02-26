@@ -36,7 +36,7 @@ def archive():
             spinner.stop_and_persist(symbol=style.SUCCESS, text="Wiki archived")
 
 
-@click.command("wiki", short_help="Wiki.")
+@click.command("wiki", short_help="interact with current wiki")
 @click.argument("keyword", required=True)
 @pass_environment
 def cli(ctx, keyword):

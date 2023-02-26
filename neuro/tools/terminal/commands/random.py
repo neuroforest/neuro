@@ -14,7 +14,7 @@ from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.terminal.commands import open
 
 
-@click.command("random", short_help="Open a tiddler in NeuroWiki.")
+@click.command("random", short_help="open a random tiddler")
 @pass_environment
 def cli(ctx):
     spinner = halo.Halo(text="Searching NeuroWiki...", spinner="dots")

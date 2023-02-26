@@ -10,7 +10,7 @@ from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.api import tw_actions
 
 
-@click.command("open", short_help="Open a tiddler in NeuroWiki.")
+@click.command("open", short_help="open a tiddler")
 @click.argument("title", required=True)
 @pass_environment
 def cli(ctx, title):

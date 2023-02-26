@@ -78,7 +78,7 @@ def get_wiki_archive_path():
     return wiki_archive_path
 
 
-@click.command("archive", short_help="Archive.")
+@click.command("archive", short_help="archive files")
 @click.argument("path", required=False, type=click.Path(resolve_path=True))
 @pass_environment
 def cli(ctx, path):

@@ -10,7 +10,7 @@ from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.api import tw_put
 
 
-@click.command("put", short_help="NeuroForest API PUT command.")
+@click.command("put", short_help="NeuroAPI PUT method")
 @click.argument("tiddler", required=False)
 @pass_environment
 def cli(ctx, tiddler):
