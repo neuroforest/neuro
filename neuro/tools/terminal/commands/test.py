@@ -10,7 +10,7 @@ from neuro.tools.terminal.cli import pass_environment
 from neuro.utils import internal_utils
 
 
-@click.command("test", short_help="Test the neuro module.")
+@click.command("test", short_help="test Python package neuro")
 @click.argument("path", required=False, type=click.Path(resolve_path=True))
 @click.option("-a", "--full", is_flag=True)
 @click.option("-i", "--integration", is_flag=True)

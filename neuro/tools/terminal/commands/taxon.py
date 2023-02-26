@@ -127,7 +127,7 @@ def integrate_wiki_filesystem(local):
     print(f"Path not resolved for {fail_count} items")
 
 
-@click.command("taxon", short_help="Organism.")
+@click.command("taxon", short_help="import taxon")
 @click.argument("taxon_name", nargs=-1)
 @click.option("-l", "--local", default="")
 @click.option("-i", "--integrate", is_flag=True)

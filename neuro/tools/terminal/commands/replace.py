@@ -26,7 +26,7 @@ def check_text(old_text, new_text):
         sys.exit()
 
 
-@click.command("replace", short_help="")
+@click.command("replace", short_help="search and replace text")
 @click.argument("old_text", required=True)
 @click.argument("new_text", required=True)
 @click.argument("tw_filter", default="")

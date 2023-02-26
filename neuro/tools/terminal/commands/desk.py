@@ -75,7 +75,7 @@ def handle_keyword(keyword):
         f.write(keyword)
 
 
-@click.command("desk", short_help="NeuroForest desktop.")
+@click.command("desk", short_help="NeuroDesktop")
 @click.argument("action", required=True)
 @click.argument("keyword", required=False, default="")
 @click.option("--core", "-c", is_flag=True)

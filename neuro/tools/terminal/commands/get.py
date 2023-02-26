@@ -28,7 +28,7 @@ def get_tiddler(tid_title, **kwargs):
         return False
 
 
-@click.command("get", short_help="NeuroForest API GET command.")
+@click.command("get", short_help="NeuroAPI GET method")
 @click.argument("resource", required=True)
 @pass_environment
 def cli(ctx, resource):

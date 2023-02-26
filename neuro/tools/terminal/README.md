@@ -1,9 +1,9 @@
-NeuroTerminal is a custom terminal module with tools and utils to use with unix terminal.
+NeuroTerminal is a Python package with tools and utils to use in unix-like terminal.
 
 ```
 Usage: neuro [OPTIONS] COMMAND [ARGS]...
 
-  NeuroForest command-line interface.
+  NeuroForest command line interface.
 
 Options:
   -v, --verbose  Enables verbose mode.
@@ -11,11 +11,17 @@ Options:
   --help         Show this message and exit.
 
 Commands:
-  archive  Archive.
-  desk     NeuroForest desktop.
-  get      NeuroForest API GET command.
-  put      NeuroForest API PUT command.
-  test     Test the neuro module.
-  wiki     Wiki.
-
+  archive  archive files
+  desk     NeuroDesktop
+  get      NeuroAPI GET method
+  merge    merge tiddlers
+  open     open a tiddler
+  put      NeuroAPI PUT method
+  random   open a random tiddler
+  rename   rename tiddler
+  replace  search and replace text
+  search   search wiki
+  taxon    import taxon
+  test     test Python package neuro
+  wiki     interact with current wiki
 ```
