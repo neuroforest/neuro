@@ -75,8 +75,6 @@ class NeuroTid(NeuroNode):
         """
         Add fields to neuro_tid.
 
-        Similar to NeuroBit.extend_fields.
-
         :param fields: dict
         :param overwrite: override existing fields
         :return:
