@@ -12,6 +12,10 @@ from neuro.utils import exceptions
 
 
 def all_tiddlers():
+    """
+    Return a list of tiddlers.
+    :return: list of dictionaries
+    """
     api = tw_api.get_api()
     if not api:
         return None

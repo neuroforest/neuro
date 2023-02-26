@@ -101,7 +101,7 @@ class TestNeuroTids:
     def test_list(self):
         from neuro.core.tid import NeuroTid, NeuroTids
 
-        # Test function NeuroBits.extend and NeuroBits.append
+        # Test function NeuroTids.extend and NeuroTids.append
         neuro_tid_3 = NeuroTid("test3")
         neuro_tids = NeuroTids([
             NeuroTid("test1"),
@@ -112,7 +112,7 @@ class TestNeuroTids:
         assert "test2" in neuro_tids
         assert neuro_tids.index(neuro_tid_3) == 2
 
-        # Test function NeuroBits.remove
+        # Test function NeuroTids.remove
         neuro_tids.remove("test2")
         assert "test2" not in neuro_tids
         assert len(neuro_tids) == 2
