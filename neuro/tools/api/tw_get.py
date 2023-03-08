@@ -11,18 +11,30 @@ from neuro.tools.api import tw_api
 from neuro.utils import exceptions
 
 
-def all_tiddlers():
+def all_tiddlers(**kwargs):
     """
     Return a list of tiddlers.
     :return: list of dictionaries
     """
-    api = tw_api.get_api()
+    api = tw_api.get_api(**kwargs)
     if not api:
         return None
 
     print("Collecting ... from {}".format(api.url))
     response = api.get("/recipes/default/tiddlers.json")
     return response["parsed"]
+
+
+def info(**kwargs):
+    api = tw_api.get_api(**kwargs)
+    if not api:
+        return None
+
+    response = api.get("/neuro/info")
+    if response["status_code"] == 200:
+        return response["parsed"]
+    else:
+        raise exceptions.UnhandledStatusCode(response["status_code"])
 
 
 def is_tiddler(tid_title, **kwargs):
@@ -50,7 +62,7 @@ def neuro_tid(tid_title):
 
 
 def rendered_tiddler(tid_title):
-    api = tw_api.get_api()
+    api = tw_api.get_api(**kwargs)
     if not api:
         return None
 
