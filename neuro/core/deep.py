@@ -292,13 +292,13 @@ class Dir(File):
         Collecting directory data.
         :return:
         """
-        file_stat = self.get_stat()
+        dir_stat = self.get_stat()
         defaults = {
-            "atime": Moment(moment=file_stat.st_atime, form="unix"),
-            "ctime": Moment(moment=file_stat.st_ctime, form="unix"),
-            "mtime": Moment(moment=file_stat.st_mtime, form="unix"),
-            "inode": file_stat.st_ino,
-            "size": file_stat.st_size
+            "atime": Moment(moment=dir_stat.st_atime, form="unix"),
+            "ctime": Moment(moment=dir_stat.st_ctime, form="unix"),
+            "mtime": Moment(moment=dir_stat.st_mtime, form="unix"),
+            "inode": dir_stat.st_ino,
+            "size": dir_stat.st_size
         }
         for key in defaults:
             attr_val = kwargs.get(key, defaults[key])
@@ -391,7 +391,8 @@ class Dir(File):
             file_paths = self.get_all_paths(mode="file")
         else:
             file_paths = self.get_children(mode="file")
-        latest_file = max(file_paths, key=os.path.getmtime)
+        sorted_file_paths = sorted(file_paths, key=lambda x: os.stat(x).st_mtime)
+        latest_file = sorted_file_paths[-1]
 
         if mime_major and latest_file:
             file_mime_major = magic.Magic(mime=True).from_file(latest_file).split("/")[0]
@@ -403,10 +404,6 @@ class Dir(File):
             return file_name
         else:
             return latest_file
-
-    def get_stat(self):
-        stat = os.stat(self.path)
-        return stat
 
     def get_title(self):
         return "dir" + str(self.inode)
