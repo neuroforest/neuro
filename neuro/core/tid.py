@@ -351,7 +351,7 @@ class NeuroTW(TextHtml):
 
 class NeuroWF:
     """
-    Wrapper for WikiFolder.
+    Wrapper for WikiFolder. It operates on port 8099 by default.
     """
     def __init__(self, wf_path, exists=True, **kwargs):
         """
