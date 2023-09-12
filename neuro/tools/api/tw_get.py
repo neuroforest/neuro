@@ -150,12 +150,12 @@ def tw_index(tw_filter=None, **kwargs):
     return response["parsed"]
 
 
-def wiki():
+def wiki(**kwargs):
     """
     Returns the full wiki html.
     :return:
     """
-    api = tw_api.get_api()
+    api = tw_api.get_api(**kwargs)
     if not api:
         return None
 
