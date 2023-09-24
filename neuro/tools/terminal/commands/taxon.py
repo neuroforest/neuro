@@ -75,7 +75,7 @@ def get_wikidata_data(taxon_name):
     :return:
     """
     data = wikidata.get_taxon_data(taxon_name)
-    if "tans.slv" in data:
+    if "trans.slv" in data:
         data["trans.slv"] = data["trans.slv"].lower()
     try:
         if data["trans.eng"] == data["name"]:
@@ -90,7 +90,7 @@ def integrate_wiki_filesystem(local):
         print("Error: no local filesystem root provided")
         return
 
-    # Find unintegrated taxa
+    # Find non-integrated taxa
     tw_filter = "[prefix[.bt-]!has[local]]"
     tw_fields = ["title", "neuro.role"]
     fields_list = tw_get.tw_fields(tw_fields, tw_filter)
