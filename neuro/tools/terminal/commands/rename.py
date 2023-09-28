@@ -13,4 +13,6 @@ from neuro.tools.api import tw_actions
 @click.argument("new_title", required=True)
 @pass_environment
 def cli(ctx, old_title, new_title):
+    old_title = old_title.strip()
+    new_title = new_title.strip()
     tw_actions.rename_tiddler(old_title, new_title)
