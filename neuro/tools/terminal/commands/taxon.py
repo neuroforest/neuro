@@ -5,6 +5,7 @@ the scientific name of the taxon.
 import logging
 import subprocess
 import os.path
+import sys
 
 import click
 import halo
@@ -163,6 +164,7 @@ def cli(ctx, taxon_name, local, integrate):
 
     if not taxon_name:
         print("Error: no taxon name given")
+        sys.exit()
 
     spinner = halo.Halo(text="Gathering taxon data...", spinner="dots")
     spinner.start()

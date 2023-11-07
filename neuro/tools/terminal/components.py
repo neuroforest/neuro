@@ -13,7 +13,7 @@ def bool_prompt(question):
     :return: bool
     """
     while True:
-        text = style.get_colored(question + " (y/n)", "BASE")
+        text = style.get_colored(f"{question} (y/n)", "BOLD")
         res = input(text)
         if res.lower() == "y":
             return True
