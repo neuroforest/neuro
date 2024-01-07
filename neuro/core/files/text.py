@@ -226,13 +226,13 @@ class TextCsv(Text):
         sorted_rows.insert(0, header_list)
         self.write(sorted_rows)
 
-    def to_json(self, json_path, header_key):
+    def to_json(self, header_key, json_path=None, mode="local"):
         self.get_header()
 
         if header_key in self.header and self.is_identifier(header_key):
             key_index = self.header.index(header_key)
         elif not self.is_identifier(header_key):
-            logging.error("Not identifier")
+            return exceptions.InternalError(f"Header {header_key} is not an identifier.")
         else:
             logging.error(f"Key: {header_key}, Header: {self.header}, CSV: {self.path}")
             raise ValueError
@@ -247,8 +247,13 @@ class TextCsv(Text):
 
             data_dict[key_value] = row_dict
 
-        with TextJson(json_path, "w") as t:
-            t.dump(data_dict)
+        if mode == "local":
+            with TextJson(json_path, "w") as t:
+                t.dump(data_dict)
+        elif mode == "dict":
+            return data_dict
+        else:
+            exceptions.InternalError(f"Mode '{mode}' is not supported.")
 
     def write(self, lol):
         writer = self.get_writer()

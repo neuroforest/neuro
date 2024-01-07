@@ -140,3 +140,26 @@ class DictUtils:
             ordered_dict[key] = value
 
         return ordered_dict
+
+    @staticmethod
+    def lod_to_lol(lod):
+        """
+        Convert list of dictionaries to list of rows.
+        :param lod:
+        :return: lol, where the first list is the header
+        """
+        header = list()
+        master_list = list()
+        for d in lod:
+            li = ["" for i in range(len(header))]
+            for key, value in d.items():
+                try:
+                    index = header.index(key)
+                    li[index] = value
+                except ValueError:
+                    li = li + [value]
+                    header = header + [key]
+                    master_list = [sublist + [""] for sublist in master_list]
+            master_list.append(li)
+        master_list.insert(0, header)
+        return master_list
