@@ -41,7 +41,7 @@ class TestTextCsv:
         json_path = get_test_file("output/text_json_from_csv.json", exists=False)
         result_json_path = get_test_file("results/text_json_from_csv.json")
         with text.TextCsv(self.data_path_short) as t:
-            t.to_json(json_path, "policyID")
+            t.to_json("policyID", json_path, mode="local")
         assert filecmp.cmp(json_path, result_json_path)
 
     def test_merge_files(self):

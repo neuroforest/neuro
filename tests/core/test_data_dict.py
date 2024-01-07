@@ -8,15 +8,15 @@ from ..helper import get_test_file, Capturing, get_hash
 
 
 class TestDictUtils:
-    def get_test_dict(self):
-        json_path = get_test_file("input/text.json")
+    def get_test_dict(self, dict_path):
+        json_path = get_test_file(dict_path)
         with open(json_path) as f:
             json_text = f.read()
         self.test_dict = json.loads(json_text)
 
     def test_display_string(self):
         from neuro.core.data.dict import DictUtils
-        self.get_test_dict()
+        self.get_test_dict("input/text.json")
         display_string = DictUtils.represent(self.test_dict, display=False)
 
         print(display_string)
@@ -59,12 +59,21 @@ class TestDictUtils:
 
     def test_sort_alpha(self):
         from neuro.core.data.dict import DictUtils
-        self.get_test_dict()
+        self.get_test_dict("input/text.json")
         sorted_dict = DictUtils.sort_alpha(self.test_dict)
         assert next(iter(sorted_dict)) == "books view split pane state"
 
     def test_remove_keys(self):
         from neuro.core.data.dict import DictUtils
-        self.get_test_dict()
+        self.get_test_dict("input/text.json")
         self.test_dict = DictUtils.remove_keys(self.test_dict, ["kind"])
         assert "kind" not in self.test_dict
+
+    def test_lod_to_lol(self):
+        from neuro.core.data.dict import DictUtils
+        self.get_test_dict("input/lod.json")
+        lol = DictUtils.lod_to_lol(self.test_dict)
+        assert lol[0][2] == "g.lat"
+        assert lol[2][1] == 13.7479
+        assert len(lol) == 4
+        assert all(len(li) == 5 for li in lol)

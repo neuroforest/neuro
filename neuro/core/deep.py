@@ -56,6 +56,8 @@ class Moment(NeuroObject):
     @classmethod
     def from_string(cls, datetime_string, datetime_format):
         """
+        Import from UTC string.
+
         :param datetime_string:
         :param datetime_format: refer to https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
         :return:
@@ -82,6 +84,12 @@ class Moment(NeuroObject):
 
     def to_tid_val(self):
         return self.to_format("%Y%m%d%H%M%S%f")
+
+    def to_tid_date(self):
+        tid_date = self.to_format("%d %B %Y")
+        if tid_date[0] == "0":
+            tid_date = tid_date[1:]
+        return tid_date
 
     def to_iso(self):
         iso_date = datetime.datetime.fromtimestamp(self.unix).isoformat()
