@@ -5,6 +5,7 @@ Test the Python module neuro.
 import os
 
 import click
+import pytest
 
 from neuro.tools.terminal.cli import pass_environment
 from neuro.utils import internal_utils
@@ -26,9 +27,8 @@ def cli(ctx, path, full, integration, notintegration):
     if os.getcwd() != neuro_path:
         os.chdir(neuro_path)
     if integration:
-        command = f"pytest -m \"integration\" {path}"
+        pytest.main(["-m", "integration", path])
     elif notintegration:
-        command = f"pytest -m \"not integration\" {path}"
+        pytest.main(["-m", "non integration", path])
     else:
-        command = f"pytest {path}"
-    os.system(command)
+        pytest.main([path])
