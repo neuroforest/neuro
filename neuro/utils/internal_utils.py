@@ -37,6 +37,7 @@ def get_path(keyword):
         "tiddlywiki.js": "tw/tiddlywiki.js",
         "tw5-plugin-core": "tw5-plugins/source/core",
         "tw5-plugin-front": "tw5-plugins/source/front",
+        "tw5-theme-basic": "tw5-plugins/themes/basic",
         "wd_queries": "neuro/resources/queries"
     }
 

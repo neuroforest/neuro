@@ -110,7 +110,7 @@ def tw_fields(fields: list, tw_filter: str, **kwargs):
     Filter tiddlers by `tw_filter` and extract `fields`.
     :param fields:
     :param tw_filter:
-    :return:
+    :return: lod
     """
     api = tw_api.get_api(**kwargs)
     if not api:
