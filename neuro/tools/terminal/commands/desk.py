@@ -64,6 +64,13 @@ def copy_plugin(plugin_name):
     os.system(command)
 
 
+def copy_theme(theme_name):
+    tw_themes_path = internal_utils.get_path("tw5") + "/themes/neuroforest"
+    theme_path = internal_utils.get_path(theme_name)
+    command = f"rsync -a --delete {theme_path} {tw_themes_path}"
+    os.system(command)
+
+
 def handle_keyword(keyword):
     """
     Handle the keyword that is used by main.js desktop file.
@@ -87,6 +94,7 @@ def cli(ctx, action, keyword, core, front):
             copy_plugin("tw5-plugin-core")
         if front:
             copy_plugin("tw5-plugin-front")
+            copy_theme("tw5-theme-basic")
         handle_keyword(keyword)
         build()
     elif action == "close":
