@@ -9,3 +9,6 @@ __pycache__/
 /neuro.egg-info
 /resources/test/output
 /temp
+
+# Files
+/neuro/utils/SETTINGS.py

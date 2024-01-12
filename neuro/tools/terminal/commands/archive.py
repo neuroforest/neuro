@@ -60,7 +60,7 @@ def determine_scope(resource_path):
 
 def get_wiki_archive_path():
     wiki_archive_dir = str(
-        internal_utils.NF_DIR
+        internal_utils.get_path("nf")
         + "/storage/archive/wikis/"
         + time_utils.YEAR
         + "/"

@@ -46,8 +46,8 @@ def build():
     remove_critical()
 
     logging.debug("Creating new NeuroDesktop.")
-    logging.info(internal_utils.NF_DIR)
-    rebld_path = internal_utils.NF_DIR + "/desktop/rebld.sh"
+    logging.info(internal_utils.get_path("nf"))
+    rebld_path = internal_utils.get_path("nf") + "/desktop/rebld.sh"
     subprocess.Popen(rebld_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     logging.debug("NeuroDesktop build completed.")
 
@@ -77,7 +77,7 @@ def handle_keyword(keyword):
     :param keyword:
     :return:
     """
-    file_path = internal_utils.NF_DIR + "/desktop/args.txt"
+    file_path = internal_utils.get_path("nf") + "/desktop/args.txt"
     with open(file_path, mode="w+", encoding="utf-8") as f:
         f.write(keyword)
 

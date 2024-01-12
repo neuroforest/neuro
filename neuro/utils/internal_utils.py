@@ -8,10 +8,7 @@ import sys
 
 import psutil
 
-
-NF_DIR = os.path.expanduser("~/Projects/NeuroForest")
-PORT = 8080
-URL = "127.0.0.1"
+from neuro.utils import SETTINGS
 
 
 def get_path(keyword):
@@ -27,14 +24,14 @@ def get_path(keyword):
         "neuro": "neuro",
         "nf": "",
         "nw": "desktop/output/linux64/TiddlyDesktop-linux64-v0.0.14/nw",
-        "plugins": "tw/plugins",
+        "plugins": "tw5/plugins",
         "resources": "neuro/resources",
         "templates": "neuro/resources/templates",
         "tests": "neuro/tests",
         "tiddlers": "storage/tiddlers",
         "tw5": "tw5",
-        "tw-com": "tw/editions/tw5.com/tiddlers",
-        "tiddlywiki.js": "tw/tiddlywiki.js",
+        "tw-com": "tw5/editions/tw5.com/tiddlers",
+        "tiddlywiki.js": "tw5/tiddlywiki.js",
         "tw5-plugin-core": "tw5-plugins/source/core",
         "tw5-plugin-front": "tw5-plugins/source/front",
         "tw5-theme-basic": "tw5-plugins/themes/basic",
@@ -42,7 +39,7 @@ def get_path(keyword):
     }
 
     if keyword in keyword_index:
-        return NF_DIR + "/" + keyword_index[keyword]
+        return SETTINGS.NF_DIR + "/" + keyword_index[keyword]
 
     logging.error(f"Keyword {keyword} is not supported.")
     sys.exit()
@@ -92,7 +89,3 @@ def get_tiddler_path(tid_title):
     tiddlers_path = get_path("tiddlers")
     tiddler_path = f"{tiddlers_path}/{tid_title}.tid"
     return tiddler_path
-
-
-if __name__ == "__main__":
-    print(NF_DIR)

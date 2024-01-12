@@ -9,7 +9,7 @@ import urllib.parse
 
 import requests
 
-from neuro.utils import internal_utils, network_utils
+from neuro.utils import SETTINGS, internal_utils, network_utils
 from neuro.core.data.dict import DictUtils
 
 
@@ -17,14 +17,14 @@ TW_INDEX = dict()
 
 
 class API:
-    def __init__(self, port=internal_utils.PORT):
+    def __init__(self, port=SETTINGS.PORT):
         self.port = port
         self.status = str()
         self.url = str()
         self.response = requests.Response()
         self.parsed_response = dict()
 
-    def connect_url(self, url=internal_utils.URL):
+    def connect_url(self, url=SETTINGS.URL):
         """
         Opens the connection to the file.
         :return:
@@ -98,7 +98,7 @@ class API:
         return self.response
 
 
-def get_api(port=internal_utils.PORT):
+def get_api(port=SETTINGS.PORT):
     if port not in TW_INDEX:
         logging.debug(f"Creating new API to port {port}.")
         tw_api = API(port)
