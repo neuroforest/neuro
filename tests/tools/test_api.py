@@ -84,4 +84,4 @@ class TestTwActions:
         assert replaced_tiddler["text"] == "replace2"
         r = tw_actions.replace_text("replace1uncommontext", "replace2", port=8088)
         assert r.status_code == 500
-        assert r.reason == "0 matches"
+        assert r.reason == "0 tiddlers affected"
