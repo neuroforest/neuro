@@ -8,7 +8,6 @@ import shlex
 import subprocess
 
 from neuro.core.deep import Dir, File
-from neuro.utils import internal_utils
 from neuro.tools.terminal import style
 
 logging.basicConfig(level=logging.INFO)
