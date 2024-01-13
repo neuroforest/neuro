@@ -25,5 +25,10 @@ neuro = "neuro.tools.terminal.cli:cli"
 [project.urls]
 repository = "https://github.com/neuroforest/neuro"
 
+[tool.pytest.ini_options]
+markers = [
+    "integration: integration test"
+]
+
 [tool.setuptools.packages]
 find = {}
