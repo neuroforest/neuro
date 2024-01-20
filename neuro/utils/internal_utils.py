@@ -8,7 +8,7 @@ import sys
 
 import psutil
 
-from neuro.utils import SETTINGS
+from neuro.utils import SETTINGS, exceptions
 
 
 def get_path(keyword):
@@ -18,31 +18,30 @@ def get_path(keyword):
     :return:
     """
     keyword_index = {
-        "archive": "storage/archive",
-        "design": "design",
-        "desktop": "desktop",
-        "neuro": "neuro",
-        "nf": "",
-        "nw": "desktop/output/linux64/TiddlyDesktop-linux64-v0.0.14/nw",
-        "plugins": "tw5/plugins",
-        "resources": "neuro/resources",
-        "templates": "neuro/resources/templates",
-        "tests": "neuro/tests",
-        "tiddlers": "storage/tiddlers",
-        "tw5": "tw5",
-        "tw-com": "tw5/editions/tw5.com/tiddlers",
-        "tiddlywiki.js": "tw5/tiddlywiki.js",
-        "tw5-plugin-core": "tw5-plugins/source/core",
-        "tw5-plugin-front": "tw5-plugins/source/front",
-        "tw5-theme-basic": "tw5-plugins/themes/basic",
-        "wd_queries": "neuro/resources/queries"
+        "archive": f"{SETTINGS.STORAGE}/archive",
+        "desktop": f"{SETTINGS.DESKTOP}",
+        "neuro": f"{SETTINGS.NEURO}",
+        "nw": f"{SETTINGS.DESKTOP}/output/linux64/TiddlyDesktop-linux64-v0.0.14/nw",
+        "plugins": f"{SETTINGS.TW5}/plugins",
+        "resources": f"{SETTINGS.NEURO}/resources",
+        "templates": f"{SETTINGS.NEURO}/resources/templates",
+        "tests": f"{SETTINGS.NEURO}/tests",
+        "themes": f"{SETTINGS.TW5}/themes",
+        "tiddlers": f"{SETTINGS.STORAGE}/tiddlers",
+        "wd_queries": f"{SETTINGS.STORAGE}resources/queries"
     }
 
-    if keyword in keyword_index:
-        return SETTINGS.NF_DIR + "/" + keyword_index[keyword]
+    if keyword not in keyword_index:
+        exceptions.InternalError(f"Keyword '{keyword}' is not supported.")
+        sys.exit()
 
-    logging.error(f"Keyword {keyword} is not supported.")
-    sys.exit()
+    path = keyword_index[keyword]
+
+    if not os.path.exists(path):
+        raise exceptions.InvalidPath(f"Path '{path}' for keyword '{keyword}' does not exist.")
+        sys.exit
+
+    return path
 
 
 def get_process(name, value):

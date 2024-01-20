@@ -28,7 +28,7 @@ venv/bin/neuro --help
 ### Test
 
 ```bash
-venv/bin/neuro test
+venv/bin/pytests tests
 ```
 
 More info about testing: ``docs/testing.rst``

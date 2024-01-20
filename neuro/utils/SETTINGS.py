@@ -1,6 +1,8 @@
-import os
-
-
-PORT = 8080
-URL = "127.0.0.1"
-NF_DIR = os.path.expanduser("~/Projects/NeuroForest")
+DESKTOP = str()
+EXTERNAL_PLUGINS = dict()
+EXTERNAL_THEMES = dict()
+NEURO = str()
+PORT = int()
+STORAGE = str()
+TW5 = str()
+URL = str()
