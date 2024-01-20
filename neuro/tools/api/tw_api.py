@@ -17,28 +17,19 @@ TW_INDEX = dict()
 
 
 class API:
-    def __init__(self, port=SETTINGS.PORT):
-        self.port = port
-        self.status = str()
-        self.url = str()
+    def __init__(self, port, url):
+        self.url = f"http://{url}:{port}" 
         self.response = requests.Response()
         self.parsed_response = dict()
-
-    def connect_url(self, url=SETTINGS.URL):
-        """
-        Opens the connection to the file.
-        :return:
-        """
-        if not network_utils.is_port_in_use(self.port):
-            msg = f"Port {self.port} is not running locally."
+        if not network_utils.is_port_in_use(port):
+            msg = f"Port {port} is not running locally."
             logging.warning(f"Refused to connect to API: {msg}")
             self.status = "unavailable"
-            return
-        self.url = "http://" + url + ":" + str(self.port)
-        self.status = "available"
+        else:
+            self.status = "available"
 
     def delete(self, path):
-        full_url = self.url + urllib.parse.quote(path)
+        full_url = self.full_url + urllib.parse.quote(path)
         headers = {
             "User-Agent": "Mozilla/5.0",
             "X-Requested-With": "TiddlyWiki"
@@ -98,11 +89,10 @@ class API:
         return self.response
 
 
-def get_api(port=SETTINGS.PORT):
+def get_api(port=SETTINGS.PORT, url=SETTINGS.URL, **kwargs):
     if port not in TW_INDEX:
         logging.debug(f"Creating new API to port {port}.")
-        tw_api = API(port)
-        tw_api.connect_url()
+        tw_api = API(port=port, url=url)
     else:
         tw_api = TW_INDEX[port]
 

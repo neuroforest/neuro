@@ -18,6 +18,10 @@ class InvalidHeader(BaseException):
     pass
 
 
+class InvalidPath(BaseException):
+    pass
+
+
 class MissingTitle(BaseException):
     pass
 

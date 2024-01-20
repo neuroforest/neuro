@@ -4,12 +4,13 @@ NeuroDesktop command-line interface.
 
 import logging
 import os
+import shutil
 import subprocess
 
 import click
 
 from neuro.tools.terminal.cli import pass_environment
-from neuro.utils import internal_utils
+from neuro.utils import internal_utils, SETTINGS
 
 
 def close():
@@ -46,8 +47,7 @@ def build():
     remove_critical()
 
     logging.debug("Creating new NeuroDesktop.")
-    logging.info(internal_utils.get_path("nf"))
-    rebld_path = internal_utils.get_path("nf") + "/desktop/rebld.sh"
+    rebld_path = internal_utils.get_path("desktop") + "/rebld.sh"
     subprocess.Popen(rebld_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     logging.debug("NeuroDesktop build completed.")
 
@@ -57,18 +57,18 @@ def run():
     subprocess.Popen(internal_utils.get_path("nw"), stdout=null, stderr=null)
 
 
-def copy_plugin(plugin_name):
-    tw_plugins_path = internal_utils.get_path("tw5") + "/plugins/neuroforest"
-    plugin_path = internal_utils.get_path(plugin_name)
-    command = f"rsync -a --delete {plugin_path} {tw_plugins_path}"
-    os.system(command)
+def copy_plugins_and_themes():
+    for plugin in SETTINGS.EXTERNAL_PLUGINS:
+        plugin_source_path = plugin["path"]
+        plugin_target_path = internal_utils.get_path("plugins") + "/" + plugin["name"]
+        shutil.rmtree(plugin_target_path, ignore_errors=True)
+        shutil.copytree(plugin_source_path, plugin_target_path)
 
-
-def copy_theme(theme_name):
-    tw_themes_path = internal_utils.get_path("tw5") + "/themes/neuroforest"
-    theme_path = internal_utils.get_path(theme_name)
-    command = f"rsync -a --delete {theme_path} {tw_themes_path}"
-    os.system(command)
+    for theme in SETTINGS.EXTERNAL_THEMES:
+        theme_source_path = theme["path"]
+        theme_target_path = internal_utils.get_path("themes") + "/" + theme["name"]
+        shutil.rmtree(theme_target_path)
+        shutil.copytree(theme_source_path, theme_target_path)
 
 
 def handle_keyword(keyword):
@@ -77,7 +77,7 @@ def handle_keyword(keyword):
     :param keyword:
     :return:
     """
-    file_path = internal_utils.get_path("nf") + "/desktop/args.txt"
+    file_path = internal_utils.get_path("desktop") +"/args.txt"
     with open(file_path, mode="w+", encoding="utf-8") as f:
         f.write(keyword)
 
@@ -90,11 +90,7 @@ def handle_keyword(keyword):
 @pass_environment
 def cli(ctx, action, keyword, core, front):
     if action == "build":
-        if core:
-            copy_plugin("tw5-plugin-core")
-        if front:
-            copy_plugin("tw5-plugin-front")
-            copy_theme("tw5-theme-basic")
+        copy_plugins_and_themes()
         handle_keyword(keyword)
         build()
     elif action == "close":

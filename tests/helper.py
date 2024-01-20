@@ -11,7 +11,9 @@ import os
 import sys
 
 
+# Testing settings
 PORT = 8088
+URL = "127.0.0.1"
 
 
 def are_dirs_identical(dir1, dir2):
