@@ -2,6 +2,7 @@
 Object-oriented programming utils.
 """
 
+import inspect
 import re
 
 
@@ -30,7 +31,7 @@ def get_attr_keys(obj, modes=None):
     if not modes.intersection(func_modes):
         modes.add("all_func")
     if not modes.intersection(layer_modes):
-        modes.add("all_layer")
+        modes.add("simple")
 
     attr_keys = dir(obj)
     # Filtering functionality.
@@ -69,7 +70,7 @@ def represent(obj, level=0, modes=None):
                 max_len = i_len
         return max_len
 
-    # Setting th default mode.
+    # Setting the default mode
     representation_string = str()
     attrs = dict()
     attr_keys = get_attr_keys(obj, modes=modes)
@@ -80,7 +81,7 @@ def represent(obj, level=0, modes=None):
         obj = [str(i) for i in obj]
         attr_keys = obj
 
-    # Handling modes given.
+    # Handling modes given
     count = 0
     for attr_key in attr_keys:
         try:
@@ -94,15 +95,19 @@ def represent(obj, level=0, modes=None):
                 attrs[str(count)] = attr_key
                 count += 1
 
-    # Displaying.
+    # Displaying
     key_len = get_max_size(list(attrs.keys()))
     for attr_key, attr_val in attrs.items():
         pretty_key = str("{:<" + str(key_len + 2) + "}").format(str(attr_key) + ":")
-        if (hasattr(attr_val, "display") and attr_key != "__class__") or \
+        if inspect.ismethod(attr_val):
+            defninig_class = inspect._findclass(attr_val)
+            method_str = f"<method '{attr_key}' of {defninig_class.__module__}.{defninig_class.__name__}>"
+            representation_string += f"{level*'  '}{pretty_key}{method_str}\n"
+        elif (hasattr(attr_val, "display") and attr_key != "__class__") or \
                 (isinstance(attr_val, dict) and attr_val):
             representation_string += f"{level*'  '}{pretty_key}\n"
             representation_string += represent(attr_val, modes=modes, level=level + 1)
         else:
-            representation_string += f"{level*'  '}{pretty_key}{attr_val}"
+            representation_string += f"{level*'  '}{pretty_key}{attr_val}\n"
 
     return representation_string

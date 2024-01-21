@@ -1,6 +1,7 @@
 DESKTOP = str()
 EXTERNAL_PLUGINS = dict()
 EXTERNAL_THEMES = dict()
+LOCAL_INCLUDE = list()
 NEURO = str()
 PORT = int()
 STORAGE = str()

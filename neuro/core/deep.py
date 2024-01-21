@@ -18,7 +18,7 @@ from neuro.core.data.dict import DictUtils
 from neuro.utils import oop_utils, time_utils
 
 
-class NeuroObject:
+class NeuroObject(object):
     pass
 
 
@@ -313,7 +313,7 @@ class Dir(File):
             self.__setattr__(key, attr_val)
 
     def display(self, **kwargs):
-        print(self.__repr__())
+        print(self.__repr__(**kwargs))
 
     def get_all_paths(self, file_ext=None, mode="def"):
         """
