@@ -7,22 +7,23 @@ import os
 import click
 
 from neuro.core.deep import Dir
-
 from neuro.tools.terminal import common
 from neuro.tools.terminal.cli import pass_environment
+from neuro.utils import SETTINGS
 
 
 def move_file(src_path, dst_path):
     src_dir = Dir(src_path)
 
     # Handle symlinks
-    symlinks = os.popen("find ~ -type l").read()[:-1].split("\n")
-    for symlink in symlinks:
-        symlink_target = os.readlink(symlink)
-        if src_path in symlink_target:
-            new_symlink_target = symlink_target.replace(src_path, dst_path)
-            os.system(f"rm {symlink}")
-            os.system(f"ln -s {new_symlink_target} {symlink}")
+    for search_dir in SETTINGS.LOCAL_INCLUDE:
+        symlinks = os.popen(f"find {search_dir} -type l").read()[:-1].split("\n")
+        for symlink in symlinks:
+            symlink_target = os.readlink(symlink)
+            if src_path in symlink_target:
+                new_symlink_target = symlink_target.replace(src_path, dst_path)
+                os.system(f"rm {symlink}")
+                os.system(f"ln -s {new_symlink_target} {symlink}")
 
     src_dir.move(dst_path)
 
@@ -37,6 +38,9 @@ def cli(ctx, src_path, dst_path):
     :param src_path: current file pathname
     :param dst_path: target file pathname
     """
+    if not os.path.exists(src_path):
+        print(f"Error: not found {src_path}")
+        return
     if os.path.exists(dst_path):
         print(f"Error: already exists {dst_path}")
         return
