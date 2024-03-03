@@ -19,8 +19,8 @@ def get_path(keyword):
     """
     keyword_index = {
         "archive": f"{SETTINGS.STORAGE}/archive",
-        "desktop": f"{SETTINGS.DESKTOP}",
-        "neuro": f"{SETTINGS.NEURO}",
+        "desktop": SETTINGS.DESKTOP,
+        "neuro": SETTINGS.NEURO,
         "nw": f"{SETTINGS.DESKTOP}/output/linux64/TiddlyDesktop-linux64-v0.0.14/nw",
         "plugins": f"{SETTINGS.TW5}/plugins",
         "resources": f"{SETTINGS.NEURO}/resources",
@@ -28,7 +28,8 @@ def get_path(keyword):
         "tests": f"{SETTINGS.NEURO}/tests",
         "themes": f"{SETTINGS.TW5}/themes",
         "tiddlers": f"{SETTINGS.STORAGE}/tiddlers",
-        "wd_queries": f"{SETTINGS.STORAGE}resources/queries"
+        "tw5": SETTINGS.TW5,
+        "wd_queries": f"{SETTINGS.NEURO}/resources/queries"
     }
 
     if keyword not in keyword_index:
