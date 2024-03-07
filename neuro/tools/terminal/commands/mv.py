@@ -3,27 +3,40 @@ Moves a file or directory both locally and in NeuroWiki.
 """
 
 import os
+import subprocess
+import sys
 
 import click
 
 from neuro.core.deep import Dir
-from neuro.tools.terminal import common
+from neuro.tools.terminal import common, style
 from neuro.tools.terminal.cli import pass_environment
 from neuro.utils import SETTINGS
+
+from neuro.core.data.dict import DictUtils
 
 
 def move_file(src_path, dst_path):
     src_dir = Dir(src_path)
 
     # Handle symlinks
+    symlink_count = 0
     for search_dir in SETTINGS.LOCAL_INCLUDE:
-        symlinks = os.popen(f"find {search_dir} -type l").read()[:-1].split("\n")
+        p = subprocess.run(["find", search_dir, "-type", "l"], stdout=subprocess.PIPE)
+        symlinks = p.stdout.decode(encoding="utf-8").split("\n")
+        symlinks = list(filter(None, symlinks))
         for symlink in symlinks:
             symlink_target = os.readlink(symlink)
             if src_path in symlink_target:
+                symlink_count +=1
                 new_symlink_target = symlink_target.replace(src_path, dst_path)
                 os.system(f"rm {symlink}")
                 os.system(f"ln -s {new_symlink_target} {symlink}")
+
+    if symlink_count == 0:
+        print(f"{style.FAIL} 0 symlinks affected")
+    else:
+        print(f"{style.SUCCESS} {symlink_count} afected")
 
     src_dir.move(dst_path)
 
