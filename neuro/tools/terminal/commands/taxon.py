@@ -36,12 +36,15 @@ REPLACE = {
     ".bt-k Bacteria": [".bt-d Bacteria", "taxon.domain"],
     ".bt-k Viruses": [".bt-d Viridae", "taxon.domain"],
     ".bt-p Actinobacteriota": [".bt-p Actinobacteria", "taxon.phylum"],
-    ".bt-p Miozoa": [".bt-p Myzozoa", "taxon.phylum"],
-    ".bt-o Caudata": [".bt-o Urodela", "taxon.order"],
     ".bt-p Bacteroidetes": [".bt-p Bacteroidota", "taxon.phylum"],
-    ".bt-c Bacteroidia": [".bt-c Bacteroidia", "taxon.phylum"],
     ".bt-p Firmicutes_A": [".bt-p Firmicutes", "taxon.phylum"],
-    ".bt-p Firmicutes_B": [".bt-p Firmicutes", "taxon.phylum"]
+    ".bt-p Firmicutes_B": [".bt-p Firmicutes", "taxon.phylum"],
+    ".bt-p Miozoa": [".bt-p Myzozoa", "taxon.phylum"],
+    ".bt-p Spirochaetes": [".bt-p Spirochaetota", "taxon.phylum"],
+    ".bt-p Spirochaetae": [".bt-p Spirochaetota", "taxon.phylum"],
+    ".bt-c Bacteroidia": [".bt-c Bacteroidia", "taxon.phylum"],
+    ".bt-o Caudata": [".bt-o Urodela", "taxon.order"],
+    ".bt-o Enterobacteriales": [".bt-o Enterobacterales", "taxon.order"]
 }
 
 
