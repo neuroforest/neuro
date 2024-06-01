@@ -52,8 +52,8 @@ def is_tiddler(tid_title, **kwargs):
         return False
 
 
-def neuro_tid(tid_title):
-    t = tiddler(tid_title)
+def neuro_tid(tid_title, **kwargs):
+    t = tiddler(tid_title, **kwargs)
     if t:
         nt = NeuroTid.from_tiddler(t)
         return nt

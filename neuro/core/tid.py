@@ -11,7 +11,7 @@ import subprocess
 from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
 
-from neuro.core.deep import NeuroNode
+from neuro.core.deep import NeuroNode, Moment
 from neuro.core.files.text import TextHtml
 from neuro.utils import oop_utils, exceptions, internal_utils, network_utils
 
@@ -23,8 +23,7 @@ class NeuroTid(NeuroNode):
     There are 3 fundamental object properties:
         - uuid - inherited from NeuroNode
         - title - tiddler title, also serves as identifier
-        - fields - a dictionary of all fields, some with special handling:
-            - tags - list
+        - fields - a dictionary of all fields, some with special handling (tags, list)
     """
     def __init__(self, tid_title="", fields=None, **kwargs):
         super().__init__(**kwargs)
@@ -40,6 +39,24 @@ class NeuroTid(NeuroNode):
     def __delitem__(self, key):
         if key in self:
             del self.fields[key]
+
+    def __eq__(self, other):
+        if not isinstance(other, NeuroTid):
+            return False
+
+        ignore_keys = ["modified", "revision"]
+        self_fields, other_fields = self.fields.copy(), other.fields.copy()
+        for key in ignore_keys:
+            try:
+                del self_fields[key]
+            except KeyError:
+                pass
+            try:
+                del other_fields[key]
+            except KeyError:
+                pass
+
+        return self.title == other.title and self_fields == other_fields
 
     def __getitem__(self, key):
         if key in ["title", "edges", "uuid", "fields"]:
@@ -127,15 +144,27 @@ class NeuroTid(NeuroNode):
         :param tiddler:
         :param kwargs:
             - ignore: list of fields to ignore when importing from tiddler
-              - override: override NeuroTid properties
+            - override: override NeuroTid properties
         :return:
         """
         try:
             tid_title = tiddler["title"]
         except KeyError:
             raise exceptions.MissingTitle()
-        neuro_tid = cls(tid_title, tiddler)
-        return neuro_tid
+
+        # Handle created
+        if "created" in tiddler:
+            created = tiddler["created"]
+            pattern_utc = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z"
+            pattern_tw5 = r"\d{17}"
+            if re.match(pattern_utc, created):
+                tiddler["created"] = Moment(created, form="utc").to_tid_val()
+            elif re.match(pattern_tw5, created):
+                tiddler["created"] = Moment(created, form="tw5").to_tid_val()
+            else:
+                logging.error(f"The format of field 'created' is not recognized: {created}")
+
+        return cls(tid_title, tiddler)
 
     @staticmethod
     def get_tid_file_name(tid_title):
