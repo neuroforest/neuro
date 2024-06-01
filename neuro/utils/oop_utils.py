@@ -56,11 +56,13 @@ def get_attr_keys(obj, modes=None):
 def represent(obj, level=0, modes=None):
     """
     Return a string used for object representation.
-    :param obj: object, practically any python object
+    :param obj: object, practically any Python object
     :param level: level of indentation
     :param modes: set of modes (see function get_attr_keys)
     :return: representation string
     """
+    if level > 10:
+        return
 
     def get_max_size(li):
         max_len = 0

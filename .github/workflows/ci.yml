@@ -13,7 +13,8 @@ jobs:
           python-version: '3.8'
           architecture: 'x64'
       - run: |
-          git submodule update --init
+          git submodule update --init --force
+          git submodule update --remote
           python3 -m venv venv
           venv/bin/pip install .
           venv/bin/pytest tests

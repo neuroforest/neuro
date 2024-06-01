@@ -19,10 +19,6 @@ def pytest_sessionstart(session):
     shutil.rmtree(output_path, ignore_errors=True)
     os.makedirs(output_path)
 
-    # Restore submodules
-    os.system("git submodule foreach git checkout -f origin/master")
-    os.system("git submodule foreach git clean -fd")
-
     if session.config.option.markexpr in ["", "integration"]:
         global PROCESS
         PROCESS = subprocess.Popen([

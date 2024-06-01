@@ -10,11 +10,13 @@ dependencies = [
     "bs4==0.0.1",
     "click>=8.1.0",
     "deepdiff==6.7.1",
+    "halo>=0.0.31",
     "lxml~=5.1.0",
     "pillow~=10.2.0",
     "psutil>=5.9.7",
     "pytest==7.4.4",
     "python-magic~=0.4.27",
+    "pytz>=2024.1",
     "requests>=2.31.0",
     "tqdm>=4.66.1",
     "urllib3>=2.1.0"

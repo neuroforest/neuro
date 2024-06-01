@@ -16,10 +16,18 @@ kwargs = {
 
 class TestTwGet:
     @pytest.mark.integration
+    def test_get_neuro_tid(self):
+        from neuro.tools.api import tw_get
+        neuro_tid = tw_get.neuro_tid("test", **kwargs)
+        assert "created" in neuro_tid.fields
+
+    @pytest.mark.integration
     def test_get_tiddler(self):
         from neuro.tools.api import tw_get
         tiddler = tw_get.tiddler("test", **kwargs)
         assert tiddler["title"] == "test"
+        assert "created" in tiddler
+        assert tiddler["created"] == "2019-01-30T20:02:31.703Z"
 
     @pytest.mark.integration
     def test_get_tw_index(self):
@@ -59,6 +67,17 @@ class TestTwPut:
         tw_put.neuro_tid(neuro_tid, **kwargs)
         tiddler = tw_get.tiddler("test_put_neuro_tid", **kwargs)
         assert tiddler["text"] == text
+
+    @pytest.mark.integration
+    def test_replace_neuro_tid(self):
+        from neuro.tools.api import tw_get, tw_put
+        nt1 = tw_get.neuro_tid("test", **kwargs)
+        tw_put.neuro_tid(nt1, **kwargs)
+        nt2 = tw_get.neuro_tid("test", **kwargs)
+        from neuro.core.data.dict import DictUtils
+        DictUtils.represent(nt1.fields)
+        DictUtils.represent(nt2.fields)
+        assert nt1 == nt2
 
 
 class TestTwActions:

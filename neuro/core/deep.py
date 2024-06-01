@@ -13,6 +13,7 @@ import time
 import uuid
 
 import magic
+import pytz
 
 from neuro.core.data.dict import DictUtils
 from neuro.utils import oop_utils, time_utils
@@ -32,9 +33,13 @@ class Moment(NeuroObject):
         if form == "unix":
             self.unix = moment
         elif form == "utc":
-            self.unix = datetime.datetime.strptime(moment, "%Y-%m-%dT%H:%M:%S.%fZ").timestamp()
+            if len(moment) == 24 and moment[-1] == "Z":
+                moment.replace("Z", "+0000")
+            self.unix = datetime.datetime.strptime(moment, "%Y-%m-%dT%H:%M:%S.%f%z").timestamp()
         elif form == "now":
             self.unix = time.time()
+        elif form == "tw5":
+            self.unix = datetime.datetime.strptime(moment + "+0000", "%Y%m%d%H%M%S%f%z").timestamp()
         else:
             logging.error("Form not recognized.")
 
@@ -73,7 +78,7 @@ class Moment(NeuroObject):
         return cls(unix)
 
     def to_format(self, time_format):
-        time_str = datetime.datetime.fromtimestamp(self.unix).strftime(time_format)
+        time_str = datetime.datetime.fromtimestamp(self.unix).astimezone(pytz.utc).strftime(time_format)
         return time_str
 
     def to_prog(self):
@@ -467,7 +472,7 @@ class NeuroNode(NeuroObject):
     and the NeuroForest platform.
     """
     def __init__(self, **kwargs):
-        # Setup the data infrastructure.
+        # Set up the data infrastructure.
         self.uuid = kwargs.get("uuid", str())
         self.set_id()
         self.edges = kwargs.get("edges", Edges())
@@ -484,14 +489,14 @@ class NeuroNode(NeuroObject):
     def __hash__(self):
         return int(self.uuid, 16)
 
-    def __repr__(self):
+    def __repr__(self, ignore=tuple()):
         """
         Display the node data in the terminal.
         :return:
         """
         attrs_keys = oop_utils.get_attr_keys(self, modes={"no_func", "simple"})
 
-        attrs = {k: self[k] for k in attrs_keys}
+        attrs = {k: self[k] for k in attrs_keys if k not in ignore}
         return DictUtils.represent(attrs, display=False)
 
     def __setitem__(self, key, value):
