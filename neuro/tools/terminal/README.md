@@ -1,4 +1,4 @@
-NeuroTerminal is a Python package with tools and utils to use in unix-like terminal.
+`neuro` is a command-line tool to interact with NeuroForest from the terminal.
 
 ```
 Usage: neuro [OPTIONS] COMMAND [ARGS]...
@@ -11,10 +11,13 @@ Options:
   --help         Show this message and exit.
 
 Commands:
-  archive  archive files
+  archive  archive tiddlers
   desk     NeuroDesktop
+  export   export a tiddler
+  geo      access tools for geospatial data
   get      NeuroAPI GET method
   merge    merge tiddlers
+  mv       move file
   open     open a tiddler
   put      NeuroAPI PUT method
   random   open a random tiddler
@@ -23,5 +26,4 @@ Commands:
   search   search wiki
   taxon    import taxon
   test     test Python package neuro
-  wiki     interact with current wiki
 ```
