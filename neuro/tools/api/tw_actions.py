@@ -44,8 +44,10 @@ def rename_tiddler(old_title, new_title, **kwargs):
         "newTitle": new_title
     }
     response = api.put("/neuro/action/rename", params=params)
-    if response.status_code != 204:
-        print(f"Error: {response.reason}")
+    if response.status_code == 200:
+        print(style.SUCCESS, response.reason)
+    else:
+        print(style.FAIL, response.reason)
     return response
 
 
