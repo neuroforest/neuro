@@ -15,8 +15,6 @@
 
 ### Install
 
-Edit settings in ``neuro/utils/SETTINGS.py`` (see ``docs/setup.rst`` for more info)
-
 ```bash
 git clone https://github.com/neuroforest/neuro.git
 cd neuro
@@ -24,6 +22,8 @@ python3 -m venv venv
 venv/bin/pip install .
 venv/bin/neuro --help
 ```
+
+Edit settings in ``neuro/utils/SETTINGS.py`` (see ``docs/setup.rst`` for more info)
 
 ### Test
 

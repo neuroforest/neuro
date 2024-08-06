@@ -24,6 +24,11 @@ class Path:
         res_file = os.path.isfile(self.path)
         return res_dir or res_file
 
+    def resolve_symlinks(self):
+        resolved = os.path.realpath(self.path)
+        self.path = resolved
+        return self.path
+
 
 class PathInfo:
     @staticmethod
