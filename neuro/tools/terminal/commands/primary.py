@@ -6,7 +6,7 @@ import click
 import pyperclip
 
 from neuro.core.data.dict import DictUtils
-from neuro.tools.api import tw_get, tw_put
+from neuro.tools.api import tw_actions, tw_get, tw_put
 from neuro.tools.terminal import style
 from neuro.tools.terminal.cli import pass_environment
 
@@ -51,11 +51,13 @@ def resolve_complex_error(tw_fields):
             print(f"{i + 1} - {tf['tags'][i]}")
 
         pyperclip.copy(tid_title)
-        temp = input(f"Select {' | '.join([str(i + 1) for i in tag_indices])},"
-                     f" input 'n' to cancel or write valid tiddler name\n")
+        temp = input(f"Select {' | '.join([str(i + 1) for i in tag_indices])}"
+                     f" | n (cancel) | o (open) or write valid tiddler name\n")
         tiddler_chosen = str()
         if temp == "n" or not temp:
             continue
+        elif temp == "o":
+            tw_actions.open_tiddler(tid_title)
         elif temp.isnumeric():
             if int(temp) - 1 in tag_indices:
                 tiddler_chosen = tf["tags"][int(temp) - 1]

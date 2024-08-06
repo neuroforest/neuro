@@ -91,7 +91,7 @@ class Moment(NeuroObject):
         return self.to_format("%Y%m%d%H%M%S%f")
 
     def to_tid_date(self):
-        tid_date = self.to_format("%d %B %Y")
+        tid_date = self.to_format("%Y-%m-%d")
         if tid_date[0] == "0":
             tid_date = tid_date[1:]
         return tid_date
