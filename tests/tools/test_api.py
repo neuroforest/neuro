@@ -94,8 +94,8 @@ class TestTwActions:
     def test_rename(self):
         from neuro.tools.api import tw_actions, tw_get
         r = tw_actions.rename_tiddler("rename1", "rename2", **kwargs)
-        assert r.reason == "OK"
-        assert r.status_code == 204
+        assert r.reason == "0 tiddlers affected"
+        assert r.status_code == 200
         assert not tw_get.is_tiddler("rename1", **kwargs)
         renamed_tiddler = tw_get.tiddler("rename2", **kwargs)
         assert renamed_tiddler["text"] == "rename1"
