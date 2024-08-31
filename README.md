@@ -28,7 +28,7 @@ Edit settings in ``neuro/utils/SETTINGS.py`` (see ``docs/setup.rst`` for more in
 ### Test
 
 ```bash
-venv/bin/pytests tests
+venv/bin/pytest tests
 ```
 
 More info about testing: ``docs/testing.rst``

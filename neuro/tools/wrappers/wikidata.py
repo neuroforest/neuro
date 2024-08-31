@@ -1,7 +1,7 @@
 import logging
 import requests
 
-from neuro.utils import internal_utils
+from neuro.utils import internal_utils, exceptions
 
 
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
@@ -46,7 +46,10 @@ def send_query(query: str, wikidata_sparql_url: str = WIKIDATA_SPARQL_URL):
     :rtype: dict
     """
     res = requests.get(wikidata_sparql_url, params={"query": query, "format": "json"})
-    return res.json()
+    if res.status_code == 200:
+        return res.json()
+    else:
+        raise exceptions.UnhandledStatusCode(f"{res.status_code} {res.reason}")
 
 
 def get_taxon_data(taxon_name: str):

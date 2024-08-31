@@ -22,5 +22,5 @@ def cli(ctx):
     tid_titles = tw_get.tw_fields(["title"], "[all[]]")
     tid_title = py_random.choice(tid_titles)["title"]
     spinner.stop()
-    print(f"Random tiddler ➜ {style.YELLOW}{style.BOLD}{tid_title}{style.RESET}")
+    print(f"Random tiddler ➜  {style.YELLOW}{style.BOLD}{tid_title}{style.RESET}")
     open.cli([tid_title])
