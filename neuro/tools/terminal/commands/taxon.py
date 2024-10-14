@@ -3,16 +3,18 @@ Command `neuro taxon <taxon_name>`, where the argument taxon_name is
 the scientific name of the taxon.
 """
 import logging
+import os
 import subprocess
-import os.path
-import sys
 
 import click
 import halo
 
-from neuro.core import tid
+from neuro.core.tid import NeuroTids, NeuroTid
+from neuro.core.data.dict import DictUtils
 from neuro.tools.api import tw_api, tw_get, tw_put
-from neuro.tools.wrappers import gbif, inaturalist, wikidata
+from neuro.tools.science import biology
+from neuro.tools.wrappers import wikidata, ncbi
+from neuro.utils import exceptions
 
 from neuro.tools.terminal import components
 from neuro.tools.terminal import style
@@ -32,21 +34,24 @@ OBLIGATORY_TAXA = [
     "taxon.species"
 ]
 
-REPLACE = {
-    ".bt-k Bacteria": [".bt-d Bacteria", "taxon.domain"],
-    ".bt-k Viruses": [".bt-d Viridae", "taxon.domain"],
-    ".bt-p Actinobacteriota": [".bt-p Actinobacteria", "taxon.phylum"],
-    ".bt-p Bacteroidetes": [".bt-p Bacteroidota", "taxon.phylum"],
-    ".bt-p Firmicutes_A": [".bt-p Firmicutes", "taxon.phylum"],
-    ".bt-p Firmicutes_B": [".bt-p Firmicutes", "taxon.phylum"],
-    ".bt-p Methanobacteriota_A": [".bt-p Methanobacteriota", "taxon.phylum"],
-    ".bt-p Miozoa": [".bt-p Myzozoa", "taxon.phylum"],
-    ".bt-p Spirochaetes": [".bt-p Spirochaetota", "taxon.phylum"],
-    ".bt-p Spirochaetae": [".bt-p Spirochaetota", "taxon.phylum"],
-    ".bt-c Bacteroidia": [".bt-c Bacteroidia", "taxon.phylum"],
-    ".bt-o Caudata": [".bt-o Urodela", "taxon.order"],
-    ".bt-o Enterobacteriales": [".bt-o Enterobacterales", "taxon.order"]
-}
+
+def process_ncbi_lineage(ncbi_lineage):
+    lineage_data = list()
+    for taxon in ncbi_lineage:
+        prefix = biology.get_prefix(taxon["Rank"])
+        if not prefix:
+            continue
+        tid_title = f"{prefix} {taxon['ScientificName']}"
+
+        taxon_data = {
+            "name": taxon['ScientificName'],
+            "ncbi.txid": taxon['TaxId'],
+            "neuro.role": f"taxon.{taxon['Rank']}",
+            "title": tid_title
+        }
+        if taxon_data:
+            lineage_data.append(taxon_data)
+    return lineage_data
 
 
 def filter_neuro_tids(neuro_tids):
@@ -54,15 +59,9 @@ def filter_neuro_tids(neuro_tids):
     Filter and repair neuro_tids.
     :return: True | False
     """
-    filtered_neuro_tids = tid.NeuroTids()
+    filtered_neuro_tids = NeuroTids()
     for neuro_tid in neuro_tids:
-        # Replace certain titles
         tid_title = neuro_tid.title
-        if tid_title in REPLACE:
-            neuro_tid.title = REPLACE[tid_title][0]
-            neuro_tid.fields["neuro.role"] = REPLACE[tid_title][1]
-        tid_title = neuro_tid.title
-
         if neuro_tid.fields["neuro.role"] in OBLIGATORY_TAXA:
             filtered_neuro_tids.append(neuro_tid)
         else:
@@ -139,20 +138,22 @@ def integrate_wiki_filesystem(local):
 
 @click.command("taxon", short_help="import taxon")
 @click.argument("taxon_name", nargs=-1)
+@click.option("-f", "--overwrite", is_flag=True)
 @click.option("-l", "--local", default="")
 @click.option("-i", "--integrate", is_flag=True)
 @pass_environment
-def cli(ctx, taxon_name, local, integrate):
+def cli(ctx, taxon_name, overwrite, local, integrate):
     """
     Command `neuro taxon <taxon_name>`.
     By running this command taxon-specific web scraping is performed
-    to gather data from WikiData, iNaturalist and GBIF. Besides the requested
+    to gather data from NCBI Taxonomy, WikiData, iNaturalist and GBIF. Besides the requested
     taxon, its full taxon chain is added to the NeuroWiki.
 
     :Example:
     $ neuro taxon Carlito syrichta
 
     :param ctx:
+    :param overwrite:
     :param taxon_name: scientific name of the taxon
     :param local: path to local organism file tree
     :param integrate: integrate NeuroWiki with local filesystem
@@ -168,68 +169,69 @@ def cli(ctx, taxon_name, local, integrate):
 
     if not taxon_name:
         print("Error: no taxon name given")
-        sys.exit()
+        return
 
     spinner = halo.Halo(text="Gathering taxon data...", spinner="dots")
     spinner.start()
     taxon_name = " ".join(taxon_name).strip()
-
-    # Get the initial identification data
-    data = get_wikidata_data(taxon_name)
-    if "gbif.taxon.id" not in data:
-        gbif_taxon_id = gbif.search_by_name(taxon_name)
-        if gbif_taxon_id:
-            data["gbif.taxon.id"] = gbif_taxon_id
-
-    if not data:
-        spinner.stop_and_persist(symbol=style.FAIL, text=f"{taxon_name}: WikiData no entity")
+    ncbi_lineage = ncbi.get_ncbi_lineage(taxon_name)
+    if not ncbi_lineage:
+        spinner.stop_and_persist(symbol=style.FAIL, text=f"{taxon_name}: NCBI Taxonomy data")
         return
-    elif "inat.taxon.id" in data:
-        inaturalist_taxon_id = data["inat.taxon.id"]
-        neuro_tids = inaturalist.get_taxon_tids(inaturalist_taxon_id)
-        if not neuro_tids:
-            spinner.stop_and_persist(symbol=style.FAIL, text=f"{taxon_name}: Incorrect iNaturalist ID on WikiData")
-            return
-        neuro_tids[-1].add_fields(data)
-        neuro_tids = filter_neuro_tids(neuro_tids)
-        spinner.stop_and_persist(symbol=style.SUCCESS, text=f"{taxon_name}: iNaturalist data")
-    elif "gbif.taxon.id" in data:
-        neuro_tids = gbif.get_taxon_tids(data["gbif.taxon.id"])
-        neuro_tids[-1].add_fields(data)
-        neuro_tids = filter_neuro_tids(neuro_tids)
-        spinner.stop_and_persist(symbol=style.SUCCESS, text=f"{taxon_name}: GBIF data")
     else:
-        spinner.stop_and_persist(symbol=style.FAIL, text="Data could not be gathered")
-        return
+        lineage_data = process_ncbi_lineage(ncbi_lineage)
+        spinner.stop_and_persist(symbol=style.SUCCESS, text=f"{taxon_name}: NCBI Taxonomy data")
 
-    # Exclude irrelevant
+    # Create lineage NeuroTids
+    neuro_tids = NeuroTids()
+    for taxon_data in lineage_data:
+        try:
+            neuro_tid = tw_get.neuro_tid(taxon_data["title"])
+        except exceptions.TiddlerDoesNotExist:
+            neuro_tid = NeuroTid(taxon_data["title"])
+        neuro_tid.add_fields(taxon_data)
+        neuro_tids.append(neuro_tid)
+    neuro_tids = filter_neuro_tids(neuro_tids)
     neuro_tids.chain()
-    relevant = [neuro_tid for neuro_tid in neuro_tids if not tw_get.is_tiddler(neuro_tid.title)]
+    changes = False
 
-    # Put relevant into the wiki
-    if relevant:
-        for neuro_tid in relevant:
+    # Add missing taxons to NeuroWiki
+    for neuro_tid in neuro_tids:
+        if overwrite or not tw_get.is_tiddler(neuro_tid.title):
+            if overwrite:
+                DictUtils.represent(neuro_tid.fields)
             if components.bool_prompt(f"Put tiddler \"{neuro_tid.title}\"?"):
                 tw_put.neuro_tid(neuro_tid)
-    else:
-        print("No additions to NeuroWiki.")
+                changes = True
 
-    # Create local file tree
-    local_relevant = [neuro_tid for neuro_tid in neuro_tids if neuro_tid.fields["neuro.role"] in OBLIGATORY_TAXA]
+    # Establish local filesystem architecture
+    current_path = local
     added = False
-    if local_relevant and local:
-        current_path = local
-        for neuro_tid in local_relevant:
+    for neuro_tid in neuro_tids:
+        if neuro_tid.fields["neuro.role"] in OBLIGATORY_TAXA:
             name = neuro_tid.title.split(" ", 1)[1].replace(" ", "_")
             current_path = f"{current_path}/{name}"
+            subpath = current_path.replace(f"{local}/", "")
+            if "local" in neuro_tid.fields:
+                local_path = neuro_tid.fields["local"].replace("file://", "")
+                if os.path.isdir(local_path):
+                    current_path = local_path
+                continue
+
             if not os.path.isdir(current_path):
-                added = True
-                subpath = current_path.replace(f"{local}/", "")
                 if components.bool_prompt(f"Establish subpath \"{subpath}\"?"):
                     os.mkdir(current_path)
                     neuro_tid.fields["local"] = f"file://{current_path}"
                     tw_put.neuro_tid(neuro_tid)
                 else:
                     break
+            else:
+                if "local" not in neuro_tid.fields:
+                    neuro_tid.fields["local"] = f"file://{current_path}"
+                    tw_put.neuro_tid(neuro_tid)
+                    added = True
+
+    if not changes:
+        print("No additions to NeuroWiki.")
     if not added:
         print("No additions to local file system.")

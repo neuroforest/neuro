@@ -20,6 +20,15 @@ def get_inaturalist_mocks():
         json.dump(taxon_data, f)
 
 
+class TestGbif:
+    @pytest.mark.integration
+    def test_request_get(self):
+        from neuro.tools.wrappers import gbif
+        taxon_data = gbif.get_taxon("2597892")
+        assert taxon_data["species"] == "Penicillium digitatum"
+        assert taxon_data["familyKey"] == 3563703
+
+
 class TestInaturalist:
     @pytest.mark.integration
     def test_request_get(self):
@@ -30,6 +39,16 @@ class TestInaturalist:
 
         taxon_data = inaturalist.get_taxon(109281)
         assert taxon_data["name"] == "Phengaris arion"
+
+
+class TestNCBI:
+    @pytest.mark.integration
+    def test_request_get(self):
+        from neuro.tools.wrappers import ncbi
+        taxon_data = ncbi.get_ncbi_taxonomy_data("Escherichia coli")
+        assert taxon_data[0]["Rank"] == "species"
+        assert taxon_data[0]["TaxId"] == "562"
+        assert len(taxon_data[0]["Lineage"]) > 10
 
 
 class TestWikiData:
@@ -44,12 +63,3 @@ class TestWikiData:
         result = data["results"]["bindings"][0]
         assert result["label"]["xml:lang"] == "en"
         assert result["label"]["value"] == "test"
-
-
-class TestGbif:
-    @pytest.mark.integration
-    def test_request_get(self):
-        from neuro.tools.wrappers import gbif
-        taxon_data = gbif.get_taxon("2597892")
-        assert taxon_data["species"] == "Penicillium digitatum"
-        assert taxon_data["familyKey"] == 3563703
