@@ -43,3 +43,21 @@ def bool_prompt_show(question, file_path):
             continue
         else:
             return False
+
+
+def selector(options, metadata=None):
+    indices = range(len(options))
+    if metadata and len(options) == len(metadata):
+        option_texts = [f"{options[i]} {metadata[i]}" for i in indices]
+    else:
+        option_texts = [str(o) for o in options]
+    for i in indices:
+        print(f"{i + 1} - {option_texts[i]}")
+    temp = input(f"Select {' | '.join([str(i + 1) for i in indices])} | n (cancel) ")
+    if temp == "n" or not temp:
+        return None
+    elif temp.isnumeric() and int(temp) - 1 in indices:
+        return options[int(temp) - 1]
+    else:
+        print(f"{style.RED}Not valid: {temp}{style.RESET}")
+        return None
