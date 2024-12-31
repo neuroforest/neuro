@@ -4,6 +4,17 @@ from neuro.tools.api import tw_api
 from neuro.tools.terminal import style
 
 
+def close_all(**kwargs):
+    api = tw_api.get_api(**kwargs)
+    if not api:
+        return None
+
+    response = api.put("/neuro/action/close-all")
+    if response.status_code != 204:
+        print(f"Error: {response.reason}")
+    return response
+
+
 def merge_tiddlers(title_list, **kwargs):
     api = tw_api.get_api(**kwargs)
     if not api:
@@ -84,7 +95,3 @@ def search(query, **kwargs):
     else:
         print(style.FAIL, response.reason)
     return response
-
-
-if __name__ == "__main__":
-    search("testd")
