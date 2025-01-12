@@ -46,17 +46,23 @@ class Moment(NeuroObject):
     def __bool__(self):
         return bool(self.unix)
 
-    def __repr__(self):
-        return datetime.datetime.fromtimestamp(self.unix).strftime(time_utils.CODE_MOMENT_SI)
-
     def __eq__(self, other):
         return self.unix == other.unix
+
+    def __gt__(self, other):
+        return self.unix > other.unix
 
     def __lt__(self, other):
         return self.unix < other.unix
 
-    def __gt__(self, other):
-        return self.unix > other.unix
+    def __repr__(self):
+        return datetime.datetime.fromtimestamp(self.unix).strftime(time_utils.CODE_MOMENT_SI)
+
+    def __sub__(self, other):
+        if isinstance(other, Moment):
+            return self.unix - other.unix
+        else:
+            return NotImplemented
 
     @classmethod
     def from_string(cls, datetime_string, datetime_format):
