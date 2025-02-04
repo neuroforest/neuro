@@ -52,6 +52,49 @@ def is_tiddler(tid_title, **kwargs):
         return False
 
 
+def lineage(root, tw_filter="[!is[system]]", limit=20, **kwargs):
+    """
+    Get lineage of all tiddlers included by the filter.
+    :param root:
+    :param tw_filter:
+    :param limit:
+    :return:
+    :rtype: dict
+    """
+    ti = tw_fields(["title", "neuro.primary"], tw_filter, **kwargs)
+    transformed_index = dict()
+    for i in ti:
+        transformed_index[i["title"]] = i
+
+    lineage_dict = dict()
+    for tid_title, tf in transformed_index.items():
+        lineage_item = list()
+        if "neuro.primary" not in tf:
+            lineage_dict[tid_title] = lineage_item
+            continue
+
+        current_tid_title = tid_title
+        count = 0
+        while True:
+            if current_tid_title == root or current_tid_title not in transformed_index:
+                lineage_item.insert(0, current_tid_title)
+                break
+            elif count >= limit:
+                break
+            else:
+                if "neuro.primary" in transformed_index[current_tid_title]:
+                    lineage_item.insert(0, current_tid_title)
+                    current_tid_title = transformed_index[current_tid_title]["neuro.primary"]
+                    count += 1
+                else:
+                    lineage_item.insert(0, current_tid_title)
+                    break
+
+        lineage_dict[tid_title] = lineage_item
+
+    return lineage_dict
+
+
 def neuro_tid(tid_title, **kwargs):
     t = tiddler(tid_title, **kwargs)
     if t:
@@ -95,6 +138,14 @@ def server_status():
 
     parsed_response = api.get("/status")
     return parsed_response
+
+
+def tid_titles(tw_filter, **kwargs):
+    tfs = tw_fields(["title"], tw_filter)
+    title_list = list()
+    for tf in tfs:
+        title_list.append(tf["title"])
+    return title_list
 
 
 def tiddler(tid_title, **kwargs):

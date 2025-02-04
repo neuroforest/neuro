@@ -5,10 +5,10 @@ DELETE wrapper.
 from neuro.tools.api import tw_api
 
 
-def tiddler(tid_title):
-    api = tw_api.get_api()
+def tiddler(tid_title, **kwargs):
+    api = tw_api.get_api(**kwargs)
     if not api:
         return None
 
-    response = api.delete("/bags/default/tiddlers/" + tid_title)
+    response = api.delete(f"/bags/default/tiddlers/{tid_title}")
     return response
