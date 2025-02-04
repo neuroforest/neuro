@@ -148,9 +148,11 @@ class MIME(NeuroObject):
         self.minor = str()
         self.major = str()
         self.valid = bool()
+        self.mime = str()
         try:
             self.major, self.minor = mime_str.split("/")
             self.valid = True
+            self.mime = f"{self.major}/{self.minor}"
         except ValueError:
             logging.error(f"Mime string is not valid: {mime_str}")
             self.valid = False
