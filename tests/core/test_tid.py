@@ -43,7 +43,7 @@ class TestNeuroTid:
 
         assert neuro_tid.fields["text"].endswith("%#@&^&(_(+€€\n")
 
-        with pytest.raises(TypeError):
+        with pytest.raises(exceptions.InternalError):
             NeuroTid.from_html("test")
 
     def test_from_tiddler(self):

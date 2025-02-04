@@ -120,9 +120,11 @@ class NeuroTid(NeuroNode):
     def from_html(cls, html):
         if isinstance(html, Tag):
             div_element = html
-        elif bool(Soup(html, "html.parser").find()):
-            soup = Soup(html, features="lxml")
+        elif isinstance(html, str):
+            soup = Soup(html, "html.parser")
             div_element = soup.find("div")
+            if not div_element:
+                raise exceptions.InternalError(f"HTML not structured properly: {html}")
         else:
             raise TypeError(f"HTML type not supported: {type(html)}")
 
