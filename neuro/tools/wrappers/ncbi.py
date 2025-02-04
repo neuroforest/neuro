@@ -1,17 +1,75 @@
-import logging
+from xml.etree import ElementTree
 
-from Bio import Entrez
+import requests
+
+from neuro.utils import exceptions
 
 
-def get_ncbi_taxonomy_data(taxon):
+def resolve_taxon_name(taxon_name):
+    url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+    params = {
+        "db": "taxonomy",
+        "term": taxon_name,
+        "retmode": "json"
+    }
+    res = requests.get(url, params)
+    return res.json()["esearchresult"]["idlist"]
+
+
+def get_lineage(taxon_id):
+    url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+    params = {
+        "db": "taxonomy",
+        "id": taxon_id,
+        "retmode": "xml"
+    }
+    res = requests.get(url, params)
+    element_tree = ElementTree.fromstring(res.text)
+    lineage_elements = element_tree.findall(".//LineageEx/Taxon")
+    lineage = list()
+    for le in lineage_elements:
+        lineage.append({
+            "TaxId": le.find("TaxId").text,
+            "ScientificName": le.find("ScientificName").text,
+            "Rank": le.find("Rank").text
+        })
+
+    lineage.append({
+        "TaxId": element_tree.find(".//Taxon/TaxId").text,
+        "ScientificName": element_tree.find(".//Taxon/ScientificName").text,
+        "Rank": element_tree.find(".//Taxon/Rank").text
+    })
+
+    return lineage
+
+
+def get_taxon_info(taxon_id):
+    url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+    params = {
+        "db": "taxonomy",
+        "id": taxon_id,
+        "retmode": "xml"
+    }
+
+    res = requests.get(url, params)
+    element_tree = ElementTree.fromstring(res.text)
+    return {
+        "Division": element_tree.find(".//Taxon/Division").text,
+        "ScientificName": element_tree.find(".//Taxon/ScientificName").text,
+        "ParentTaxId": element_tree.find(".//Taxon/ParentTaxId").text,
+        "Rank": element_tree.find(".//Taxon/Rank")
+    }
+
+
+def get_ncbi_taxonomy_data_legacy(taxon):
+    lineage = []
     # Search taxon
     Entrez.email = "your_email@example.com"
     search_handle = Entrez.esearch(db="taxonomy", term=taxon)
     search_results = Entrez.read(search_handle)
     search_handle.close()
     if not search_results['IdList']:
-        logging.info(f"No taxon found for: {taxon}")
-        return lineage
+        raise exceptions.InternalError(f"No taxon found")
     tax_id = search_results['IdList'][0]
 
     # Fetch taxonomy details
@@ -22,7 +80,6 @@ def get_ncbi_taxonomy_data(taxon):
 
 
 def get_ncbi_lineage(taxon):
-    lineage = []
     try:
         taxon_data = get_ncbi_taxonomy_data(taxon)
         lineage = taxon_data[0]['LineageEx']
@@ -31,7 +88,16 @@ def get_ncbi_lineage(taxon):
             "ScientificName": taxon_data[0]["ScientificName"],
             "Rank": taxon_data[0]["Rank"]
         })
-    except Exception as e:
-        logging.error(e)
+    except BaseException as e:
+        if "HTTP Error 400" in str(e):
+            return exceptions.InternalError("HTTP Error 400")
+        elif "Search Backend failed" in str(e):
+            return exceptions.InternalError("Search Backend failed")
+        else:
+            return e
 
     return lineage
+
+
+if __name__ == "__main__":
+    print(get_lineage("938170"))

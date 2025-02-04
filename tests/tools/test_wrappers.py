@@ -43,23 +43,40 @@ class TestInaturalist:
 
 class TestNCBI:
     @pytest.mark.integration
-    def test_request_get(self):
+    def test_resolve_taxon_name(self):
         from neuro.tools.wrappers import ncbi
-        taxon_data = ncbi.get_ncbi_taxonomy_data("Escherichia coli")
-        assert taxon_data[0]["Rank"] == "species"
-        assert taxon_data[0]["TaxId"] == "562"
-        assert len(taxon_data[0]["Lineage"]) > 10
+        taxon_ids = ncbi.resolve_taxon_name("Amata phegea")
+        assert len(taxon_ids) == 1
+        assert taxon_ids[0] == "938170"
+        taxon_ids = ncbi.resolve_taxon_name("Proteus")
+        assert len(taxon_ids) == 2
+        taxon_ids = ncbi.resolve_taxon_name("Protozoa")
+        assert len(taxon_ids) == 0
+
+    def test_get_lineage(self):
+        from neuro.tools.wrappers import ncbi
+        lineage = ncbi.get_lineage("938170")
+        lepidoptera = {
+            "TaxId": "7088",
+            "ScientificName": "Lepidoptera",
+            "Rank": "order"
+        }
+        assert lepidoptera in lineage
+
+    def test_get_taxon_info(self):
+        from neuro.tools.wrappers import ncbi
+        taxon_info = ncbi.get_taxon_info("938170")
+        assert taxon_info["ScientificName"] == "Amata phegea"
 
 
 class TestWikiData:
     @pytest.mark.integration
-    def test_query(self):
+    def test_fetch(self):
         from neuro.tools.wrappers import wikidata
-        query_path = get_path("resources/queries/test.rq")
-        with open(query_path) as f:
-            query = f.read()
-        data = wikidata.send_query(query)
+        params = {
+            "entity-id": "Q1285940"
+        }
+        query_file_path = get_path("resources/queries/test.rq")
+        data = wikidata.fetch(query_file_path, params)
         assert data
-        result = data["results"]["bindings"][0]
-        assert result["label"]["xml:lang"] == "en"
-        assert result["label"]["value"] == "test"
+        assert data[0]["organismLabel"]["value"] == "Scatophagus"
