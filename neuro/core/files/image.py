@@ -72,7 +72,6 @@ class Image(File):
     """Image object."""
     def __init__(self, image_path, **kwargs):
         self.img_exif = dict()
-        self.img_info = pyexiv2.Image
         self.img_location = GeoLocation()
         self.img_time = Moment(moment=None)
         super().__init__(image_path, **kwargs)
@@ -85,18 +84,11 @@ class Image(File):
         location = self.img_location == other.img_location
         return all([size, name, location])
 
-    def fetch_info(self):
-        self.img_info = pyexiv2.Image(self.path)
-
-    def get_tid_title(self):
-        return "$:/my/img {}".format(str(self.inode))
-
-    def get_first_pixel(self):
-        pixel = self.pil.getdata().getpixel((0, 0))
-        return pixel
-
-    def get_pixels(self):
-        return list(self.pil.getdata())
+    def set_basic(self, **kwargs):
+        super().set_basic(**kwargs)
+        self.set_exif()
+        self.set_location()
+        self.set_time()
 
     def save_pdf(self, pdf_path):
         pdf_buffer = PIL_Image.new("RGB", self.pil.size, (255, 255, 255))
@@ -115,9 +107,9 @@ class Image(File):
         pdf_buffer.save(pdf_path, "PDF", resoultion=100.0)
 
     def set_description(self, description):
-        self.fetch_info()
+        image_metadata = pyexiv2.Image(self.path)
         mods_dict = {"Iptc.Application2.Caption": description}
-        self.img_info.modify_iptc(mods_dict)
+        image_metadata.modify_iptc(mods_dict)
 
     def set_exif(self):
         try:
@@ -144,13 +136,6 @@ class Image(File):
             self.img_time = moment
         else:
             self.img_time = self.ctime
-
-    def set(self, **kwargs):
-        """Collects the data specific for an image."""
-        super().set(**kwargs)
-        self.set_exif()
-        self.set_location()
-        self.set_time()
 
     def show(self):
         self.pil.show()

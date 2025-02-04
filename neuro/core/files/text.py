@@ -99,10 +99,8 @@ class TextCsv(Text):
         return column
 
     def get_header(self):
-        """Return header as a list.
-
-        Args:
-            self: self object
+        """
+        Return header as a list.
         :return:
         :rtype: list
         """
@@ -227,6 +225,13 @@ class TextCsv(Text):
         self.write(sorted_rows)
 
     def to_json(self, header_key, json_path=None, mode="local"):
+        """
+        Convert csv to json by using specific column for keys.
+        :param header_key:
+        :param json_path:
+        :param mode: "local" or "dict"
+        :return:
+        """
         self.get_header()
 
         if header_key in self.header and self.is_identifier(header_key):
