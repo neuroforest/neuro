@@ -29,13 +29,12 @@ class API:
             self.status = "available"
 
     def delete(self, path):
-        full_url = self.full_url + urllib.parse.quote(path)
+        full_url = self.url + urllib.parse.quote(path)
         headers = {
             "User-Agent": "Mozilla/5.0",
             "X-Requested-With": "TiddlyWiki"
         }
         self.response = requests.delete(url=full_url, headers=headers)
-
         if self.response.status_code == 204:
             return True
         else:

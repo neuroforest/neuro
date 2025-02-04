@@ -14,7 +14,59 @@ kwargs = {
 }
 
 
+class TestTwActions:
+    @pytest.mark.integration
+    def test_merge(self):
+        from neuro.tools.api import tw_actions, tw_get
+        r = tw_actions.merge_tiddlers(["merge1", "merge2"], **kwargs)
+        assert r.status_code == 204
+        assert not tw_get.is_tiddler("merge1", **kwargs)
+        merged_tiddler = tw_get.tiddler("merge2", **kwargs)
+        assert merged_tiddler["text"] == "merge2"
+
+    @pytest.mark.integration
+    def test_rename(self):
+        from neuro.tools.api import tw_actions, tw_get
+        r = tw_actions.rename_tiddler("rename1", "rename2", **kwargs)
+        assert r.reason == "0 tiddlers affected"
+        assert r.status_code == 200
+        assert not tw_get.is_tiddler("rename1", **kwargs)
+        renamed_tiddler = tw_get.tiddler("rename2", **kwargs)
+        assert renamed_tiddler["text"] == "rename1"
+
+    def test_replace(self):
+        from neuro.tools.api import tw_actions, tw_get
+        r = tw_actions.replace_text("replace1", "replace2", **kwargs)
+        assert r.reason == "1 tiddlers affected"
+        assert r.status_code == 200
+        replaced_tiddler = tw_get.tiddler("replace1", **kwargs)
+        assert replaced_tiddler["text"] == "replace2"
+        r = tw_actions.replace_text("replace1uncommontext", "replace2", **kwargs)
+        assert r.status_code == 500
+        assert r.reason == "0 tiddlers affected"
+
+
+class TestTwDel:
+    @pytest.mark.integration
+    def test_del_tiddler(self):
+        from neuro.tools.api import tw_del, tw_get
+        assert tw_get.is_tiddler("delete", **kwargs) is True
+        tw_del.tiddler("delete", **kwargs)
+        assert tw_get.is_tiddler("delete", **kwargs) is False
+
+
 class TestTwGet:
+    @pytest.mark.integration
+    def test_get_lineage(self):
+        from neuro.tools.api import tw_get
+        lineage = tw_get.lineage("lineage-root", "[!is[system]]", limit=20, **kwargs)
+        assert len(lineage["lineage-branch-4"]) == 20
+        assert len(lineage["lineage-branch-1-1"]) == 3
+        assert lineage["lineage-branch-1-1"][0] == "lineage-root"
+        assert lineage["test"] == []
+        assert lineage["lineage-branch-6-1"][0] == "lineage-nonexistent"
+        assert lineage["lineage-branch-3-1"][0] == "lineage-branch-3"
+
     @pytest.mark.integration
     def test_get_neuro_tid(self):
         from neuro.tools.api import tw_get
@@ -78,35 +130,3 @@ class TestTwPut:
         DictUtils.represent(nt1.fields)
         DictUtils.represent(nt2.fields)
         assert nt1 == nt2
-
-
-class TestTwActions:
-    @pytest.mark.integration
-    def test_merge(self):
-        from neuro.tools.api import tw_actions, tw_get
-        r = tw_actions.merge_tiddlers(["merge1", "merge2"], **kwargs)
-        assert r.status_code == 204
-        assert not tw_get.is_tiddler("merge1", **kwargs)
-        merged_tiddler = tw_get.tiddler("merge2", **kwargs)
-        assert merged_tiddler["text"] == "merge2"
-
-    @pytest.mark.integration
-    def test_rename(self):
-        from neuro.tools.api import tw_actions, tw_get
-        r = tw_actions.rename_tiddler("rename1", "rename2", **kwargs)
-        assert r.reason == "0 tiddlers affected"
-        assert r.status_code == 200
-        assert not tw_get.is_tiddler("rename1", **kwargs)
-        renamed_tiddler = tw_get.tiddler("rename2", **kwargs)
-        assert renamed_tiddler["text"] == "rename1"
-
-    def test_replace(self):
-        from neuro.tools.api import tw_actions, tw_get
-        r = tw_actions.replace_text("replace1", "replace2", **kwargs)
-        assert r.reason == "1 tiddlers affected"
-        assert r.status_code == 200
-        replaced_tiddler = tw_get.tiddler("replace1", **kwargs)
-        assert replaced_tiddler["text"] == "replace2"
-        r = tw_actions.replace_text("replace1uncommontext", "replace2", **kwargs)
-        assert r.status_code == 500
-        assert r.reason == "0 tiddlers affected"

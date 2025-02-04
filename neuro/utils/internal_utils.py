@@ -33,14 +33,12 @@ def get_path(keyword):
     }
 
     if keyword not in keyword_index:
-        exceptions.InternalError(f"Keyword '{keyword}' is not supported.")
-        sys.exit()
+        raise exceptions.InternalError(f"Keyword '{keyword}' is not supported.")
 
     path = keyword_index[keyword]
 
     if not os.path.exists(path):
         raise exceptions.InvalidPath(f"Path '{path}' for keyword '{keyword}' does not exist.")
-        sys.exit
 
     return path
 
