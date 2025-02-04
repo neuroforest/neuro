@@ -4,9 +4,9 @@ Command-line interface. It is available through the command `neuro`.
 
 import os
 import sys
+import importlib.metadata
 
 import click
-import pkg_resources
 
 CONTEXT_SETTINGS = dict(auto_envvar_prefix="NEURO")
 
@@ -52,7 +52,7 @@ class NeuroCLI(click.MultiCommand):
 
 @click.command(cls=NeuroCLI, context_settings=CONTEXT_SETTINGS)
 @click.option("-v", "--verbose", is_flag=True, help="Enables verbose mode.")
-@click.version_option(pkg_resources.require("neuro")[0].version)
+@click.version_option(importlib.metadata.version("neuro"))
 @pass_environment
 def cli(ctx, verbose):
     """NeuroForest command line interface."""
