@@ -9,8 +9,7 @@
 ### Requirements
 
 - git
-- Python 3.6 or higher
-- node.js
+- Python 3.13
 - TiddlyWiki5 server
 
 ### Install
