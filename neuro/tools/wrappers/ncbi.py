@@ -1,3 +1,4 @@
+import os
 from xml.etree import ElementTree
 
 import requests
@@ -10,7 +11,8 @@ def resolve_taxon_name(taxon_name):
     params = {
         "db": "taxonomy",
         "term": taxon_name,
-        "retmode": "json"
+        "retmode": "json",
+        "api_key": os.getenv("NCBI_API_KEY")
     }
     res = requests.get(url, params)
     return res.json()["esearchresult"]["idlist"]
@@ -21,7 +23,8 @@ def get_lineage(taxon_id):
     params = {
         "db": "taxonomy",
         "id": taxon_id,
-        "retmode": "xml"
+        "retmode": "xml",
+        "api_key": os.getenv("NCBI_API_KEY")
     }
     res = requests.get(url, params)
     element_tree = ElementTree.fromstring(res.text)
@@ -48,7 +51,8 @@ def get_taxon_info(taxon_id):
     params = {
         "db": "taxonomy",
         "id": taxon_id,
-        "retmode": "xml"
+        "retmode": "xml",
+        "api_key": os.getenv("NCBI_API_KEY")
     }
 
     res = requests.get(url, params)
