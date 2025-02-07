@@ -25,6 +25,17 @@ def all_tiddlers(**kwargs):
     return response["parsed"]
 
 
+def filter_output(tw_filter, **kwargs):
+    api = tw_api.get_api(**kwargs)
+    if not api:
+        return None
+
+    url = "/neuro/filter"
+    params = {"filter": tw_filter}
+    response = api.get(url, params=params, **kwargs)
+    return response["parsed"]
+
+
 def info(**kwargs):
     api = tw_api.get_api(**kwargs)
     if not api:
