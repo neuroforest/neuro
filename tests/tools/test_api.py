@@ -57,6 +57,14 @@ class TestTwDel:
 
 class TestTwGet:
     @pytest.mark.integration
+    def test_filter_output(self):
+        from neuro.tools.api import tw_get
+        tw_filter = "[title[test]get[created]] [title[test]get[neuro.id]]"
+        filter_output = tw_get.filter_output(tw_filter, **kwargs)
+        assert type(filter_output) is list
+        assert len(filter_output) == 2
+
+    @pytest.mark.integration
     def test_get_lineage(self):
         from neuro.tools.api import tw_get
         lineage = tw_get.lineage("lineage-root", "[!is[system]]", limit=20, **kwargs)
