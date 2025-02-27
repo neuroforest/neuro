@@ -8,7 +8,7 @@ from ..helper import get_test_file, get_path
 
 
 def get_inaturalist_mocks():
-    from neuro.tools.wrappers import inaturalist
+    from neuro.tools.integrations import inaturalist
     observation_data = inaturalist.get_observation(67294836)
     observation_data_path = get_test_file("mocks/inaturalist-observation.json", exists=False)
     with open(observation_data_path, "w+") as f:
@@ -23,7 +23,7 @@ def get_inaturalist_mocks():
 class TestGbif:
     @pytest.mark.integration
     def test_request_get(self):
-        from neuro.tools.wrappers import gbif
+        from neuro.tools.integrations import gbif
         taxon_data = gbif.get_taxon("2597892")
         assert taxon_data["species"] == "Penicillium digitatum"
         assert taxon_data["familyKey"] == 3563703
@@ -32,7 +32,7 @@ class TestGbif:
 class TestInaturalist:
     @pytest.mark.integration
     def test_request_get(self):
-        from neuro.tools.wrappers import inaturalist
+        from neuro.tools.integrations import inaturalist
 
         observation_data = inaturalist.get_observation("67294836")
         assert observation_data["uuid"] == "275460f4-6fe0-4991-bfd5-991bff22697b"
@@ -44,7 +44,7 @@ class TestInaturalist:
 class TestNCBI:
     @pytest.mark.integration
     def test_resolve_taxon_name(self):
-        from neuro.tools.wrappers import ncbi
+        from neuro.tools.integrations import ncbi
         taxon_ids = ncbi.resolve_taxon_name("Amata phegea")
         assert len(taxon_ids) == 1
         assert taxon_ids[0] == "938170"
@@ -54,7 +54,7 @@ class TestNCBI:
         assert len(taxon_ids) == 0
 
     def test_get_lineage(self):
-        from neuro.tools.wrappers import ncbi
+        from neuro.tools.integrations import ncbi
         lineage = ncbi.get_lineage("938170")
         lepidoptera = {
             "TaxId": "7088",
@@ -64,7 +64,7 @@ class TestNCBI:
         assert lepidoptera in lineage
 
     def test_get_taxon_info(self):
-        from neuro.tools.wrappers import ncbi
+        from neuro.tools.integrations import ncbi
         taxon_info = ncbi.get_taxon_info("938170")
         assert taxon_info["ScientificName"] == "Amata phegea"
 
@@ -72,7 +72,7 @@ class TestNCBI:
 class TestWikiData:
     @pytest.mark.integration
     def test_fetch(self):
-        from neuro.tools.wrappers import wikidata
+        from neuro.tools.integrations import wikidata
         params = {
             "entity-id": "Q1285940"
         }
