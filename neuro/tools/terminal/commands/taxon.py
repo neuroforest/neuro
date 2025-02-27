@@ -13,12 +13,11 @@ from neuro.core.tid import NeuroTids, NeuroTid
 from neuro.core.data.dict import DictUtils
 from neuro.tools.api import tw_api, tw_get, tw_put
 from neuro.tools.science import biology
-from neuro.tools.wrappers import wikidata, ncbi
-from neuro.utils import exceptions
-
-from neuro.tools.terminal import components
-from neuro.tools.terminal import style
+from neuro.tools.terminal import components, style
 from neuro.tools.terminal.cli import pass_environment
+from neuro.tools.integrations import wikidata, ncbi
+from neuro.utils import exceptions, internal_utils
+
 
 logging.basicConfig(level=30)
 
