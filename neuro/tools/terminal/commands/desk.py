@@ -2,6 +2,7 @@
 NeuroDesktop command-line interface.
 """
 
+import json
 import logging
 import os
 import shutil
@@ -10,7 +11,10 @@ import subprocess
 import click
 
 from neuro.tools.terminal.cli import pass_environment
-from neuro.utils import internal_utils, SETTINGS
+from neuro.utils import internal_utils, config
+
+
+config.load_env_files()
 
 
 def close():
@@ -58,13 +62,13 @@ def run():
 
 
 def copy_plugins_and_themes():
-    for plugin in SETTINGS.EXTERNAL_PLUGINS:
+    for plugin in json.loads(os.getenv("EXTERNAL_PLUGINS")):
         plugin_source_path = plugin["path"]
         plugin_target_path = internal_utils.get_path("plugins") + "/" + plugin["name"]
         shutil.rmtree(plugin_target_path, ignore_errors=True)
         shutil.copytree(plugin_source_path, plugin_target_path)
 
-    for theme in SETTINGS.EXTERNAL_THEMES:
+    for theme in json.loads(os.getenv("EXTERNAL_THEMES")):
         theme_source_path = theme["path"]
         theme_target_path = internal_utils.get_path("themes") + "/" + theme["name"]
         shutil.rmtree(theme_target_path)
@@ -77,7 +81,7 @@ def handle_keyword(keyword):
     :param keyword:
     :return:
     """
-    file_path = internal_utils.get_path("desktop") +"/args.txt"
+    file_path = internal_utils.get_path("desktop") + "/args.txt"
     with open(file_path, mode="w+", encoding="utf-8") as f:
         f.write(keyword)
 

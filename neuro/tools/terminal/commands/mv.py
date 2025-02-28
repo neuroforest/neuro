@@ -4,16 +4,16 @@ Moves a file or directory both locally and in NeuroWiki.
 
 import os
 import subprocess
-import sys
 
 import click
 
 from neuro.core.deep import Dir
 from neuro.tools.terminal import common, style
 from neuro.tools.terminal.cli import pass_environment
-from neuro.utils import SETTINGS
+from neuro.utils import config
 
-from neuro.core.data.dict import DictUtils
+
+config.load_env_files()
 
 
 def move_file(src_path, dst_path):
@@ -21,7 +21,8 @@ def move_file(src_path, dst_path):
 
     # Handle symlinks
     symlink_count = 0
-    for search_dir in SETTINGS.LOCAL_INCLUDE:
+    local_include = os.getenv("LOCAL_INCLUDE").split(",") if os.getenv("LOCAL_INCLUDE") else []
+    for search_dir in local_include:
         p = subprocess.run(["find", search_dir, "-type", "l"], stdout=subprocess.PIPE)
         symlinks = p.stdout.decode(encoding="utf-8").split("\n")
         symlinks = list(filter(None, symlinks))
@@ -36,7 +37,7 @@ def move_file(src_path, dst_path):
     if symlink_count == 0:
         print(f"{style.FAIL} 0 symlinks affected")
     else:
-        print(f"{style.SUCCESS} {symlink_count} afected")
+        print(f"{style.SUCCESS} {symlink_count} affected")
 
     src_dir.move(dst_path)
 

@@ -4,15 +4,16 @@ Locally running TiddlyWiki API.
 
 import json
 import logging
-import socket
+import os
 import urllib.parse
 
 import requests
 
-from neuro.utils import SETTINGS, internal_utils, network_utils
+from neuro.utils import network_utils, config
 from neuro.core.data.dict import DictUtils
 
 
+config.load_env_files()
 TW_INDEX = dict()
 
 
@@ -88,7 +89,7 @@ class API:
         return self.response
 
 
-def get_api(port=SETTINGS.PORT, url=SETTINGS.URL, **kwargs):
+def get_api(port=os.getenv("PORT"), url=os.getenv("URL"), **kwargs):
     if port not in TW_INDEX:
         logging.debug(f"Creating new API to port {port}.")
         tw_api = API(port=port, url=url)
