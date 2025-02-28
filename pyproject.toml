@@ -16,6 +16,7 @@ dependencies = [
     "psutil>=5.9.7",
     "pyexiv2>=2.15.3",
     "pytest>=7.4.4",
+    "python-dotenv>=1.0.1",
     "python-magic>=0.4.27",
     "pytz>=2024.1",
     "requests>=2.31.0",
@@ -35,4 +36,5 @@ markers = [
 ]
 
 [tool.setuptools.packages.find]
-exclude = ["build*"]
+include = ["neuro*"]
+exclude = ["build*", "tests*"]

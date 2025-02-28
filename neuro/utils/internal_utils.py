@@ -2,13 +2,14 @@
 Internal utility constants and functions.
 """
 
-import logging
 import os
-import sys
 
 import psutil
 
-from neuro.utils import SETTINGS, exceptions
+from neuro.utils import config, exceptions
+
+
+config.load_env_files()
 
 
 def get_path(keyword):
@@ -18,18 +19,18 @@ def get_path(keyword):
     :return:
     """
     keyword_index = {
-        "archive": f"{SETTINGS.STORAGE}/archive",
-        "desktop": SETTINGS.DESKTOP,
-        "neuro": SETTINGS.NEURO,
-        "nw": f"{SETTINGS.DESKTOP}/output/linux64/TiddlyDesktop-linux64-v0.0.14/nw",
-        "plugins": f"{SETTINGS.TW5}/plugins",
-        "resources": f"{SETTINGS.NEURO}/resources",
-        "templates": f"{SETTINGS.NEURO}/resources/templates",
-        "tests": f"{SETTINGS.NEURO}/tests",
-        "themes": f"{SETTINGS.TW5}/themes",
-        "tiddlers": f"{SETTINGS.STORAGE}/tiddlers",
-        "tw5": SETTINGS.TW5,
-        "wd_queries": f"{SETTINGS.NEURO}/resources/queries"
+        "archive": f"{os.getenv('STORAGE')}/archive",
+        "desktop": os.getenv("DESKTOP"),
+        "neuro": os.getenv("NEURO"),
+        "nw": f"{os.getenv('DESKTOP')}/output/linux64/TiddlyDesktop-linux64-v0.0.14/nw",
+        "plugins": f"{os.getenv('TW5')}/plugins",
+        "resources": f"{os.getenv('NEURO')}/resources",
+        "templates": f"{os.getenv('NEURO')}/resources/templates",
+        "tests": f"{os.getenv('NEURO')}/tests",
+        "themes": f"{os.getenv('tw5')}/themes",
+        "tiddlers": f"{os.getenv('STORAGE')}/tiddlers",
+        "tw5": os.getenv("tw5"),
+        "wd_queries": f"{os.getenv('NEURO')}/resources/queries"
     }
 
     if keyword not in keyword_index:
@@ -38,7 +39,9 @@ def get_path(keyword):
     path = keyword_index[keyword]
 
     if not os.path.exists(path):
-        raise exceptions.InvalidPath(f"Path '{path}' for keyword '{keyword}' does not exist.")
+        raise exceptions.InvalidPath(f"Path '{path}' for keyword '{keyword}' does not exist in {os.getcwd()}.")
+    else:
+        path = os.path.abspath(path)
 
     return path
 
