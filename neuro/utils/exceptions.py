@@ -38,3 +38,6 @@ class UnhandledStatusCode(BaseException):
 class NoAPI(BaseException):
     pass
 
+
+class PortInUse(BaseException):
+    pass
