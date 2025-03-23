@@ -65,24 +65,6 @@ def get_taxon_info(taxon_id):
     }
 
 
-def get_ncbi_taxonomy_data_legacy(taxon):
-    lineage = []
-    # Search taxon
-    Entrez.email = "your_email@example.com"
-    search_handle = Entrez.esearch(db="taxonomy", term=taxon)
-    search_results = Entrez.read(search_handle)
-    search_handle.close()
-    if not search_results['IdList']:
-        raise exceptions.InternalError(f"No taxon found")
-    tax_id = search_results['IdList'][0]
-
-    # Fetch taxonomy details
-    fetch_handle = Entrez.efetch(db="taxonomy", id=tax_id, retmode="xml")
-    taxon_data = Entrez.read(fetch_handle)
-    fetch_handle.close()
-    return taxon_data
-
-
 def get_ncbi_lineage(taxon):
     try:
         taxon_data = get_ncbi_taxonomy_data(taxon)
@@ -101,7 +83,3 @@ def get_ncbi_lineage(taxon):
             return e
 
     return lineage
-
-
-if __name__ == "__main__":
-    print(get_lineage("938170"))
