@@ -2,14 +2,12 @@
 Internal utility constants and functions.
 """
 
+import logging
 import os
 
 import psutil
 
-from neuro.utils import config, exceptions
-
-
-config.load_env_files()
+from neuro.utils import exceptions
 
 
 def get_path(keyword):
@@ -18,6 +16,7 @@ def get_path(keyword):
     :param keyword: string
     :return:
     """
+
     keyword_index = {
         "archive": f"{os.getenv('STORAGE')}/archive",
         "desktop": os.getenv("DESKTOP"),
@@ -29,7 +28,7 @@ def get_path(keyword):
         "tests": f"{os.getenv('NEURO')}/tests",
         "themes": f"{os.getenv('tw5')}/themes",
         "tiddlers": f"{os.getenv('STORAGE')}/tiddlers",
-        "tw5": os.getenv("tw5"),
+        "tw5": os.getenv("TW5"),
         "wd_queries": f"{os.getenv('NEURO')}/resources/queries"
     }
 
@@ -43,6 +42,7 @@ def get_path(keyword):
     else:
         path = os.path.abspath(path)
 
+    logging.debug(f"Obtained path {path} for keyword {keyword}")
     return path
 
 
