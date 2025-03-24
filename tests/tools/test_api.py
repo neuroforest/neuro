@@ -1,16 +1,15 @@
 """
 Unit tests for the package neuro.tools.api.
 """
+import os
 
 import pytest
 import time
 
-from ..helper import PORT, URL
-
 
 kwargs = {
-    "port": PORT,
-    "url": URL
+    "port": os.getenv('TEST_PORT'),
+    "url": os.getenv('URL')
 }
 
 
