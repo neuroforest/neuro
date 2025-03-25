@@ -5,7 +5,7 @@ Open a random tiddler in NeuroWiki.
 import random as py_random
 
 import click
-import halo
+from rich.console import Console
 
 from neuro.tools.api import tw_get
 
@@ -17,7 +17,7 @@ from neuro.tools.terminal.commands import open
 @click.command("random", short_help="open a random tiddler")
 @pass_environment
 def cli(ctx):
-    spinner = halo.Halo(text="Searching NeuroWiki...", spinner="dots")
+    spinner = Console().status("Searching NeuroWiki...", spinner="dots")
     spinner.start()
     tid_titles = tw_get.tw_fields(["title"], "[all[]]")
     tid_title = py_random.choice(tid_titles)["title"]
