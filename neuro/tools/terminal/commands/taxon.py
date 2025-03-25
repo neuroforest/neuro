@@ -7,7 +7,7 @@ import os
 import subprocess
 
 import click
-import halo
+from rich.console import Console
 
 from neuro.core.tid import NeuroTids, NeuroTid
 from neuro.core.data.dict import DictUtils
@@ -17,9 +17,6 @@ from neuro.tools.terminal import components, style
 from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.integrations import wikidata, ncbi
 from neuro.utils import exceptions, internal_utils
-
-
-logging.basicConfig(level=30)
 
 
 OBLIGATORY_TAXA = [
@@ -71,23 +68,6 @@ def filter_neuro_tids(neuro_tids):
     return filtered_neuro_tids
 
 
-def get_wikidata_data(taxon_name):
-    """
-    Get and repair data from WikiData
-    :param taxon_name:
-    :return:
-    """
-    data = wikidata.get_taxon_data(taxon_name)
-    if "trans.slv" in data:
-        data["trans.slv"] = data["trans.slv"].lower()
-    try:
-        if data["trans.eng"] == data["name"]:
-            del data["trans.eng"]
-    except KeyError:
-        pass
-    return data
-
-
 def integrate_wiki_filesystem(local):
     if not local:
         print("Error: no local filesystem root provided")
@@ -135,13 +115,40 @@ def integrate_wiki_filesystem(local):
     print(f"Path not resolved for {fail_count} items")
 
 
+def add_translations(neuro_tid):
+    ncbi_taxon_id = neuro_tid.fields["ncbi.txid"]
+    query_file_path = os.path.join(internal_utils.get_path("wd_queries"), "taxon.rq")
+    wd_res = wikidata.fetch(query_file_path, {"ncbi-taxon-id": ncbi_taxon_id})
+    if len(wd_res) > 1:
+        print("Warning: multiple results for WikiData query")
+        return neuro_tid
+    elif not wd_res:
+        print(f"Warning: No WikiData available for {neuro_tid.fields['name']}")
+        return neuro_tid
+    else:
+        wd_res = wd_res[0]
+
+    if "labelSL" in wd_res:
+        label_sl = wd_res["labelSL"]["value"]
+        if label_sl != neuro_tid.fields["name"]:
+            neuro_tid.fields["trans.slv"] = label_sl.lower()
+
+    if "labelEN" in wd_res:
+        label_en = wd_res["labelEN"]["value"]
+        if label_en != neuro_tid.fields["name"]:
+            neuro_tid.fields["trans.eng"] = label_en
+
+    return neuro_tid
+
+
 @click.command("taxon", short_help="import taxon")
 @click.argument("taxon_name", nargs=-1)
 @click.option("-f", "--overwrite", is_flag=True)
 @click.option("-l", "--local", default="")
 @click.option("-i", "--integrate", is_flag=True)
+@click.option("-y", "--yes", is_flag=True)
 @pass_environment
-def cli(ctx, taxon_name, overwrite, local, integrate):
+def cli(ctx, taxon_name, overwrite, local, integrate, yes):
     """
     Command `neuro taxon <taxon_name>`.
     By running this command taxon-specific web scraping is performed
@@ -156,6 +163,7 @@ def cli(ctx, taxon_name, overwrite, local, integrate):
     :param taxon_name: scientific name of the taxon
     :param local: path to local organism file tree
     :param integrate: integrate NeuroWiki with local filesystem
+    :param yes: addition to
     :return:
     """
     if not tw_api.get_api():
@@ -170,16 +178,35 @@ def cli(ctx, taxon_name, overwrite, local, integrate):
         print("Error: no taxon name given")
         return
 
-    spinner = halo.Halo(text="Gathering taxon data...", spinner="dots")
-    spinner.start()
+    # Taxon identification
     taxon_name = " ".join(taxon_name).strip()
-    ncbi_lineage = ncbi.get_ncbi_lineage(taxon_name)
-    if not ncbi_lineage:
-        spinner.stop_and_persist(symbol=style.FAIL, text=f"{taxon_name}: NCBI Taxonomy data")
+    id_list = ncbi.resolve_taxon_name(taxon_name)
+    if len(id_list) == 0:
+        print(f"Error: taxon {taxon_name} not found")
         return
+    elif len(id_list) == 1:
+        taxon_id = id_list[0]
     else:
-        lineage_data = process_ncbi_lineage(ncbi_lineage)
-        spinner.stop_and_persist(symbol=style.SUCCESS, text=f"{taxon_name}: NCBI Taxonomy data")
+        print("Multiple taxa with this name found")
+        metadata = [ncbi.get_taxon_info(i)['Division'] for i in id_list]
+        taxon_id = components.selector(id_list, metadata)
+        if not taxon_id:
+            return
+
+    with Console().status("Gathering taxon data...", spinner="dots") as status:
+        ncbi_lineage = ncbi.get_lineage(taxon_id)
+        if not ncbi_lineage:
+            print(f"{style.FAIL} {taxon_name}: NCBI bad request, try again")
+            return
+        elif isinstance(ncbi_lineage, exceptions.InternalError):
+            print(f"{style.FAIL} {taxon_name}: NCBI Taxonomy - {ncbi_lineage}")
+            return
+        elif isinstance(ncbi_lineage, Exception):
+            print(f"{style.FAIL} {taxon_name}: NCBI Taxonomy - {ncbi_lineage}")
+            return
+        else:
+            lineage_data = process_ncbi_lineage(ncbi_lineage)
+            print(f"{style.SUCCESS} {taxon_name}: NCBI Taxonomy data")
 
     # Create lineage NeuroTids
     neuro_tids = NeuroTids()
@@ -194,9 +221,10 @@ def cli(ctx, taxon_name, overwrite, local, integrate):
     neuro_tids.chain()
     changes = False
 
-    # Add missing taxons to NeuroWiki
+    # Add missing taxa to NeuroWiki
     for neuro_tid in neuro_tids:
         if overwrite or not tw_get.is_tiddler(neuro_tid.title):
+            neuro_tid = add_translations(neuro_tid)
             if overwrite:
                 DictUtils.represent(neuro_tid.fields)
             if components.bool_prompt(f"Put tiddler \"{neuro_tid.title}\"?"):
