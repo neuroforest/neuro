@@ -4,6 +4,7 @@ Test the Python module neuro.
 This module is used for running tests locally. When pushing code to GitHub, the file
 .github/workflows/ci.yml is used for automated testing.
 """
+import dotenv
 import logging
 import os
 import sys
@@ -12,11 +13,10 @@ import subprocess
 import click
 import pytest
 
-from neuro.tools.terminal.cli import pass_environment
 from neuro.utils import internal_utils
 
 
-@click.command("test", short_help="test Python package neuro")
+@click.command("ntest", short_help="test Python package neuro")
 @click.argument("path", required=False, type=click.Path(resolve_path=True))
 @click.option("-a", "--full", is_flag=True)
 @click.option("-i", "--integration", is_flag=True)
@@ -24,19 +24,16 @@ from neuro.utils import internal_utils
 @click.option("-n", "--notintegration", is_flag=True)
 @click.option("-p", "--production", is_flag=True)
 @click.argument("file", nargs=-1)
-@pass_environment
-def cli(ctx, path, full, integration, notintegration, local, file, production):
+def cli(path, full, integration, notintegration, local, file, production):
+    neuro_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    os.chdir(neuro_path)
+    dotenv.load_dotenv(os.path.abspath(".env.defaults"))
+    dotenv.load_dotenv(os.path.abspath(".env.testing"), override=True)
+    os.environ["ENVIRONMENT"] = "TESTING"
+
     if local and production:
         logging.getLogger(__name__).error("Incompatible options")
         sys.exit()
-
-    if production:
-        os.environ["TESTING"] = "True"
-
-    # Set working directory
-    neuro_path = internal_utils.get_path("neuro")
-    if os.getcwd() != neuro_path:
-        os.chdir(neuro_path)
 
     # Set test path
     if not path:
@@ -67,3 +64,7 @@ def cli(ctx, path, full, integration, notintegration, local, file, production):
         pytest.main(["-v", "-m", "non integration", path])
     else:
         pytest.main([path])
+
+
+if __name__ == "__main__":
+    cli()

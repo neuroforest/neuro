@@ -27,6 +27,7 @@ dependencies = [
 
 [project.scripts]
 neuro = "neuro.tools.terminal.cli:cli"
+ntest = "neuro.utils.ntest:cli"
 
 [project.urls]
 repository = "https://github.com/neuroforest/neuro"
