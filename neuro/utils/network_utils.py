@@ -1,23 +1,17 @@
 import logging
-import os
 import socket
+import subprocess
 
 
-def is_port_in_use(port):
+def is_port_in_use(port, url="localhost"):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('localhost', int(port))) == 0
-
-
-def kill_process(port):
-    command_0 = "lsof -ti:" + str(port) + " | xargs kill"
-    command = "kill -9 $(lsof -t -i:" + str(port) + " -sTCP:LISTEN)"
-    os.system(command)
+        return s.connect_ex((url, int(port))) == 0
 
 
 def release_port(port):
     if is_port_in_use(port):
         logging.info(f"Releasing port: {port}")
-        kill_process(port)
+        subprocess.run(["freeport", str(port)])
 
 
 def wait_for_socket(host, port):
