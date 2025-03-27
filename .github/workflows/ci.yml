@@ -19,4 +19,5 @@ jobs:
           venv/bin/pip install .
           venv/bin/pytest tests
         env:
+          ENVIRONMENT: TESTING
           NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
