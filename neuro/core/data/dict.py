@@ -35,7 +35,7 @@ class DictUtils:
         return d
 
     @staticmethod
-    def represent(d, level=0, display=True):
+    def represent(d, level=0, display=True, sort=True):
         """
         Returns a string used for dictionary representation.
         This is a recursive function.
@@ -51,15 +51,18 @@ class DictUtils:
             if key_len > max_len:
                 max_len = key_len
 
-        dictionary = DictUtils.sort_alpha(d)
+        if sort:
+            dictionary = DictUtils.sort_alpha(d)
+        else:
+            dictionary = d
         for key in dictionary:
             val = dictionary[key]
 
             pretty_key = str("{:<" + str(max_len + 3) + "}").format(str(key) + " :")
-            if type(val) == dict:
+            if type(val) is dict:
                 representation_string += f"{level * '    '}{pretty_key}\n"
                 representation_string += DictUtils.represent(val, level=level + 1, display=False)
-            elif type(val) == list:
+            elif type(val) is list:
                 representation_string += f"{level * '    '}{pretty_key}[\n"
                 for i in val:
                     representation_string += f"{(level + 1) * '    '}{i}\n"

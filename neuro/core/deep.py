@@ -515,7 +515,7 @@ class NeuroNode(NeuroObject):
 
     def set_id(self):
         """
-        Obtains and configures the neuro id. Currently using the uuid v1.
+        Obtains and configures the neuro id. Currently using the uuid v4.
         """
         if not self.uuid:
             self.uuid = uuid.uuid4().hex
