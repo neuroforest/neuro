@@ -518,7 +518,7 @@ class NeuroNode(NeuroObject):
         Obtains and configures the neuro id. Currently using the uuid v4.
         """
         if not self.uuid:
-            self.uuid = uuid.uuid4().hex
+            self.uuid = uuid.uuid4().__str__()
 
     def to_dict(self):
         attrs = oop_utils.get_attr_keys(self)
