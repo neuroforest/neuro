@@ -187,6 +187,17 @@ class NeuroTid(NeuroNode):
         return tid_file_name
 
     @staticmethod
+    def get_local_name(tid_title):
+        """
+        Name used in the local file system.
+        :return:
+        """
+        name = " ".join(e for e in tid_title.split() if not e.startswith("."))
+        name = re.sub(r"[.,|{}\[\]]", " ", name)
+        name = name.replace(" ", "")
+        return name
+
+    @staticmethod
     def to_text(fields):
         """
         Determine tid file text.
