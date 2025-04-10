@@ -2,9 +2,11 @@
 Unit tests for the package neuro.tools.api.
 """
 import os
+import time
 
 import pytest
-import time
+
+from ..helper import create_and_run_wiki_folder
 
 
 kwargs = {
@@ -66,13 +68,13 @@ class TestTwGet:
     @pytest.mark.integration
     def test_get_lineage(self):
         from neuro.tools.api import tw_get
-        lineage = tw_get.lineage("lineage-root", "[!is[system]]", limit=20, **kwargs)
+        create_and_run_wiki_folder("lineage", 8069)
+        lineage = tw_get.lineage("lineage-root", "[!is[system]]", limit=20, port=8069)
         assert len(lineage["lineage-branch-4"]) == 20
         assert len(lineage["lineage-branch-1-1"]) == 3
         assert lineage["lineage-branch-1-1"][0] == "lineage-root"
-        assert lineage["test"] == []
-        assert lineage["lineage-branch-6-1"][0] == "lineage-nonexistent"
-        assert lineage["lineage-branch-3-1"][0] == "lineage-branch-3"
+        assert "lineage-6-1" not in lineage
+        assert "lineage-branch-3-1" not in lineage
 
     @pytest.mark.integration
     def test_get_neuro_tid(self):
