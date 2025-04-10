@@ -8,7 +8,11 @@ import hashlib
 import io
 import logging
 import os
+import shutil
+import subprocess
 import sys
+
+from neuro.utils import network_utils
 
 
 def are_dirs_identical(dir1, dir2):
@@ -61,6 +65,44 @@ def get_hash(string):
     m.update(bytes(string, encoding="utf-8"))
     digest = m.hexdigest()
     return digest
+
+
+def run_wiki_folder(path, port):
+    if network_utils.is_port_in_use(port):
+        network_utils.release_port(port)
+
+    process = subprocess.Popen([
+        "node",
+        "tw5/tiddlywiki.js",
+        path,
+        "--listen",
+        f"port={port}",
+        "readers=(anon)",
+        "writers=(anon)"
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    network_utils.wait_for_socket(os.getenv('URL'), port)
+
+    return process
+
+
+def create_and_run_wiki_folder(tiddlers_name, port):
+    """
+    Create a wiki folder and run it on the specified port.
+    :param tiddlers_name: name of the tiddlers folder to use
+    :param port:
+    :return: process object of the running wiki
+    """
+    output_wiki_folder_path = get_test_file(f"output/wf-{tiddlers_name}", exists=False)
+    os.makedirs(output_wiki_folder_path)
+    tiddlywiki_info = get_test_file("input/tiddlywiki.info")
+    shutil.copy(tiddlywiki_info, output_wiki_folder_path)
+    tiddlers_folder = get_test_file(f"input/tiddlers/{tiddlers_name}")
+    shutil.copytree(tiddlers_folder, f"{output_wiki_folder_path}/tiddlers")
+
+    process = run_wiki_folder(output_wiki_folder_path, port)
+
+    return process
 
 
 class Capturing(list):
