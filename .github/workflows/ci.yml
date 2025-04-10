@@ -17,6 +17,7 @@ jobs:
           git submodule update --remote
           python3 -m venv venv
           venv/bin/pip install .
+          source venv/bin/activate
           venv/bin/pytest tests
         env:
           ENVIRONMENT: TESTING
