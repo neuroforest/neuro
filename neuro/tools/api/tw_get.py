@@ -131,7 +131,7 @@ def neuro_tids(tw_filter, **kwargs):
     nts = NeuroTids()
     for t in titles:
         tid_title = t["title"]
-        nt = neuro_tid(tid_title)
+        nt = neuro_tid(tid_title, **kwargs)
         nts.append(nt)
 
     return nts
@@ -163,7 +163,7 @@ def server_status():
 
 
 def tid_titles(tw_filter, **kwargs):
-    tfs = tw_fields(["title"], tw_filter)
+    tfs = tw_fields(["title"], tw_filter, **kwargs)
     title_list = list()
     for tf in tfs:
         title_list.append(tf["title"])

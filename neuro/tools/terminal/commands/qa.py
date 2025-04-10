@@ -8,6 +8,7 @@ import os
 
 import click
 import pyperclip
+from rich.console import Console
 import tqdm
 
 from neuro.core.tid import NeuroTids
@@ -16,33 +17,62 @@ from neuro.tools.terminal import style, components
 from neuro.tools.terminal.cli import pass_environment
 
 
-def remove_ghost_tiddlers():
-    tid_titles = tw_get.tid_titles("[search:title[Draft of ']!has[draft.of]]")
+def remove_ghost_tiddlers(port):
+    tid_titles = tw_get.tid_titles("[search:title[Draft of ']!has[draft.of]]", port=port)
     for tid_title in tid_titles:
-        tw_del.tiddler(tid_title)
+        tw_del.tiddler(tid_title, port=port)
         print(f"Removed {tid_title}")
 
 
-def resolve_neuro_ids(verbose=False):
+def resolve_neuro_ids(port, verbose=False):
     resolved = True
+
     # Add neuro.id
-    unidentified = tw_get.neuro_tids("[!is[system]!has[neuro.id]]")
+    unidentified = tw_get.neuro_tids("[!is[system]!has[neuro.id]]", port=port)
     if unidentified:
         print("Adding neuro.id fields:")
         width = max([len(neuro_tid.title) for neuro_tid in unidentified])
         with tqdm.tqdm(total=len(unidentified)) as pbar:
             for neuro_tid in unidentified:
                 pbar.set_description(neuro_tid.title.ljust(width))
-                tw_put.neuro_tid(neuro_tid)
+                tw_put.neuro_tid(neuro_tid, port=port)
                 pbar.update(1)
             pbar.set_description("")
 
-    print(f"{style.SUCCESS} Neuro ID")
+    # Find potential neuro.id duplicates
+    all_nids = tw_get.filter_output("[has[neuro.id]get[neuro.id]]", port=port)
+    seen = set()
+    duplicates = set()
+    for nid in all_nids:
+        if nid in seen:
+            duplicates.add(nid)
+        else:
+            seen.add(nid)
+
+    if duplicates:
+        resolved = False
+        if verbose:
+            print("The following neuro.id conflicts ware found")
+            duplicates = list(duplicates)
+            for i in range(len(duplicates)):
+                nid = duplicates[i]
+                tid_titles = tw_get.filter_output(f"[search:neuro.id:literal[{nid}]]", port=port)
+                print(f"{i+1}) {nid}:\n\t{'\n\t'.join(tid_titles)}")
+
+    if not all([len(nid) == 36 for nid in seen]):
+        resolved = False
+        print("neuro.id length variability detected")
+
+    if resolved:
+        print(f"{style.SUCCESS} Neuro ID")
+    else:
+        print(f"{style.FAIL} Neuro ID")
+
     return resolved
 
 
-def set_journal():
-    update_tids = tw_get.neuro_tids("[tag[JOURNAL]!has[neuro.role]]")
+def set_journal(port):
+    update_tids = tw_get.neuro_tids("[tag[JOURNAL]!has[neuro.role]]", port=port)
     if update_tids:
         print(f"\nJournal roles: {len(update_tids)}")
         width = max([len(neuro_tid.title) for neuro_tid in update_tids])
@@ -50,19 +80,20 @@ def set_journal():
             for neuro_tid in update_tids:
                 pbar.set_description(neuro_tid.title.ljust(width))
                 neuro_tid.add_fields({"neuro.role": "journal"})
-                tw_put.neuro_tid(neuro_tid)
+                tw_put.neuro_tid(neuro_tid, port=port)
                 pbar.update(1)
             pbar.set_description("")
 
     print(f"{style.SUCCESS} Journal")
 
 
-def set_model_roles():
+def set_model_roles(port):
     model_roles = [
         "Concepts",
         "Fundamentals",
         "Objects",
         "Phenomena",
+        "Structures",
         "Terminology"
     ]
 
@@ -70,7 +101,7 @@ def set_model_roles():
     for model_role in model_roles:
         regexp_pattern = r"^\S+\s\S+$"
         model_tids = tw_get.neuro_tids(f"[prefix[.]suffix[ {model_role}]!has[neuro.role]"
-                                       f"regexp[{regexp_pattern}]]")
+                                       f"regexp[{regexp_pattern}]]", port=port)
         update_tids.extend(model_tids)
 
     if update_tids:
@@ -81,14 +112,21 @@ def set_model_roles():
                 pbar.set_description(neuro_tid.title.ljust(width))
                 pbar.update(1)
                 neuro_tid.add_fields({"neuro.role": "model"})
-                tw_put.neuro_tid(neuro_tid)
+                tw_put.neuro_tid(neuro_tid, port=port)
             pbar.set_description("")
     print(f"{style.SUCCESS} Model roles")
 
 
-def validate_tags(interactive=False, verbose=True):
+def validate_tags(port, interactive=False, verbose=True):
+    """
+    Validate every non-system tiddler to have a tag that is itself a tiddler.
+    :param port:
+    :param interactive:
+    :param verbose:
+    :return:
+    """
     validated = True
-    tfs = tw_get.tw_fields(["title", "tags"], "[!is[system]]")
+    tfs = tw_get.tw_fields(["title", "tags"], "[!is[system]]", port=port)
     transformed_index = dict()
     for tf in tfs:
         tid_title = tf["title"]
@@ -148,13 +186,13 @@ def validate_tags(interactive=False, verbose=True):
     return validated
 
 
-def resolve_missing_tiddlers(interactive=False, verbose=True):
+def resolve_missing_tiddlers(port, interactive=False, verbose=True):
     validated = True
-    missing_tiddlers = tw_get.filter_output("[all[missing]!is[system]]")
+    missing_tiddlers = tw_get.filter_output("[all[missing]!is[system]]", port=port)
     if missing_tiddlers:
         validated = False
     for missing_tiddler in missing_tiddlers:
-        backlinks = tw_get.filter_output(f"[[{missing_tiddler}]backlinks[]]")
+        backlinks = tw_get.filter_output(f"[[{missing_tiddler}]backlinks[]]", port=port)
         for backlink in backlinks:
             if interactive:
                 print(f"{style.YELLOW}{style.BOLD}{backlink}{style.RESET} has a broken link")
@@ -235,7 +273,7 @@ class Primary:
 
     def verify_lineage(self):
         lineage_root = "$:/plugins/neuroforest/front/tags/Contents"
-        lineage = tw_get.lineage(lineage_root)
+        lineage = tw_get.lineage(lineage_root, port=self.port)
         cycles = list()
         for tid_title, lineage_item in lineage.items():
             if not lineage_item:
@@ -277,7 +315,7 @@ class Primary:
         with tqdm.tqdm(total=len(simple_tfs)) as pbar:
             for tf in simple_tfs:
                 title = tf["title"]
-                neuro_tid = tw_get.neuro_tid(title)
+                neuro_tid = tw_get.neuro_tid(title, port=self.port)
                 neuro_tid.fields["neuro.primary"] = tf["tags"][0]
                 if self.verbose:
                     if "primary" in tf:
@@ -287,15 +325,19 @@ class Primary:
                 else:
                     pbar.set_description(title.ljust(width)[:width])
                     pbar.update(1)
-                tw_put.neuro_tid(neuro_tid)
+                tw_put.neuro_tid(neuro_tid, port=self.port)
             pbar.set_description("")
 
     def resolve_complex(self):
         complex_tfs = self.sorting_bin["primary∉tags"] + self.sorting_bin["¬∃primary∃tags"]
+        if complex_tfs and not self.interactive:
+            self.validated = False
+            return
+
         for tf in complex_tfs:
             tid_title = tf["title"]
             tid_tags = sorted(tf['tags'])
-            tw_actions .open_tiddler(tid_title)
+            tw_actions.open_tiddler(tid_title)
             print(f"\n{'-' * 30}\nSetting primary for {style.BOLD}{tf['title']}{style.RESET}", end="")
             if "neuro.primary" in tf:
                 print(f" (current {tf['neuro.primary']})")
@@ -305,9 +347,9 @@ class Primary:
             tiddler_chosen = components.selector(tid_tags)
 
             if tiddler_chosen:
-                neuro_tid = tw_get.neuro_tid(tid_title)
+                neuro_tid = tw_get.neuro_tid(tid_title, port=self.port)
                 neuro_tid.fields["neuro.primary"] = tiddler_chosen
-                tw_put.neuro_tid(neuro_tid)
+                tw_put.neuro_tid(neuro_tid, port=self.port)
             else:
                 self.validated = False
 
@@ -350,17 +392,18 @@ def cli(ctx, interactive, port, verbose):
     :param verbose:
     """
 
-    remove_ghost_tiddlers()
-    set_model_roles()
-    set_journal()
+    remove_ghost_tiddlers(port)
+    set_model_roles(port)
+    set_journal(port)
 
     if interactive:
-        validate_tags(interactive=True, verbose=False)
-        resolve_missing_tiddlers(interactive=True, verbose=False)
+        with Console().status("Validating tags...", spinner="dots"):
+            validate_tags(port, interactive=True, verbose=False)
+            resolve_missing_tiddlers(interactive=True, verbose=False)
 
-    tags_response = validate_tags()
-    missing_response = resolve_missing_tiddlers()
+    tags_response = validate_tags(port)
+    missing_response = resolve_missing_tiddlers(port)
     primary_response = Primary(interactive, port, verbose).run()
-    resolve_neuro_ids(verbose=True)
+    resolve_neuro_ids(port, verbose=True)
 
     return all([tags_response, missing_response, primary_response])
