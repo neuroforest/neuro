@@ -8,10 +8,9 @@ import sys
 import click
 from rich.console import Console
 
-from neuro.tools.terminal import components
 from neuro.tools.terminal import style
 from neuro.tools.terminal.cli import pass_environment
-from neuro.tools.terminal.commands import qa
+from neuro.tools.terminal.commands import qa, local
 from neuro.utils import internal_utils, time_utils
 from neuro.core.deep import Dir, Moment
 
@@ -50,7 +49,8 @@ def cli(ctx, check):
         print_time_from_last_archive()
         sys.exit()
     quality_secured = qa.cli(["--interactive"], standalone_mode=False)
-    if quality_secured:
+    local_integration_secured = local.cli(["--quality"], standalone_mode=False)
+    if all([quality_secured, local_integration_secured]):
         print("-"*50)
         print_time_from_last_archive()
         archive()

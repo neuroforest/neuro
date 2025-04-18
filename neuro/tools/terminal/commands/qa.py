@@ -399,7 +399,7 @@ def cli(ctx, interactive, port, verbose):
     if interactive:
         with Console().status("Validating tags...", spinner="dots"):
             validate_tags(port, interactive=True, verbose=False)
-            resolve_missing_tiddlers(interactive=True, verbose=False)
+            resolve_missing_tiddlers(port, interactive=True, verbose=False)
 
     tags_response = validate_tags(port)
     missing_response = resolve_missing_tiddlers(port)
