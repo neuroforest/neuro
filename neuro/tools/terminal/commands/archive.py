@@ -7,8 +7,9 @@ import sys
 
 import click
 from rich.console import Console
+from sympy.integrals.heurisch import components
 
-from neuro.tools.terminal import style
+from neuro.tools.terminal import style, components
 from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.terminal.commands import qa, local
 from neuro.utils import internal_utils, time_utils
@@ -41,12 +42,28 @@ def print_time_from_last_archive():
     print(f"Time since last archive: {style.BOLD}{time_string}{style.RESET}")
 
 
+def remove_latest():
+    """
+    Remove the latest archive.
+    """
+    archive_path = f"{internal_utils.get_path('archive')}/tiddlers/"
+    month_path = max(Dir(archive_path).get_children())
+    timestamp_path = max(Dir(month_path).get_children())
+    if components.bool_prompt(f"Delete archive entry {timestamp_path.replace(archive_path, '')}?"):
+        shutil.rmtree(timestamp_path, ignore_errors=True)
+        print(f"{style.SUCCESS} Removed")
+
+
 @click.command("archive", short_help="archive tiddlers")
 @click.option("-c", "--check", is_flag=True)
+@click.option("-r", "--remove", is_flag=True)
 @pass_environment
-def cli(ctx, check):
+def cli(ctx, check, remove):
     if check:
         print_time_from_last_archive()
+        sys.exit()
+    if remove:
+        remove_latest()
         sys.exit()
     quality_secured = qa.cli(["--interactive"], standalone_mode=False)
     local_integration_secured = local.cli(["--quality"], standalone_mode=False)
