@@ -404,6 +404,6 @@ def cli(ctx, interactive, port, verbose):
     tags_response = validate_tags(port)
     missing_response = resolve_missing_tiddlers(port)
     primary_response = Primary(interactive, port, verbose).run()
-    resolve_neuro_ids(port, verbose=True)
+    neuro_ids_response = resolve_neuro_ids(port, verbose=True)
 
-    return all([tags_response, missing_response, primary_response])
+    return all([tags_response, missing_response, primary_response, neuro_ids_response])

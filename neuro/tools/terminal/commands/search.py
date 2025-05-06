@@ -2,8 +2,6 @@
 Search NeuroForest command-line interface.
 """
 
-import json
-
 import click
 
 from neuro.tools.terminal.cli import pass_environment
