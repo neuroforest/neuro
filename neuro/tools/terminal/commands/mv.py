@@ -1,5 +1,5 @@
 """
-Moves a file or directory both locally and in NeuroWiki.
+Move a file or directory both locally and in NeuroWiki.
 """
 
 import os
@@ -10,10 +10,6 @@ import click
 from neuro.core.deep import Dir
 from neuro.tools.terminal import common, style
 from neuro.tools.terminal.cli import pass_environment
-from neuro.utils import config
-
-
-config.load_env_files()
 
 
 def move_file(src_path, dst_path):

@@ -63,23 +63,3 @@ def get_taxon_info(taxon_id):
         "ParentTaxId": element_tree.find(".//Taxon/ParentTaxId").text,
         "Rank": element_tree.find(".//Taxon/Rank")
     }
-
-
-def get_ncbi_lineage(taxon):
-    try:
-        taxon_data = get_ncbi_taxonomy_data(taxon)
-        lineage = taxon_data[0]['LineageEx']
-        lineage.append({
-            "TaxId": taxon_data[0]["TaxId"],
-            "ScientificName": taxon_data[0]["ScientificName"],
-            "Rank": taxon_data[0]["Rank"]
-        })
-    except BaseException as e:
-        if "HTTP Error 400" in str(e):
-            return exceptions.InternalError("HTTP Error 400")
-        elif "Search Backend failed" in str(e):
-            return exceptions.InternalError("Search Backend failed")
-        else:
-            return e
-
-    return lineage

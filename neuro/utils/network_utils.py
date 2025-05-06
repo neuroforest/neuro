@@ -1,7 +1,6 @@
 import logging
 import socket
 import subprocess
-import psutil
 
 
 def is_port_in_use(port, url="localhost"):

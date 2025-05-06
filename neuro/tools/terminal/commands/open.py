@@ -2,12 +2,13 @@
 Open a tiddler in NeuroWiki.
 """
 
-import os
+import time
+import subprocess
 
 import click
 
 from neuro.tools.terminal.cli import pass_environment
-from neuro.tools.api import tw_actions
+from neuro.tools.api import tw_actions, tw_get
 
 
 @click.command("open", short_help="open a tiddler")
@@ -16,4 +17,8 @@ from neuro.tools.api import tw_actions
 def cli(ctx, title):
     response = tw_actions.open_tiddler(title)
     if response.status_code == 204:
-        os.system("wmctrl -a NeuroWiki")
+        tiddler = tw_get.tiddler(title)
+        if "local" in tiddler:
+            subprocess.run(["xdg-open", tiddler["local"]])
+            time.sleep(0.1)
+        subprocess.run(["wmctrl", "-a", "NeuroWiki — taking language to the next level"])
