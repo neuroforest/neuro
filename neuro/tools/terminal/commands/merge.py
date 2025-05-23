@@ -12,4 +12,7 @@ from neuro.tools.api import tw_actions
 @click.argument("titles", required=True, nargs=-1)
 @pass_environment
 def cli(ctx, titles):
+    """
+    Merge tiddlers by ascending priority.
+    """
     tw_actions.merge_tiddlers(list(titles))

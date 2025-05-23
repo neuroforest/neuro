@@ -16,11 +16,19 @@ from neuro.tools.terminal.commands import open
 
 @click.command("random", short_help="open a random tiddler")
 @click.option("-s", "--safe", is_flag=True)
+@click.option("-j", "--journal", is_flag=True)
+@click.option("-q", "--quote", is_flag=True)
 @pass_environment
-def cli(ctx, safe):
+def cli(ctx, safe, journal, quote):
     spinner = Console().status("Searching NeuroWiki...", spinner="dots")
     spinner.start()
-    tid_titles = tw_get.tw_fields(["title"], "[all[]]")
+    if journal:
+        tw_filter = "[tag[JOURNAL]]"
+    elif quote:
+        tw_filter = "[search:title[ #Quote ]]"
+    else:
+        tw_filter = "[all[]]"
+    tid_titles = tw_get.tw_fields(["title"], tw_filter)
     tid_title = py_random.choice(tid_titles)["title"]
     spinner.stop()
     print(f"Random tiddler:  {style.YELLOW}{style.BOLD}{tid_title}{style.RESET}")
