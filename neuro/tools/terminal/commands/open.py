@@ -21,4 +21,4 @@ def cli(ctx, title):
         if "local" in tiddler:
             subprocess.run(["xdg-open", tiddler["local"]])
             time.sleep(0.1)
-        subprocess.run(["wmctrl", "-a", "NeuroWiki — taking language to the next level"])
+        subprocess.run(["wmctrl", "-a", "NeuroWiki — beyond language"])

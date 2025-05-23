@@ -33,7 +33,7 @@ def move_file(src_path, dst_path):
     if symlink_count == 0:
         print(f"{style.FAIL} 0 symlinks affected")
     else:
-        print(f"{style.SUCCESS} {symlink_count} affected")
+        print(f"{style.SUCCESS} {symlink_count} symlinks affected")
 
     src_dir.move(dst_path)
 
