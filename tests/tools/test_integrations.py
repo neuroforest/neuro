@@ -80,3 +80,19 @@ class TestWikiData:
         data = wikidata.fetch(query_file_path, params)
         assert data
         assert data[0]["organismLabel"]["value"] == "Scatophagus"
+
+
+class TestZotero:
+    @pytest.mark.integration
+    def test_get_citation_text(self):
+        """
+        Using this open Zotero group for testing:
+        https://www.zotero.org/groups/368553/aquacrop_publications
+        """
+        from neuro.tools.integrations import zotero
+        item_id = "PJRUXIWH"
+        library_id = "368553"
+        library_type = "group"
+        citation_text = zotero.get_citation_text(item_id, library_id, library_type=library_type, style="apa")
+        assert citation_text
+        assert len(citation_text) == 246
