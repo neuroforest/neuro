@@ -19,6 +19,7 @@ def get_path(keyword):
 
     keyword_index = {
         "archive": f"{os.getenv('STORAGE')}/archive",
+        "design": os.getenv("DESIGN"),
         "desktop": os.getenv("DESKTOP"),
         "neuro": os.getenv("NEURO"),
         "nw": f"{os.getenv('DESKTOP')}/output/linux64/TiddlyDesktop-linux64-v0.0.14/nw",
