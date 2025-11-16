@@ -83,6 +83,10 @@ class Moment(NeuroObject):
 
         return cls(unix)
 
+    @classmethod
+    def from_tid_val(cls, tid_val):
+        return cls.from_string(tid_val, "%Y%m%d%H%M%S%f")
+
     def to_format(self, time_format):
         time_str = datetime.datetime.fromtimestamp(self.unix).astimezone(pytz.utc).strftime(time_format)
         return time_str
