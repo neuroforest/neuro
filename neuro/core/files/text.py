@@ -224,17 +224,19 @@ class TextCsv(Text):
         sorted_rows.insert(0, header_list)
         self.write(sorted_rows)
 
-    def to_json(self, header_key, json_path=None, mode="local"):
+    def to_json(self, header_key=None, json_path=None, mode="local"):
         """
         Convert csv to json by using specific column for keys.
-        :param header_key:
+        :param header_key: the column of CSV that is used as identifier
         :param json_path:
         :param mode: "local" or "dict"
         :return:
         """
         self.get_header()
 
-        if header_key in self.header and self.is_identifier(header_key):
+        if not header_key:
+            key_index = None
+        elif header_key in self.header and self.is_identifier(header_key):
             key_index = self.header.index(header_key)
         elif not self.is_identifier(header_key):
             return exceptions.InternalError(f"Header {header_key} is not an identifier.")
@@ -244,21 +246,28 @@ class TextCsv(Text):
 
         data_dict = dict()
 
+        count = 0
         for row in self.get_rows():
-            key_value = row[key_index]
+            if key_index is None:
+                key_value = count
+            else:
+                key_value = row[key_index]
             row_dict = dict()
             for i in range(len(self.header)):
                 row_dict[self.header[i]] = row[i]
 
             data_dict[key_value] = row_dict
+            count += 1
 
         if mode == "local":
             with TextJson(json_path, "w") as t:
                 t.dump(data_dict)
+                return dict()
         elif mode == "dict":
             return data_dict
         else:
             exceptions.InternalError(f"Mode '{mode}' is not supported.")
+            return dict()
 
     def write(self, lol):
         writer = self.get_writer()

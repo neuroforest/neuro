@@ -403,6 +403,7 @@ class NeuroWF:
         """
         self.process: subprocess.Popen
         self.wf_path = wf_path
+        self.port = kwargs.get("port", 8099)
         if exists:
             tiddlywiki_info = f"{wf_path}/tiddlywiki.info"
             tiddlers = f"{wf_path}/tiddlers"
@@ -423,14 +424,13 @@ class NeuroWF:
                 raise FileExistsError
             self.create(**kwargs)
 
-    def close(self, port=8099):
+    def close(self):
         self.process.kill()
         # This impairs performance
-        if network_utils.is_port_in_use(port):
+        if network_utils.is_port_in_use(self.port):
             p = subprocess.Popen([
-                "npx",
-                "kill-port",
-                str(port)
+                "killport",
+                str(self.port)
             ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             p.wait()
             p.kill()
@@ -456,13 +456,13 @@ class NeuroWF:
         if tid_folder:
             shutil.copytree(tid_folder, f"{self.wf_path}/tiddlers")
 
-    def open(self, tw5="tw5/tiddlywiki.js", port=8099):
+    def open(self, tw5="tw5/tiddlywiki.js"):
         self.process = subprocess.Popen([
             "node",
             tw5,
             self.wf_path,
             "--listen",
-            f"port={port}"
-        ], stdout=subprocess.DEVNULL, close_fds=True)
+            f"port={self.port}"
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
 
-        network_utils.wait_for_socket("127.0.0.1", port)
+        network_utils.wait_for_socket("127.0.0.1", self.port)
