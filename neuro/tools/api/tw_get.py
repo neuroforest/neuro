@@ -21,7 +21,7 @@ def all_tiddlers(**kwargs):
         return None
 
     print("Collecting ... from {}".format(api.url))
-    response = api.get("/recipes/default/tiddlers.json")
+    response = api.get("/recipes/default/tiddlers.json", **kwargs)
     return response["parsed"]
 
 
@@ -206,7 +206,7 @@ def tw_fields(fields: list, tw_filter: str, **kwargs):
         params["fields"] = fields
     if tw_filter:
         params["filter"] = tw_filter
-    parsed_response = api.get(url, params=params)["parsed"]
+    parsed_response = api.get(url, params=params, **kwargs)["parsed"]
     return parsed_response
 
 

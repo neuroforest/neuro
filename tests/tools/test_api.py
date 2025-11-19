@@ -110,6 +110,12 @@ class TestTwGet:
         tw_fields = tw_get.tw_fields(["title"], "[search:title:literal,casesensitive[thisistest]]", **kwargs)
         assert tw_fields == [{"title": "thisistest"}]
 
+    def test_get_tid_titles(self):
+        from neuro.tools.api import tw_get
+        tid_titles = tw_get.tid_titles("[all[]]", **kwargs)
+        assert len(tid_titles) == 32
+        assert type(tid_titles[0]) == str
+
 
 class TestTwPut:
     @pytest.mark.integration
