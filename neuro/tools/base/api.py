@@ -1,4 +1,5 @@
 import os
+import logging
 
 import neo4j
 
@@ -8,10 +9,14 @@ class NeuroBase:
     Simple, reusable Neo4j client wrapper.
     """
     def __init__(self, neo4j_uri=None, neo4j_user=None, neo4j_password=None, **kwargs):
-        self.uri = neo4j_uri or os.getenv("NEO4J_URI")
-        self.user = neo4j_user or os.getenv("NEO4J_USER")
-        self.password = neo4j_password or os.getenv("NEO4J_PASSWORD")
-        self.driver = neo4j.GraphDatabase.driver(self.uri, auth=(self.user, self.password))
+        uri = neo4j_uri or os.getenv("NEO4J_URI")
+        user = neo4j_user or os.getenv("NEO4J_USER")
+        password = neo4j_password or os.getenv("NEO4J_PASSWORD")
+        try:
+            self.driver = neo4j.GraphDatabase.driver(uri, auth=(user, password))
+        except neo4j.exceptions.ConfigurationError:
+            logging.error(f"Incorrect Neo4j parameters: {uri}")
+            return
 
     def run_query(self, query, parameters=None):
         """
@@ -29,15 +34,6 @@ class NeuroBase:
             result = session.run(query, parameters or {})
             records = [record.data() for record in result]
             return records
-
-    def get_objects(self, query, parameters=None):
-        """
-        Run a Cypher query and return the objects as a list of dicts.
-        """
-        with self.driver.session() as session:
-            result = session.run(query, parameters or {})
-            objects = [next(iter(record.data().values())) for record in result]
-            return objects
 
     def save_object(self, o):
         """
@@ -82,3 +78,22 @@ class NeuroBase:
         """
         if self.driver:
             self.driver.close()
+
+
+def get_all_objects(**kwargs):
+    """
+    Run a Cypher query and return the objects as a list of dicts.
+    """
+    nb = NeuroBase(**kwargs)
+    try:
+        nb.driver.verify_connectivity()
+        query = "MATCH (o:Object) RETURN o;"
+        result = nb.get_data(query)
+        objects = [next(iter(record.values())) for record in result]
+    except Exception as e:
+        print(f"Error connecting to Neo4j: {e}")
+        return None
+    finally:
+        nb.close()
+
+    return objects
