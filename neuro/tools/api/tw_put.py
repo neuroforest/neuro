@@ -42,6 +42,7 @@ def tiddler(api_tiddler, **kwargs):
     """
     Api tiddler is not even necessary.
     :param api_tiddler:
+    :param preserve: preserve existing fields, not changing modified
     :return:
     """
     api = tw_api.get_api(**kwargs)
@@ -49,7 +50,8 @@ def tiddler(api_tiddler, **kwargs):
         return None
 
     tiddler_json = json.dumps(api_tiddler)
-    response = api.put("/neuro/tiddlers/" + api_tiddler["title"], data=tiddler_json)
+    response = api.put("/neuro/tiddlers/" + api_tiddler["title"],
+                       data=tiddler_json, params=kwargs.get("params", dict()))
     if response.status_code == 204:
         logging.debug(f"Put '{api_tiddler['title']}'")
     else:
