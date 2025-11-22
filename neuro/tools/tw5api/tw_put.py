@@ -5,7 +5,7 @@ PUT wrapper.
 import json
 import logging
 
-from neuro.tools.api import tw_api
+from neuro.tools.tw5api import tw_api
 
 
 def fields(tw_fields, **kwargs):

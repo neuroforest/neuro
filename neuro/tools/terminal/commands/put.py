@@ -7,7 +7,7 @@ import json
 import click
 
 from neuro.tools.terminal.cli import pass_environment
-from neuro.tools.api import tw_put
+from neuro.tools.tw5api import tw_put
 
 
 @click.command("put", short_help="NeuroAPI PUT method")

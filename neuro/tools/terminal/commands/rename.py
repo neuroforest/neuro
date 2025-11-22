@@ -5,7 +5,7 @@ Invoke NeuroForest wiki function $tw.wiki.nfRename.
 import click
 
 from neuro.tools.terminal.cli import pass_environment
-from neuro.tools.api import tw_actions
+from neuro.tools.tw5api import tw_actions
 
 
 @click.command("rename", short_help="rename tiddler")

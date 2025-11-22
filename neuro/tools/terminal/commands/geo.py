@@ -7,7 +7,7 @@ import click
 import requests
 import tqdm
 
-from neuro.tools.api import tw_get, tw_put
+from neuro.tools.tw5api import tw_get, tw_put
 from neuro.tools.terminal.cli import pass_environment
 
 
