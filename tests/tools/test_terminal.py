@@ -75,3 +75,19 @@ class TestQa:
         assert example["neuro.id"][14] == "4"
 
         process.kill()
+
+
+class TestTaxon:
+    def test_taxon(self):
+        from neuro.tools.terminal.commands import taxon
+        from neuro.tools.api import tw_get
+        port = 8069
+        runner = CliRunner()
+        process = create_and_run_wiki_folder("taxon", port=port)
+        result = runner.invoke(taxon.cli, [f"--port={port}", "-y", "Amata phegea"],
+                               env={"ENVIRONMENT": "TESTING"})
+        assert result.exit_code == 0
+        tiddler = tw_get.tiddler("Amata phegea", port=port)
+        assert tiddler
+        process.kill()
+

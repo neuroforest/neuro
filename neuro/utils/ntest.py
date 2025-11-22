@@ -18,13 +18,12 @@ from neuro.utils import internal_utils
 
 @click.command("ntest", short_help="test Python package neuro")
 @click.argument("path", required=False, type=click.Path(resolve_path=True))
-@click.option("-a", "--full", is_flag=True)
 @click.option("-i", "--integration", is_flag=True)
 @click.option("-l", "--local", is_flag=True)
 @click.option("-n", "--notintegration", is_flag=True)
 @click.option("-p", "--production", is_flag=True)
 @click.argument("file", nargs=-1)
-def cli(path, full, integration, notintegration, local, file, production):
+def cli(path, integration, notintegration, local, file, production):
     neuro_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     os.chdir(neuro_path)
     dotenv.load_dotenv(os.path.abspath(".env.defaults"))
