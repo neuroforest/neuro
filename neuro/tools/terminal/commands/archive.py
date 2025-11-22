@@ -14,7 +14,7 @@ from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.terminal.commands import qa, local
 from neuro.utils import internal_utils, time_utils
 from neuro.core.deep import Dir, Moment, File
-from neuro.tools.base import migrate
+from neuro.tools import migrate
 
 
 def archive():
@@ -52,7 +52,7 @@ def remove_latest():
     month_path = max(Dir(archive_path).get_children())
     timestamp_path = max(Dir(month_path).get_children())
     if components.bool_prompt(f"Delete archive entry {timestamp_path.replace(archive_path, '')}?"):
-        shutil.rmtree(timestamp_path, ignore_errors=True)
+        os.remove(timestamp_path)
         print(f"{style.SUCCESS} Removed")
 
 
