@@ -7,9 +7,11 @@ import os
 import re
 import shutil
 import subprocess
+import time
 
 from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
+import requests
 
 from neuro.core.deep import NeuroNode, Moment
 from neuro.core.files.text import TextHtml
@@ -395,15 +397,21 @@ class NeuroWF:
     """
     Wrapper for WikiFolder. It operates on port 8099 by default.
     """
-    def __init__(self, wf_path, exists=True, **kwargs):
+    def __init__(self, wf_path, exists=True, tw5="tw5/tiddlywiki.js", **kwargs):
         """
         Initialize and verify WikiFolder
         :param wf_path: WikiFolder path
         :param exists: should the WikiFolder already exist
+        :param tw_info_template: template used for creating WF
+        :param tw5: path to the tiddlywiki.js file
+        :param silent: supress stduout
         """
         self.process: subprocess.Popen
         self.wf_path = wf_path
+        self.tw5 = tw5
         self.port = kwargs.get("port", 8099)
+        self.url = kwargs.get("url", "127.0.0.1")
+        self.silent = kwargs.get("silent", False)
         if exists:
             tiddlywiki_info = f"{wf_path}/tiddlywiki.info"
             tiddlers = f"{wf_path}/tiddlers"
@@ -424,16 +432,24 @@ class NeuroWF:
                 raise FileExistsError
             self.create(**kwargs)
 
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc_value, tb):
+        # Ensure everything is saved
+        while True:
+            status = requests.get(f"http://{self.url}:{self.port}/neuro/info")
+            if status.json()["dirty"]:
+                time.sleep(0.2)
+            else:
+                break
+
+        self.close()
+        return False
+
     def close(self):
         self.process.kill()
-        # This impairs performance
-        if network_utils.is_port_in_use(self.port):
-            p = subprocess.Popen([
-                "killport",
-                str(self.port)
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            p.wait()
-            p.kill()
 
     def create(self, tid_folder=None, **kwargs):
         """
@@ -456,13 +472,22 @@ class NeuroWF:
         if tid_folder:
             shutil.copytree(tid_folder, f"{self.wf_path}/tiddlers")
 
-    def open(self, tw5="tw5/tiddlywiki.js"):
+    def open(self):
+        if self.silent:
+            params = {
+                "stdout": subprocess.DEVNULL,
+                "stderr": subprocess.DEVNULL
+            }
+        else:
+            params = dict()
+
         self.process = subprocess.Popen([
             "node",
-            tw5,
+            self.tw5,
             self.wf_path,
             "--listen",
-            f"port={self.port}"
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+            f"port={self.port}",
+            f"host={self.url}"
+        ], **params)
 
-        network_utils.wait_for_socket("127.0.0.1", self.port)
+        network_utils.wait_for_socket(self.url, self.port)
