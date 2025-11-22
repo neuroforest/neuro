@@ -87,9 +87,14 @@ class Moment(NeuroObject):
     def from_tid_val(cls, tid_val):
         return cls.from_string(tid_val, "%Y%m%d%H%M%S%f")
 
+    @classmethod
+    def from_iso(cls, iso_string):
+        return cls.from_string(iso_string, "%Y-%m-%dT%H:%M:%S.%f%z")
+
     def to_format(self, time_format):
-        time_str = datetime.datetime.fromtimestamp(self.unix).astimezone(pytz.utc).strftime(time_format)
-        return time_str
+        return datetime.datetime.fromtimestamp(self.unix, tz=datetime.UTC).strftime(time_format)
+        dt = datetime.datetime.fromtimestamp(self.unix, tz=tzinfo)
+        return dt.strftime(time_format)
 
     def to_prog(self):
         return self.to_format("%Y%m%d%H%M%S")
@@ -107,8 +112,7 @@ class Moment(NeuroObject):
         return tid_date
 
     def to_iso(self):
-        iso_date = datetime.datetime.fromtimestamp(self.unix).isoformat()
-        return iso_date
+        return self.to_format("%Y-%m-%dT%H:%M:%S.%f")
 
 
 class GeoLocation(NeuroObject):
@@ -274,6 +278,7 @@ class File(NeuroObject):
             except UnicodeDecodeError:
                 logging.error(f"Could not decode file {self.path}")
                 return None
+        self.text = text
         return text
 
     def get_title(self):

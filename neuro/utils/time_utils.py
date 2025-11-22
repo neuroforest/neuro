@@ -8,10 +8,12 @@ import time
 
 # Codes.
 CODE_DATE = "%Y%m%d"
+CODE_DATE_ISO = "%Y-%m-%d"
 CODE_DATE_SI = "%d. %m. %Y"
 CODE_MOMENT = "%Y%m%d%H%M%S"
 CODE_MOMENT_2 = "%Y%m%d_%H%M%S"
 CODE_MOMENT_3 = "%Y-%m-%d-%H-%M-%S"
+CODE_MOMENT_4 = "%Y-%m-%d_%H-%M-%S"
 CODE_MOMENT_SI = "%Y-%m-%d %H:%M:%S"
 CODE_MONTH = "%Y_%m"
 CODE_PHOTO = "%Y:%m:%d %H:%M:%S"
@@ -22,9 +24,11 @@ CODE_YEAR = "%Y"
 # Datetime strings.
 CURRENT_TIME_SI = datetime.datetime.now().strftime(CODE_TIME_SI)
 DATE = datetime.datetime.now().strftime(CODE_DATE)
+DATE_ISO = datetime.datetime.now().strftime(CODE_DATE_ISO)
 MOMENT = datetime.datetime.now().strftime(CODE_MOMENT)
 MOMENT_2 = datetime.datetime.now().strftime(CODE_MOMENT_2)
 MOMENT_3 = datetime.datetime.now().strftime(CODE_MOMENT_3)
+MOMENT_4 = datetime.datetime.now().strftime(CODE_MOMENT_4)
 MOMENT_SI = datetime.datetime.now().strftime(CODE_MOMENT_SI)
 MONTH = datetime.datetime.now().strftime(CODE_MONTH)
 TODAY_SI = datetime.datetime.now().strftime(CODE_DATE_SI)
