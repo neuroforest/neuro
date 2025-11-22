@@ -1,7 +1,7 @@
 """
 Archive tiddlers.
 """
-
+import os
 import shutil
 import sys
 
@@ -13,7 +13,8 @@ from neuro.tools.terminal import style, components
 from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.terminal.commands import qa, local
 from neuro.utils import internal_utils, time_utils
-from neuro.core.deep import Dir, Moment
+from neuro.core.deep import Dir, Moment, File
+from neuro.tools.base import migrate
 
 
 def archive():
@@ -21,21 +22,22 @@ def archive():
     Archive tiddlers.
     """
     with Console().status("Archiving...", spinner="dots"):
-        moment_prog = time_utils.MOMENT
+        moment_prog = time_utils.MOMENT_4
         month_prog = time_utils.MONTH
 
-        tiddlers_path = internal_utils.get_path("tiddlers")
-        archive_path = f"{internal_utils.get_path('archive')}/tiddlers/{month_prog}/{moment_prog}"
+        archive_path = f"{internal_utils.get_path('archive')}/json/{month_prog}"
+        os.makedirs(archive_path, exist_ok=True)
+        json_path = f"{archive_path}/{moment_prog}.json"
 
-        shutil.copytree(tiddlers_path, archive_path, dirs_exist_ok=False)
+        migrate.migrate_neo4j_to_json(json_path)
         print(f"{style.SUCCESS} Wiki archived")
 
 
 def print_time_from_last_archive():
-    tiddler_archive_path = internal_utils.get_path("archive") + "/tiddlers/"
+    tiddler_archive_path = internal_utils.get_path("archive") + "/json/"
     month_path = max(Dir(tiddler_archive_path).get_children())
     timestamp_path = max(Dir(month_path).get_children())
-    last_timestamp = Dir(timestamp_path).ctime
+    last_timestamp = File(timestamp_path).ctime
     current_moment = Moment(form="now")
     second_passed = current_moment - last_timestamp
     time_string = time_utils.get_time_string(second_passed)
@@ -46,7 +48,7 @@ def remove_latest():
     """
     Remove the latest archive.
     """
-    archive_path = f"{internal_utils.get_path('archive')}/tiddlers/"
+    archive_path = f"{internal_utils.get_path('archive')}/json/"
     month_path = max(Dir(archive_path).get_children())
     timestamp_path = max(Dir(month_path).get_children())
     if components.bool_prompt(f"Delete archive entry {timestamp_path.replace(archive_path, '')}?"):
