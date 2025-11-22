@@ -2,8 +2,6 @@
 Tools for Docker container management.
 """
 
-
-
 import json
 import os
 import subprocess
