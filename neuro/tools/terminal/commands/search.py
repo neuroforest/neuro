@@ -5,7 +5,7 @@ Search NeuroForest command-line interface.
 import click
 
 from neuro.tools.terminal.cli import pass_environment
-from neuro.tools.api import tw_actions, tw_get
+from neuro.tools.tw5api import tw_actions, tw_get
 
 
 @click.command("search", short_help="search wiki")

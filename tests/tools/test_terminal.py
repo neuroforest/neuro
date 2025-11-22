@@ -17,7 +17,7 @@ class TestGeo:
 class TestQa:
     def test_qa(self):
         from neuro.tools.terminal.commands import qa
-        from neuro.tools.api import tw_get, tw_put, tw_del
+        from neuro.tools.tw5api import tw_get, tw_put, tw_del
         port = 8069
         process = create_and_run_wiki_folder("qa", port=port)
         runner = CliRunner()
@@ -80,7 +80,7 @@ class TestQa:
 class TestTaxon:
     def test_taxon(self):
         from neuro.tools.terminal.commands import taxon
-        from neuro.tools.api import tw_get
+        from neuro.tools.tw5api import tw_get
         port = 8069
         runner = CliRunner()
         process = create_and_run_wiki_folder("taxon", port=port)
