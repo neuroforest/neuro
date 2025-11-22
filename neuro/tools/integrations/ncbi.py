@@ -57,9 +57,11 @@ def get_taxon_info(taxon_id):
 
     res = requests.get(url, params)
     element_tree = ElementTree.fromstring(res.text)
+
     return {
         "Division": element_tree.find(".//Taxon/Division").text,
+        "TaxId": element_tree.find(".//Taxon/TaxId").text,
         "ScientificName": element_tree.find(".//Taxon/ScientificName").text,
         "ParentTaxId": element_tree.find(".//Taxon/ParentTaxId").text,
-        "Rank": element_tree.find(".//Taxon/Rank")
+        "Rank": element_tree.find(".//Taxon/Rank").text
     }

@@ -9,7 +9,7 @@ import urllib.parse
 
 import requests
 
-from neuro.utils import network_utils
+from neuro.utils import network_utils, exceptions
 from neuro.core.data.dict import DictUtils
 
 
@@ -46,12 +46,15 @@ class API:
         full_url = self.url + urllib.parse.quote(path)
         params = kwargs.get("params", dict())
         logging.getLogger(__name__).debug(f"Request URL: {full_url}")
-        self.response = self.session.get(url=full_url, params=params)
-        self.parse()
-        return {
-            "parsed": self.parsed_response,
-            **self.response.__dict__
-        }
+        try:
+            self.response = self.session.get(url=full_url, params=params)
+            self.parse()
+            return {
+                "parsed": self.parsed_response,
+                **self.response.__dict__
+            }
+        except exceptions.NoAPI:
+            return ""
 
     def parse(self):
         # Getting the response content type.
@@ -89,7 +92,9 @@ class API:
         return self.response
 
 
-def get_api(port=os.getenv("PORT"), url=os.getenv("URL"), **kwargs):
+def get_api(port=None, url=None, **kwargs):
+    port = port or os.getenv("PORT")
+    url = url or os.getenv("URL")
     global API_CACHE
     if port not in API_CACHE:
         logging.getLogger(__name__).debug(f"Creating new API to port {port}.")
@@ -103,3 +108,4 @@ def get_api(port=os.getenv("PORT"), url=os.getenv("URL"), **kwargs):
         return tw_api
     else:
         logging.getLogger(__name__).error(f"API is {api_status}")
+        raise exceptions.NoAPI()

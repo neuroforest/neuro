@@ -11,7 +11,7 @@ def is_port_in_use(port, url="localhost"):
 def release_port(port):
     if is_port_in_use(port):
         logging.info(f"Releasing port: {port}")
-        subprocess.run(["killport", str(port)])
+        subprocess.run(["killport", str(port)], stdout=subprocess.DEVNULL)
 
 
 def wait_for_socket(host, port):
