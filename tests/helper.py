@@ -97,8 +97,11 @@ def create_and_run_wiki_folder(tiddlers_name, port):
     os.makedirs(output_wiki_folder_path)
     tiddlywiki_info = get_test_file("input/tiddlywiki.info")
     shutil.copy(tiddlywiki_info, output_wiki_folder_path)
-    tiddlers_folder = get_test_file(f"input/tiddlers/{tiddlers_name}")
-    shutil.copytree(tiddlers_folder, f"{output_wiki_folder_path}/tiddlers")
+    try:
+        tiddlers_folder = get_test_file(f"input/tiddlers/{tiddlers_name}")
+        shutil.copytree(tiddlers_folder, f"{output_wiki_folder_path}/tiddlers")
+    except NotADirectoryError:
+        pass
 
     process = run_wiki_folder(output_wiki_folder_path, port)
 
