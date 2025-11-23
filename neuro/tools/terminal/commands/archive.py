@@ -7,7 +7,6 @@ import sys
 
 import click
 from rich.console import Console
-from sympy.integrals.heurisch import components
 
 from neuro.tools.terminal import style, components
 from neuro.tools.terminal.cli import pass_environment
