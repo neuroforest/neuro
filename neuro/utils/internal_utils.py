@@ -22,13 +22,13 @@ def get_path(keyword):
         "design": os.getenv("DESIGN"),
         "desktop": os.getenv("DESKTOP"),
         "neuro": os.getenv("NEURO"),
-        "nw": f"{os.getenv('DESKTOP')}/output/linux64/TiddlyDesktop-linux64-v0.0.14/nw",
         "plugins": f"{os.getenv('TW5')}/plugins",
         "resources": f"{os.getenv('NEURO')}/resources",
         "templates": f"{os.getenv('NEURO')}/resources/templates",
         "tests": f"{os.getenv('NEURO')}/tests",
         "themes": f"{os.getenv('tw5')}/themes",
         "tiddlers": f"{os.getenv('STORAGE')}/tiddlers",
+        "tiddlywiki.js": f"{os.getenv("TW5")}/tiddlywiki.js",
         "tw5": os.getenv("TW5"),
         "wd_queries": f"{os.getenv('NEURO')}/resources/queries"
     }
