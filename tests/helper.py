@@ -81,7 +81,7 @@ def run_wiki_folder(path, port):
         "writers=(anon)"
     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    network_utils.wait_for_socket(os.getenv('URL'), port)
+    network_utils.wait_for_socket(os.getenv("HOST"), port)
 
     return process
 
