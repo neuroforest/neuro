@@ -13,21 +13,32 @@ from neuro.utils import network_utils, exceptions
 from neuro.core.data.dict import DictUtils
 
 
-API_CACHE = dict()
-
-
 class API:
-    def __init__(self, port, url):
-        self.url = f"http://{url}:{port}"
+    def __init__(self, port=None, host=None):
+        self.port = port or os.getenv("PORT")
+        self.host = host or os.getenv("HOST")
+        if self.port is None:
+            raise exceptions.NoAPI(
+                "API port is required. Pass it via the 'port' argument"
+                " or set the 'PORT' environment variable."
+            )
+        if self.host is None:
+            raise exceptions.NoAPI(
+                "API URL is required. Pass it via the 'url' argument"
+                " or set the 'URL' environment variable."
+            )
+        self.url = f"http://{self.host}:{self.port}"
         self.response = requests.Response()
         self.parsed_response = dict()
         self.session = requests.Session()
-        if not network_utils.is_port_in_use(port):
-            msg = f"Port {port} is not running locally."
-            logging.getLogger(__name__).warning(f"Refused to connect to API: {msg}")
-            self.status = "unavailable"
-        else:
-            self.status = "available"
+
+    def __enter__(self):
+        if not network_utils.is_port_in_use(self.port, self.host):
+            raise exceptions.NoAPI(f"Service not running on {self.host}:{self.port}")
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
 
     def delete(self, path):
         full_url = self.url + urllib.parse.quote(path)
@@ -74,7 +85,6 @@ class API:
 
     def put(self, path, **kwargs):
         full_url = self.url + urllib.parse.quote(path)
-        # "User-Agent": "Mozilla/5.0",
         headers = {
             "X-Requested-With": "TiddlyWiki",
             "Content-Type": "application/json",
@@ -91,21 +101,3 @@ class API:
 
         return self.response
 
-
-def get_api(port=None, url=None, **kwargs):
-    port = port or os.getenv("PORT")
-    url = url or os.getenv("URL")
-    global API_CACHE
-    if port not in API_CACHE:
-        logging.getLogger(__name__).debug(f"Creating new API to port {port}.")
-        tw_api = API(port=port, url=url)
-        API_CACHE[port] = tw_api
-    else:
-        tw_api = API_CACHE[port]
-
-    api_status = tw_api.status
-    if api_status == "available":
-        return tw_api
-    else:
-        logging.getLogger(__name__).error(f"API is {api_status}")
-        raise exceptions.NoAPI()
