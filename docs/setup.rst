@@ -4,18 +4,9 @@ Setup
 Settings
 ^^^^
 
+Create file ``.env`` using ``.env.defaults`` as the template.
 
-Edit file ``neuro/utils/SETTINGS.py``:
-
-- Set the variables ``URL`` and ``PORT`` according to where your TiddlyWiki5 server instance is running.
-- Set the variable ``NF_DIR`` to the absoulute path of the parent directory of ``neuro`` repository on the local file sistem. Setting the variable ``NF_DIR``  enables directory independence.
-
-You can make git ignore/unignore the changes made to this file by running commands, respectively:
-
-::
-
-    git update-index --assume-unchanged neuro/utils/SETTINGS.py
-    git update-index --no-assume-unchanged neuro/utils/SETTINGS.py
+- Set the variable ``NF_DIR`` to the absolute path of the parent directory of ``neuro`` repository on the local file sistem. Setting the variable ``NF_DIR`` enables independence of the working directory.
 
 TiddlyWiki5
 ^^^^
@@ -37,8 +28,9 @@ OPTIONAL: For optimal performance and development purposes, the following file a
 ::
 
     NeuroForest
+    ├── desktop
     ├── neuro
     └── storage
     | └── archive
-    ├── tw5 (or TiddlyWiki5)
+    ├── tw5
     └── tw5-plugins

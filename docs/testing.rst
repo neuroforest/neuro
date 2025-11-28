@@ -11,7 +11,7 @@ The data is in the folder ``data/tests``. There are 3 subdirectories:
 
 **Environment variables**
 
-The default variable names used for testing are stored in file ``.env.defaults``. Variables in this file can be overriden by creating the file ``.env.testing`` in the root directory.
+The default variable names used for testing are stored in file ``.env.defaults``. Variables in this file can be overridden by creating the file ``.env.testing`` in the root directory.
 
 **Running tests**
 

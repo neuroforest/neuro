@@ -1,16 +1,21 @@
 # neuro
 `neuro` is a Python package that features:
 
-- an interface to <a href="https://tiddlywiki.com" target="_blank">TiddlyWiki5</a> API
-- file and data management utilities
+- <a href="https://neo4j.com" target="_blank">Neo4j</a> as the graph database
+- <a href="https://tiddlywiki.com" target="_blank">TiddlyWiki5</a> as the user interface
+- API to the database and the user interface
 - integrations with <a href="https://www.ncbi.nlm.nih.gov/taxonomy" target="_blank">NCBI Taxonomy</a>, <a href="https://www.wikidata.org" target="_blank">WikiData</a>, <a href="https://www.gbif.org" target="_blank">GBIF</a>, <a href="https://www.inaturalist.org" target="_blank">iNaturalist</a>, and <a href="https://www.zotero.org/" target="_blank">Zotero</a>
+- file and data management tools
 - command-line interface 
 
 ### Requirements
 
 - git
 - Python 3.13
-- TiddlyWiki5 server
+- node.js
+- NW.js
+- TiddlyWiki5
+- Neo4j
 
 ### Install
 
@@ -22,7 +27,7 @@ venv/bin/pip install .
 venv/bin/neuro --help
 ```
 
-Edit settings in ``neuro/utils/SETTINGS.py`` (see ``docs/setup.rst`` for more info)
+Edit configuration in ``.env`` (see ``docs/setup.rst`` for more info)
 
 ### Test
 
