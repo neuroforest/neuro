@@ -5,6 +5,7 @@ Before a wiki is archived, certain criteria must be satisfied.
 """
 
 import os
+import json
 
 import click
 import pyperclip
@@ -87,18 +88,31 @@ def set_journal(port):
     print(f"{style.SUCCESS} Journal")
 
 
-def set_model_roles(port):
-    model_roles = [
-        "Concepts",
-        "Fundamentals",
-        "Objects",
-        "Phenomena",
-        "Structures",
-        "Terminology"
-    ]
+def set_roles(port):
+    role_pairs = dict()
+    for tid_tag, role in json.loads(os.getenv("ROLE_DICT")).items():
+        neuro_tids = tw_get.neuro_tids(f"[tag[{tid_tag}]!has[neuro.role]]", port=port)
+        for neuro_tid in neuro_tids:
+            role_pairs[neuro_tid.title] = role
 
+    if role_pairs:
+        print(f"\nSetting roles for {len(role_pairs)} tiddlers")
+        width = max([len(tid_title) for tid_title in role_pairs])
+        with tqdm.tqdm(total=len(role_pairs)) as pbar:
+            for tid_title, role in role_pairs.items():
+                pbar.set_description(tid_title.ljust(width))
+                neuro_tid = tw_get.neuro_tid(tid_title, port=port)
+                neuro_tid.add_fields({"neuro.role": role})
+                tw_put.neuro_tid(neuro_tid, port=port)
+                pbar.update(1)
+            pbar.set_description("")
+
+    print(f"{style.SUCCESS} Roles set")
+
+
+def set_model_roles(port):
     update_tids = NeuroTids()
-    for model_role in model_roles:
+    for model_role in json.loads(os.getenv("MODEL_ROLES")):
         regexp_pattern = r"^\S+\s\S+$"
         model_tids = tw_get.neuro_tids(f"[prefix[.]suffix[ {model_role}]!has[neuro.role]"
                                        f"regexp[{regexp_pattern}]]", port=port)
@@ -394,6 +408,7 @@ def cli(ctx, interactive, port, verbose):
 
     remove_ghost_tiddlers(port)
     set_model_roles(port)
+    set_roles(port)
     set_journal(port)
 
     if interactive:
