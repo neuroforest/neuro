@@ -33,7 +33,7 @@ def pytest_sessionstart(session):
             "writers=(anon)"
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    network_utils.wait_for_socket(os.getenv('URL'), test_port)
+    network_utils.wait_for_socket(os.getenv("HOST"), test_port)
 
 
 def pytest_sessionfinish(session, exitstatus):

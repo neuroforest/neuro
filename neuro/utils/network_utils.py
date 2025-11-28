@@ -3,9 +3,12 @@ import socket
 import subprocess
 
 
-def is_port_in_use(port, url="localhost"):
+def is_port_in_use(port, host="localhost"):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex((url, int(port))) == 0
+        try:
+            return s.connect_ex((host, int(port))) == 0
+        except socket.gaierror:
+            return False
 
 
 def release_port(port):

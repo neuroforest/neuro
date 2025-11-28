@@ -1,7 +1,7 @@
 class TestUtils:
     def test_config(self):
         import os
-        assert os.getenv("URL") == "127.0.0.1"
+        assert os.getenv("HOST") == "127.0.0.1"
         assert os.getenv("ENVIRONMENT") == "TESTING"
         assert os.getenv("NCBI_API_KEY")
 
