@@ -16,36 +16,26 @@ def all_tiddlers(**kwargs):
     Return a list of tiddlers.
     :return: list of dictionaries
     """
-    api = tw_api.get_api(**kwargs)
-    if not api:
-        return None
-
-    print("Collecting ... from {}".format(api.url))
-    response = api.get("/recipes/default/tiddlers.json", **kwargs)
-    return response["parsed"]
+    with tw_api.API(**kwargs) as api:
+        print("Collecting ... from {}".format(api.url))
+        response = api.get("/recipes/default/tiddlers.json", **kwargs)
+        return response["parsed"]
 
 
 def filter_output(tw_filter, **kwargs):
-    api = tw_api.get_api(**kwargs)
-    if not api:
-        return None
-
-    url = "/neuro/filter"
-    params = {"filter": tw_filter}
-    response = api.get(url, params=params, **kwargs)
-    return response["parsed"]
+    with tw_api.API(**kwargs) as api:
+        params = {"filter": tw_filter}
+        response = api.get("/neuro/filter", params=params, **kwargs)
+        return response["parsed"]
 
 
 def info(**kwargs):
-    api = tw_api.get_api(**kwargs)
-    if not api:
-        return None
-
-    response = api.get("/neuro/info")
-    if response["status_code"] == 200:
-        return response["parsed"]
-    else:
-        raise exceptions.UnhandledStatusCode(response["status_code"])
+    with tw_api.API() as api:
+        response = api.get("/neuro/info")
+        if response["status_code"] == 200:
+            return response["parsed"]
+        else:
+            raise exceptions.UnhandledStatusCode(response["status_code"])
 
 
 def is_tiddler(tid_title, **kwargs):
@@ -55,7 +45,6 @@ def is_tiddler(tid_title, **kwargs):
     :param tid_title:
     :return: bool
     """
-
     try:
         tiddler(tid_title, **kwargs)
         return True
@@ -138,28 +127,22 @@ def neuro_tids(tw_filter, **kwargs):
 
 
 def rendered_tiddler(tid_title):
-    api = tw_api.get_api(**kwargs)
-    if not api:
-        return None
+    with tw_api.API(**kwargs) as api:
+        parsed_response = api.get("/{}".format(tid_title), content_type="text/html")
+        path = os.path.abspath("temp.html")
+        url = "file://" + path
 
-    parsed_response = api.get("/{}".format(tid_title), content_type="text/html")
-    path = os.path.abspath("temp.html")
-    url = "file://" + path
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(parsed_response)
 
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(parsed_response)
-
-    # Opening the rendered tiddler in the web browser.
-    webbrowser.open(url)
+        # Opening the rendered tiddler in the web browser.
+        webbrowser.open(url)
 
 
 def server_status():
-    api = tw_api.get_api()
-    if not api:
-        return None
-
-    parsed_response = api.get("/status")
-    return parsed_response
+    with tw_api.API(**kwargs) as api:
+        parsed_response = api.get("/status")
+        return parsed_response
 
 
 def tid_titles(tw_filter, **kwargs):
@@ -176,17 +159,15 @@ def tiddler(tid_title, **kwargs):
     :param tid_title:
     :return: tid
     """
-    api = tw_api.get_api(**kwargs)
-    if not api:
-        raise exceptions.NoAPI()
-    response = api.get(f"/neuro/tiddlers/{tid_title}")
+    with tw_api.API(**kwargs) as api:
+        response = api.get(f"/neuro/tiddlers/{tid_title}")
 
-    if response["status_code"] == 200:
-        return response["parsed"]
-    elif response["status_code"] == 404:
-        raise exceptions.TiddlerDoesNotExist(tid_title)
-    else:
-        raise exceptions.UnhandledStatusCode(response["status_code"])
+        if response["status_code"] == 200:
+            return response["parsed"]
+        elif response["status_code"] == 404:
+            raise exceptions.TiddlerDoesNotExist(tid_title)
+        else:
+            raise exceptions.UnhandledStatusCode(response["status_code"])
 
 
 def tw_fields(fields: list, tw_filter: str, **kwargs):
@@ -196,18 +177,14 @@ def tw_fields(fields: list, tw_filter: str, **kwargs):
     :param tw_filter:
     :return: lod
     """
-    api = tw_api.get_api(**kwargs)
-    if not api:
-        return None
-
-    url = "/neuro/fields.json"
-    params = dict()
-    if fields:
-        params["fields"] = fields
-    if tw_filter:
-        params["filter"] = tw_filter
-    parsed_response = api.get(url, params=params, **kwargs)["parsed"]
-    return parsed_response
+    with tw_api.API(**kwargs) as api:
+        params = dict()
+        if fields:
+            params["fields"] = fields
+        if tw_filter:
+            params["filter"] = tw_filter
+        parsed_response = api.get("/neuro/fields.json", params=params, **kwargs)["parsed"]
+        return parsed_response
 
 
 def tw_index(tw_filter=None, **kwargs):
@@ -222,16 +199,12 @@ def tw_index(tw_filter=None, **kwargs):
     :return:
     :rtype: list
     """
-    api = tw_api.get_api(**kwargs)
-    if not api:
-        return None
-
-    url = "/neuro/index.json"
-    params = dict()
-    if tw_filter:
-        params["filter"] = tw_filter
-    response = api.get(url, params=params)
-    return response["parsed"]
+    with tw_api.API(**kwargs) as api:
+        params = dict()
+        if tw_filter:
+            params["filter"] = tw_filter
+        response = api.get("/neuro/index.json", params=params)
+        return response["parsed"]
 
 
 def wiki(**kwargs):
@@ -239,10 +212,7 @@ def wiki(**kwargs):
     Returns the full wiki html.
     :return:
     """
-    api = tw_api.get_api(**kwargs)
-    if not api:
-        return None
-
-    logging.getLogger(__name__).info(f"Collecting wiki HTML from {api.url}")
-    tw_html = api.get("/")["parsed"]
-    return tw_html
+    with tw_api.API(**kwargs) as api:
+        logging.getLogger(__name__).info(f"Collecting wiki HTML from {api.url}")
+        tw_html = api.get("/")["parsed"]
+        return tw_html

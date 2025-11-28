@@ -10,8 +10,8 @@ from ..helper import create_and_run_wiki_folder
 
 
 kwargs = {
-    "port": os.getenv('TEST_PORT'),
-    "url": os.getenv('URL')
+    "port": os.getenv("TEST_PORT"),
+    "host": os.getenv("HOST")
 }
 
 
@@ -94,7 +94,7 @@ class TestTwGet:
     def test_get_tw_index(self):
         from neuro.tools.tw5api import tw_get
         tw_index = tw_get.tw_index("[all[]]", **kwargs)
-        assert type(tw_index) == list
+        assert type(tw_index) is list
         assert len(tw_index) > 0
         assert all([True if set(d.keys()).issubset({"title", "tmap.id", "tags"}) else False for d in tw_index])
 
@@ -103,7 +103,7 @@ class TestTwGet:
         from neuro.tools.tw5api import tw_get
         fields = ["title", "created"]
         tw_fields = tw_get.tw_fields(fields, "[all[]]", **kwargs)
-        assert type(tw_fields) == list
+        assert type(tw_fields) is list
         assert len(tw_fields) > 0
         assert all([True if set(d.keys()).issubset(set(fields)) else False for d in tw_fields])
 
@@ -114,7 +114,7 @@ class TestTwGet:
         from neuro.tools.tw5api import tw_get
         tid_titles = tw_get.tid_titles("[all[]]", **kwargs)
         assert len(tid_titles) == 32
-        assert type(tid_titles[0]) == str
+        assert type(tid_titles[0]) is str
 
 
 class TestTwPut:
