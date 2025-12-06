@@ -40,6 +40,7 @@ def cli(path, integration, notintegration, local, file, production):
 
     # Get tw5 submodule from local file system or from remote repository
     if local:
+        internal_utils.copy_plugins_and_themes()
         tw5_src = internal_utils.get_path("tw5")
         subprocess.run(["rsync", "-a", "--exclude=tw5/.git", tw5_src, neuro_path, "--delete"])
     else:
