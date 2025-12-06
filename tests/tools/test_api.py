@@ -19,11 +19,16 @@ class TestTwActions:
     @pytest.mark.integration
     def test_merge(self):
         from neuro.tools.tw5api import tw_actions, tw_get
-        r = tw_actions.merge_tiddlers(["merge1", "merge2"], **kwargs)
+        r = tw_actions.merge_tiddlers(["merge1", "merge2", "merge3"], **kwargs)
         assert r.status_code == 204
         assert not tw_get.is_tiddler("merge1", **kwargs)
-        merged_tiddler = tw_get.tiddler("merge2", **kwargs)
-        assert merged_tiddler["text"] == "merge2"
+        assert not tw_get.is_tiddler("merge2", **kwargs)
+        merged_tiddler = tw_get.tiddler("merge3", **kwargs)
+        assert merged_tiddler["text"] == "merge3"
+        assert merged_tiddler["created"] == "2022-02-04T11:55:42.968Z"
+        assert merged_tiddler["merge1"] == "yes"
+        assert merged_tiddler["merge2"] == "yes"
+        assert merged_tiddler["merge3"] == "yes"
 
     @pytest.mark.integration
     def test_rename(self):
@@ -113,7 +118,7 @@ class TestTwGet:
     def test_get_tid_titles(self):
         from neuro.tools.tw5api import tw_get
         tid_titles = tw_get.tid_titles("[all[]]", **kwargs)
-        assert len(tid_titles) == 32
+        assert len(tid_titles) == 21
         assert type(tid_titles[0]) is str
 
 
