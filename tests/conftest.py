@@ -4,6 +4,8 @@ import shutil
 
 from neuro.utils import network_utils, exceptions, config
 
+from .helper import create_and_run_wiki_folder
+
 
 PROCESS: subprocess.Popen
 
@@ -23,15 +25,7 @@ def pytest_sessionstart(session):
 
     if session.config.option.markexpr in ["", "integration"]:
         global PROCESS
-        PROCESS = subprocess.Popen([
-            "node",
-            "tw5/tiddlywiki.js",
-            "tw5/editions/neuro-test",
-            "--listen",
-            f"port={test_port}",
-            "readers=(anon)",
-            "writers=(anon)"
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        PROCESS = create_and_run_wiki_folder("universal", test_port)
 
     network_utils.wait_for_socket(os.getenv("HOST"), test_port)
 
