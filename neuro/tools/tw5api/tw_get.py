@@ -1,10 +1,12 @@
 """
 GET wrapper.
 """
-
+import html
 import logging
 import os
 import webbrowser
+import json
+import html
 
 from neuro.core.tid import NeuroTid, NeuroTids
 from neuro.tools.tw5api import tw_api
@@ -216,3 +218,9 @@ def wiki(**kwargs):
         logging.getLogger(__name__).info(f"Collecting wiki HTML from {api.url}")
         tw_html = api.get("/")["parsed"]
         return tw_html
+
+
+def export_wiki(wiki_path, **kwargs):
+    wiki_html = wiki(**kwargs)
+    with open(wiki_path, "w+", encoding="utf-8") as f:
+        f.write(wiki_html)

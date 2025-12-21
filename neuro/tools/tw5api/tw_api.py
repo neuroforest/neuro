@@ -59,6 +59,7 @@ class API:
         logging.getLogger(__name__).debug(f"Request URL: {full_url}")
         try:
             self.response = self.session.get(url=full_url, params=params)
+            self.response.encoding = "utf-8"
             self.parse()
             return {
                 "parsed": self.parsed_response,
