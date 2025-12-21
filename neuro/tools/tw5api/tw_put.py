@@ -8,47 +8,20 @@ import logging
 from neuro.tools.tw5api import tw_api
 
 
-def fields(tw_fields, **kwargs):
-    """
-    Put fields to existing tiddler.
-    :param tw_fields: dictionary of fields
-    :return:
-    """
-    if "title" not in tw_fields:
-        log.error("Missing field: title")
-        return None
-    else:
-        tid_title = tw_fields.pop("title")
-
-    with tw_api.API(**kwargs) as api:
-        fields_json = json.dumps(tw_fields)
-        response = api.put("/neuro/fields/" + tid_title, data=fields_json)
-        if response.status_code == 204:
-            logging.debug(f"Put fields to '{tid_title}'")
-        else:
-            logging.error(f"Unhandled response status: {response.status_code}")
-            logging.error(
-                f"text: {response.text}\n"
-                f"request: {response.request}"
-                f"reason: {response.reason}")
-
-        return response
-
-
-def tiddler(api_tiddler, **kwargs):
+def tiddler(tw_fields, **kwargs):
     """
     Api tiddler is not even necessary.
-    :param api_tiddler:
+    :param tw_fields: dict, with obligatory key "title"
     :param preserve: preserve existing fields, not changing modified
     :return:
     """
     with tw_api.API(**kwargs) as api:
 
-        tiddler_json = json.dumps(api_tiddler)
-        response = api.put("/neuro/tiddlers/" + api_tiddler["title"],
+        tiddler_json = json.dumps(tw_fields)
+        response = api.put("/neuro/tiddlers/" + tw_fields["title"],
                            data=tiddler_json, params=kwargs.get("params", dict()))
         if response.status_code == 204:
-            logging.debug(f"Put '{api_tiddler['title']}'")
+            logging.debug(f"Put '{tw_fields['title']}'")
         else:
             logging.error(f"Unhandled response status: {response.status_code}")
             logging.error(
