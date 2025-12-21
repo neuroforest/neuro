@@ -1,12 +1,14 @@
 {
-    "description": "NeuroWiki",
+    "description": "NeuroWiki - wiki with Neo4j sync",
     "plugins": [
-        "tiddlywiki/filesystem",
         "neuroforest/core",
         "neuroforest/front",
         "neuroforest/neo4j-syncadaptor"
+        "tiddlywiki/filesystem",
     ],
     "themes": [
+        "neuroforest/basic",
+        "neuroforest/mobile",
         "tiddlywiki/vanilla",
         "tiddlywiki/snowwhite"
     ],

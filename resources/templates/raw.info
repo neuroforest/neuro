@@ -1,8 +1,7 @@
 {
-    "description": "Wiki with filesystem sync",
+    "description": "Raw in-memory wiki",
     "plugins": [
         "tiddlywiki/tiddlyweb",
-        "tiddlywiki/filesystem",
         "neuroforest/core",
         "neuroforest/front"
     ],
