@@ -21,7 +21,7 @@ def copy_plugins_and_themes():
     for theme in json.loads(os.getenv("EXTERNAL_THEMES")):
         theme_source_path = theme["path"]
         theme_target_path = get_path("tw5") + "/themes/" + theme["name"]
-        shutil.rmtree(theme_target_path)
+        shutil.rmtree(theme_target_path, ignore_errors=True)
         shutil.copytree(theme_source_path, theme_target_path)
 
 

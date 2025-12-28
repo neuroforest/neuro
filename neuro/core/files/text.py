@@ -27,7 +27,12 @@ class Text(File):
             self.set()
 
     def __enter__(self):
-        return self
+        try:
+            self.file = open(self.path, self.mode)
+            return self
+        except Exception as e:
+            print(f"Error opening file: {e}")
+            raise
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
@@ -352,7 +357,7 @@ class TextJson(Text):
 class TextTid(Text):
     def __init__(self, path):
         super().__init__(path)
-        self.tiddler = self.to_tiddler()
+        self.fields = self.to_tiddler()
 
     def to_tiddler(self):
         tiddler = dict()

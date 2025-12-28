@@ -40,4 +40,4 @@ markers = [
 
 [tool.setuptools.packages.find]
 include = ["neuro*"]
-exclude = ["build*", "tests*"]
+exclude = ["build*", "tests*", "venv*"]

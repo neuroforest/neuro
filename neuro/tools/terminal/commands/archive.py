@@ -2,7 +2,6 @@
 Archive tiddlers.
 """
 import os
-import shutil
 import sys
 
 import click
