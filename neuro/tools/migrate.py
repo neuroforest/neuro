@@ -4,7 +4,7 @@ import shutil
 import tqdm
 
 from neuro.core.deep import Moment
-from neuro.core.tid import NeuroWF
+from neuro.core.tid import NeuroWF, NeuroTW
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.base import api
 from neuro.utils import config, internal_utils
@@ -42,7 +42,7 @@ def prepare_object(o):
     return o
 
 
-def migrate_wf_to_neo4j(wf_path, port=8099, **kwargs):
+def migrate_wf_to_neo4j(wf_path, port=8222, **kwargs):
     """
     Migrate data from filesystem to Neo4j database.
     :param wf_path:
@@ -70,7 +70,7 @@ def migrate_wf_to_neo4j(wf_path, port=8099, **kwargs):
         print(f"Finished importing {len(tid_titles)} tiddlers")
 
 
-def migrate_neo4j_to_wf(wf_path, port=8099, **kwargs):
+def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
     """
     Migrate data from Neo4j database to a WikiFolder.
     :param wf_path:
@@ -96,3 +96,12 @@ def migrate_neo4j_to_json(json_path):
 
 def migrate_wf_to_json():
     pass
+
+
+def migrate_html_to_wf(html_path, wf_path, port=8222, **kwargs):
+    try:
+        ntw = NeuroTW().from_html(html_path)
+    except AttributeError:
+        ntw = NeuroTW().from_html_legacy(html_path)
+
+    ntw.write_to_wf(wf_path, port=port, **kwargs)
