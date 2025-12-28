@@ -520,7 +520,7 @@ class NeuroWF:
         if tid_folder:
             shutil.copytree(tid_folder, f"{self.wf_path}/tiddlers")
 
-    def open(self):
+    def start(self):
         if self.silent:
             params = {
                 "stdout": subprocess.DEVNULL,
@@ -539,3 +539,5 @@ class NeuroWF:
         ], **params)
 
         network_utils.wait_for_socket(self.url, self.port)
+
+        return self.process

@@ -94,9 +94,13 @@ def migrate_neo4j_to_json(json_path):
         json.dump(objects, f)
 
 
-def migrate_wf_to_json():
-    pass
-
+def migrate_wf_to_json(wf_path, json_path, port=8222, **kwargs):
+    wf = NeuroWF(wf_path, port=port, silent=True, **kwargs)
+    process = wf.start()
+    tiddlers = tw_get.all_tiddlers(port=port, params={"exclude": ","})
+    with open(json_path, "w+") as f:
+        json.dump(tiddlers, f)
+    process.kill()
 
 def migrate_html_to_wf(html_path, wf_path, port=8222, **kwargs):
     try:

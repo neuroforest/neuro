@@ -14,7 +14,7 @@ from neuro.core.data.dict import DictUtils
 
 
 class API:
-    def __init__(self, port=None, host=None):
+    def __init__(self, port=None, host=None, **kwargs):
         self.port = port or os.getenv("PORT")
         self.host = host or os.getenv("HOST")
         if self.port is None:
