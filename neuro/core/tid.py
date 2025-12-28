@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import time
 
+import tqdm
 from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
 import requests
@@ -332,7 +333,7 @@ class NeuroTids(list):
         super().remove(neuro_tid)
         del self.object_index[tid_title]
 
-    def write_dir(self, dir_path):
+    def write_tiddlers(self, dir_path):
         """
         Write NeuroTids to tid text files.
         :param dir_path: absolute pathname to directory
@@ -362,15 +363,20 @@ class NeuroTW(TextHtml):
     """
     Wrapper for TiddlyWiki HTML file.
     """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.neuro_tids = NeuroTids()
 
     def __contains__(self, tid_title):
         return self.neuro_tids.__contains__(tid_title)
 
     @classmethod
-    def from_html(cls, html):
+    def from_html_legacy(cls, html):
+        """
+        For HTML files up to and including TiddlyWiki v5.1.23.
+        :param html:
+        :return:
+        """
         if isinstance(html, str):
             with open(html) as f:
                 tw_soup = Soup(f, "html.parser")
@@ -381,7 +387,7 @@ class NeuroTW(TextHtml):
         else:
             raise TypeError(f"HTML type not supported: {type(html)}")
 
-        neuro_tw = cls()
+        neuro_tw = cls(html)
 
         # Collect tiddlers
         store_area_div = tw_soup.find(id="storeArea")
@@ -391,6 +397,48 @@ class NeuroTW(TextHtml):
             neuro_tw.neuro_tids.append(neuro_tid)
 
         return neuro_tw
+
+    @classmethod
+    def from_html(cls, html):
+        """
+        “For HTML files starting from TiddlyWiki v5.2.0 and later.”
+        :param html:
+        :return:
+        """
+        with open(html) as f:
+            tw_soup = Soup(f, "html.parser")
+
+        neuro_tw = cls(html)
+
+        store_area_json = tw_soup.find('script', class_='tiddlywiki-tiddler-store').text
+        json_object = json.loads(store_area_json)
+        neuro_tids = NeuroTids()
+        for tiddler in tqdm.tqdm(json_object):
+            neuro_tid = NeuroTid.from_tiddler(tiddler)
+            neuro_tids.append(neuro_tid)
+        neuro_tw.neuro_tids.extend(neuro_tids)
+
+        return neuro_tw
+
+    def write_to_wf(self, wf_path, exists=False, **kwargs):
+        """
+        Write NeuroTW to WikiFolder.
+        :return:
+        """
+        # Create WikiFolder
+        neuro_wf = NeuroWF(wf_path, exists=exists, **kwargs)
+        p = subprocess.Popen([
+            "node",
+            neuro_wf.tw5,
+            wf_path,
+            "--load",
+            self.path
+        ], stdout=subprocess.DEVNULL)
+        p.wait()
+        p.kill()
+
+    def write_tiddlers(self, wf_path):
+        self.neuro_tids.write_tiddlers(wf_path)
 
 
 class NeuroWF:
@@ -404,7 +452,7 @@ class NeuroWF:
         :param exists: should the WikiFolder already exist
         :param tw_info_template: template used for creating WF
         :param tw5: path to the tiddlywiki.js file
-        :param silent: supress stduout
+        :param silent: supress stdout
         """
         self.process: subprocess.Popen
         self.wf_path = wf_path

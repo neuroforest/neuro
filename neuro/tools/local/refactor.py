@@ -38,22 +38,3 @@ def update_tiddlers(old, new, tiddlers_path):
             f.write(new_text)
 
     print(f"{style.SUCCESS} {len(fts_lines)} tiddlers affected")
-
-
-def transform(html_wiki, wiki_folder, tw5="tw5/tiddlywiki.js"):
-    """
-    Convert HTML wiki to wikifolder.
-    :param html_wiki:
-    :param wiki_folder: path to established wikifolder with tiddlywiki.info file
-    :param tw5:
-    :return:
-    """
-    p = subprocess.Popen([
-        "node",
-        tw5,
-        wiki_folder,
-        "--load",
-        html_wiki
-        ], stdout=subprocess.DEVNULL)
-    p.wait()
-    p.kill()
