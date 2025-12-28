@@ -12,6 +12,7 @@ dependencies = [
     "deepdiff>=6.7.1",
     "killport>=1.2.0",
     "lxml>=5.1.0",
+    "neo4j>=6.0.3",
     "pillow>=10.2.0",
     "psutil>=5.9.7",
     "pyexiv2>=2.15.3",
