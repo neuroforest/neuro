@@ -44,11 +44,11 @@ def get_test_file(file_name, exists=True, multi=False):
         elif not file_paths:
             logging.error(f"Test data file not found: {file_name}")
             logging.error(f"Test data dir: {test_data_dir}")
-            return False
+            raise FileNotFoundError
         else:
             if not multi:
                 logging.error(f"Test data file name not specific enough, found {len(file_paths)}")
-                return False
+                raise FileNotFoundError
             else:
                 return file_paths
     else:
@@ -100,7 +100,7 @@ def create_and_run_wiki_folder(tiddlers_name, port):
     try:
         tiddlers_folder = get_test_file(f"input/tiddlers/{tiddlers_name}")
         shutil.copytree(tiddlers_folder, f"{output_wiki_folder_path}/tiddlers")
-    except NotADirectoryError:
+    except FileNotFoundError:
         pass
 
     process = run_wiki_folder(output_wiki_folder_path, port)

@@ -16,11 +16,11 @@ class TestDictUtils:
 
     def test_display_string(self):
         from neuro.core.data.dict import DictUtils
-        self.get_test_dict("input/text.json")
+        self.get_test_dict("input/files/text.json")
         display_string = DictUtils.represent(self.test_dict, display=False)
 
         print(display_string)
-        result_path = get_test_file("results/display-string.txt")
+        result_path = get_test_file("results/files/display-string.txt")
         with open(result_path) as f:
             result_text = f.read()
 
@@ -59,19 +59,19 @@ class TestDictUtils:
 
     def test_sort_alpha(self):
         from neuro.core.data.dict import DictUtils
-        self.get_test_dict("input/text.json")
+        self.get_test_dict("input/files/text.json")
         sorted_dict = DictUtils.sort_alpha(self.test_dict)
         assert next(iter(sorted_dict)) == "books view split pane state"
 
     def test_remove_keys(self):
         from neuro.core.data.dict import DictUtils
-        self.get_test_dict("input/text.json")
+        self.get_test_dict("input/files/text.json")
         self.test_dict = DictUtils.remove_keys(self.test_dict, ["kind"])
         assert "kind" not in self.test_dict
 
     def test_lod_to_lol(self):
         from neuro.core.data.dict import DictUtils
-        self.get_test_dict("input/lod.json")
+        self.get_test_dict("input/files/lod.json")
         lol = DictUtils.lod_to_lol(self.test_dict)
         assert lol[0][2] == "g.lat"
         assert lol[2][1] == 13.7479
