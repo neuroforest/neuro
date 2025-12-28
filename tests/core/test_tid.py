@@ -8,14 +8,14 @@ import pytest
 
 from neuro.utils import exceptions
 
-from ..helper import get_test_file, get_path
+from ..helper import get_test_file, get_path, create_and_run_wiki_folder
 
 
 class TestNeuroTid:
     @staticmethod
     def get_test_neuro_tid():
         from neuro.core.tid import NeuroTid
-        tiddler_html_path = get_test_file("input/tiddler_html.txt")
+        tiddler_html_path = get_test_file("input/files/tiddler_html.txt")
         with open(tiddler_html_path) as f:
             tiddler_html = f.read()
         neuro_tid = NeuroTid.from_html(tiddler_html)
@@ -48,7 +48,7 @@ class TestNeuroTid:
 
     def test_from_tiddler(self):
         from neuro.core.tid import NeuroTid
-        tiddler_json = get_test_file("input/tiddler.json")
+        tiddler_json = get_test_file("input/files/tiddler.json")
         with open(tiddler_json) as f:
             tiddler = json.load(f)
 
@@ -90,7 +90,7 @@ class TestNeuroTid:
     def test_to_text(self):
         neuro_tid = self.get_test_neuro_tid()
         text = neuro_tid.to_text(neuro_tid.fields)
-        result_text_path = get_test_file("results/tiddler_text.txt")
+        result_text_path = get_test_file("results/files/tiddler_text.txt")
         with open(result_text_path) as f:
             result_text = f.read()
 
@@ -150,25 +150,26 @@ class TestNeuroTids:
 class TestNeuroTW:
     def test_from_html(self):
         from neuro.core.tid import NeuroTW
-        tw_html_path = get_test_file("input/tw.html")
+        tw_html_path = get_test_file("input/wikis/tw5.html")
 
         neuro_tw = NeuroTW.from_html(tw_html_path)
-        assert len(neuro_tw.neuro_tids) == 7
+        assert len(neuro_tw.neuro_tids) == 9
         assert neuro_tw.__contains__("$:/isEncrypted")
-        assert neuro_tw.neuro_tids.object_index["$:/isEncrypted"].fields["text"] == "\nno\n"
+        assert neuro_tw.neuro_tids.object_index["$:/isEncrypted"].fields["text"] == "no"
 
 
 class TestNeuroWF:
     def test_init(self):
         from neuro.core.tid import NeuroWF
-        wf_path = get_test_file("input/wikifolder")
-        wf_path_nonexistent = get_test_file("output/nonexistent", exists=False)
+        process = create_and_run_wiki_folder("init",8099)
+        process.kill()
+
+        wf_path = get_test_file("output/wf-init")
         wf = NeuroWF(wf_path)
         assert isinstance(wf, NeuroWF)
 
+        wf_path_nonexistent = get_test_file("output/wf-init-nonexistent", exists=False)
         with pytest.raises(exceptions.FileNotWiki):
             NeuroWF(wf_path_nonexistent)
-
-        tw_info_template = get_path("resources/templates/tiddlywiki.info")
-        wf_nonexistent = NeuroWF(wf_path_nonexistent, exists=False, tw_info_template=tw_info_template)
+        wf_nonexistent = NeuroWF(wf_path_nonexistent, exists=False)
         assert isinstance(wf_nonexistent, NeuroWF)
