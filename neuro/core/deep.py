@@ -205,6 +205,7 @@ class File(NeuroObject):
         self.owner = str()
         self.file = None
         self.text = None
+        self.name = os.path.basename(self.path)
         if os.path.isfile(self.path):
             self.set_basic(**kwargs)
 
@@ -231,7 +232,7 @@ class File(NeuroObject):
         print(self.__repr__())
 
     def display_mtime(self):
-        print("The file {} was last modified:  {}".format(self.get_name(), self.mtime))
+        print("The file {} was last modified:  {}".format(self.name, self.mtime))
 
     def get_data(self):
         """Obtain the file inode."""
@@ -247,12 +248,6 @@ class File(NeuroObject):
         mime = magic.Magic(mime=True)
         file_type = mime.from_file(self.path)
         return MIME(file_type)
-
-    def get_name(self, extension=True):
-        if extension:
-            return os.path.split(self.path)[-1]
-        else:
-            return os.path.splitext(self.path)[0].split("/")[-1]
 
     def get_size(self):
         """

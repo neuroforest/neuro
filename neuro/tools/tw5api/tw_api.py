@@ -24,8 +24,8 @@ class API:
             )
         if self.host is None:
             raise exceptions.NoAPI(
-                "API URL is required. Pass it via the 'url' argument"
-                " or set the 'URL' environment variable."
+                "API HOST is required. Pass it via the 'host' argument"
+                " or set the 'HOST' environment variable."
             )
         self.url = f"http://{self.host}:{self.port}"
         self.response = requests.Response()
