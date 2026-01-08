@@ -12,6 +12,16 @@ def close_all(**kwargs):
         return response
 
 
+def load(title):
+    with tw_api.API() as api:
+        response = api.put("/neuro/action/load", params={"title": title})
+        if response.status_code == 204:
+            print(style.SUCCESS, response.reason)
+        else:
+            print(style.FAIL, response.reason)
+        return response
+
+
 def merge_tiddlers(title_list, **kwargs):
     with tw_api.API(**kwargs) as api:
         params = {
