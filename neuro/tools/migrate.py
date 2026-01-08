@@ -89,7 +89,7 @@ def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
 
 
 def migrate_neo4j_to_json(json_path):
-    objects = api.get_all_objects()
+    objects = api.get_all_tiddlers()
     with open(json_path, "w+") as f:
         json.dump(objects, f)
 

@@ -80,20 +80,20 @@ class NeuroBase:
             self.driver.close()
 
 
-def get_all_objects(**kwargs):
+def get_all_tiddlers(**kwargs):
     """
-    Run a Cypher query and return the objects as a list of dicts.
+    Run a Cypher query and return the tiddlers as a list of dicts.
     """
     nb = NeuroBase(**kwargs)
     try:
         nb.driver.verify_connectivity()
-        query = "MATCH (o:Object) RETURN o;"
+        query = "MATCH (t:Tiddler) RETURN t;"
         result = nb.get_data(query)
-        objects = [next(iter(record.values())) for record in result]
+        tiddlers = [next(iter(record.values())) for record in result]
     except Exception as e:
         print(f"Error connecting to Neo4j: {e}")
         return None
     finally:
         nb.close()
 
-    return objects
+    return tiddlers
