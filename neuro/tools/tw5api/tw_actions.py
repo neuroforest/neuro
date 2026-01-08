@@ -58,6 +58,16 @@ def rename_tiddler(old_title, new_title, **kwargs):
         return response
 
 
+def render(tiddler):
+    with tw_api.API() as api:
+        response = api.put("/neuro/action/render", params=tiddler)
+        if response.status_code == 204:
+            print(style.SUCCESS, response.reason)
+        else:
+            print(style.FAIL, response.reason)
+        return response
+
+
 def replace_text(old_text, new_text, tw_filter="", **kwargs):
     with tw_api.API(**kwargs) as api:
         params = {
