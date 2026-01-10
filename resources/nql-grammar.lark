@@ -1,0 +1,14 @@
+?start: statement
+
+?statement: ontology
+
+ontology: "ONTOLOGY" type properties
+
+properties: "{" pair ("," pair)* "}"
+pair:       CNAME ":" ESCAPED_STRING
+type:       CNAME
+
+%import common.CNAME
+%import common.ESCAPED_STRING
+%import common.WS
+%ignore WS
