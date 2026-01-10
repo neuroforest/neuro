@@ -20,8 +20,6 @@ def session():
     - Alt+Enter: send query
     - Ctrl+C: clear current input
     - Ctrl+D: exit session
-
-    :return:
     """
     history_file = FileHistory(os.path.expanduser("~/.nql_history"))
     s = PromptSession(history=history_file)
