@@ -36,7 +36,7 @@ def print_time_from_last_archive():
     month_path = max(Dir(tiddler_archive_path).get_children())
     timestamp_path = max(Dir(month_path).get_children())
     last_timestamp = File(timestamp_path).ctime
-    current_moment = Moment(form="now")
+    current_moment = Moment()
     second_passed = current_moment - last_timestamp
     time_string = time_utils.get_time_string(second_passed)
     print(f"Time since last archive: {style.BOLD}{time_string}{style.RESET}")

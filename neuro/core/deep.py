@@ -35,6 +35,9 @@ class Moment(NeuroObject):
         :param moment: date and time input
         :param form: form of moment input
         """
+        if not moment:
+            moment = time.time()
+
         if form == "unix":
             self.unix = moment
         elif form == "utc":
@@ -118,6 +121,9 @@ class Moment(NeuroObject):
 
     def to_iso(self):
         return self.to_format("%Y-%m-%dT%H:%M:%S.%f")
+
+    def to_iso_z(self):
+        return self.to_format("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 class GeoLocation(NeuroObject):
@@ -204,7 +210,7 @@ class File(NeuroObject):
     def __init__(self, path="", **kwargs):
         self.path = path
         self.mime = str()
-        self.atime, self.ctime, self.mtime = tuple(Moment(form="now") for i in range(3))
+        self.atime, self.ctime, self.mtime = tuple(Moment() for i in range(3))
         self.inode = int()
         self.size = int()
         self.owner = str()
