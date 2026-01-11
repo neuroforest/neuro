@@ -20,7 +20,12 @@ from neuro.utils import oop_utils, time_utils
 
 
 class NeuroObject(object):
-    pass
+    @staticmethod
+    def generate_neuro_id():
+        """
+        Generate NeuroID.
+        """
+        return uuid.uuid4().__str__()
 
 
 class Moment(NeuroObject):
@@ -484,9 +489,7 @@ class NeuroNode(NeuroObject):
     and the NeuroForest platform.
     """
     def __init__(self, **kwargs):
-        # Set up the data infrastructure.
-        self.uuid = kwargs.get("uuid", str())
-        self.set_id()
+        self.uuid = kwargs.get("uuid", self.generate_neuro_id())
         self.edges = kwargs.get("edges", Edges())
 
     def __eq__(self, other):
@@ -516,13 +519,6 @@ class NeuroNode(NeuroObject):
 
     def __str__(self):
         return str(self.uuid)
-
-    def set_id(self):
-        """
-        Obtains and configures the neuro id. Currently using the uuid v4.
-        """
-        if not self.uuid:
-            self.uuid = uuid.uuid4().__str__()
 
     def to_dict(self):
         attrs = oop_utils.get_attr_keys(self)
