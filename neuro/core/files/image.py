@@ -129,7 +129,7 @@ class Image(File):
         elif self.img_exif:
             moment = Moment.from_string(self.img_exif.date_time, "%d.%m.%Y %H:%M:%S")
         else:
-            moment = Moment(form="now")
+            moment = Moment()
 
         # TODO: data types not correct
         if moment:
