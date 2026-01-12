@@ -1,3 +1,7 @@
+"""
+NeuroWiki migration tools
+"""
+
 import json
 import shutil
 
