@@ -35,13 +35,15 @@ class DictUtils:
         return d
 
     @staticmethod
-    def represent(d, level=0, display=True, sort=True):
+    def represent(d, level=0, display=True, sort=True, ignore_list=False):
         """
         Returns a string used for dictionary representation.
         This is a recursive function.
         :param d: dictionary
         :param level: level of indent
         :param display: print the representation string
+        :param sort:
+        :param ignore_list:
         """
         representation_string = str()
         # Determine the size f key values.
@@ -63,10 +65,13 @@ class DictUtils:
                 representation_string += f"{level * '    '}{pretty_key}\n"
                 representation_string += DictUtils.represent(val, level=level + 1, display=False)
             elif type(val) is list:
-                representation_string += f"{level * '    '}{pretty_key}[\n"
-                for i in val:
-                    representation_string += f"{(level + 1) * '    '}{i}\n"
-                representation_string += f"{level * '    '}]\n"
+                if ignore_list:
+                    representation_string += f"{level * '    '}{pretty_key}{val}\n"
+                else:
+                    representation_string += f"{level * '    '}{pretty_key}[\n"
+                    for i in val:
+                        representation_string += f"{(level + 1) * '    '}{i}\n"
+                    representation_string += f"{level * '    '}]\n"
             else:
                 representation_string += f"{level * '    '}{pretty_key}{val}\n"
 
