@@ -12,7 +12,14 @@ property_key:      CNAME | ESCAPED_KEY
 relationship_node: "[:" label [properties]"]"
 
 ESCAPED_KEY:    /`[^`]+`/
-ONTOLOGY_TYPE:  "object" | "relationship" | "property" | "set_property" | "set_relationship"
+ONTOLOGY_TYPE: "node"
+             | "relationship"
+             | "property"
+             | "require_property"
+             | "set_property"
+             | "set_relationship"
+             | "set_subclass"
+             | "info"
 
 %import common.CNAME
 %import common.ESCAPED_STRING
