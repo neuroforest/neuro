@@ -15,11 +15,13 @@ class NqlParser(Lark):
 class NqlTransformer(Transformer):
     @staticmethod
     def ontology(children):
-        ont_type, node = children
+        ont_type, node, relationship_node, target_node = children
         return {
             "type": ont_type.value,
             "label": node["label"],
-            "properties": node["properties"]
+            "properties": node["properties"],
+            "relationship_node": relationship_node,
+            "target_node": target_node
         }
 
     @staticmethod
@@ -45,6 +47,13 @@ class NqlTransformer(Transformer):
         key = str(items[0])
         val = str(items[1]).strip('"')
         return key, val
+
+    @staticmethod
+    def relationship_node(items):
+        return {
+            "label": items[0],
+            "properties": items[1] if items[1] else dict()
+        }
 
 
 class NqlReconstructor(Reconstructor):

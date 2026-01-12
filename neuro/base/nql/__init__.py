@@ -6,11 +6,9 @@ import os
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
-from lark import Lark
 
 import neuro.base.nql.handlers as handlers
 from neuro.base.nql.components import NqlParser
-from neuro.utils import internal_utils
 
 
 def session():
