@@ -2,16 +2,17 @@
 
 ?statement: ontology
 
-ontology: "ONTOLOGY" ONTOLOGY_TYPE ontology_node
+ontology: "ONTOLOGY" ONTOLOGY_TYPE ontology_node ["-" relationship_node] ["-" ontology_node]
 
-label:          CNAME
-ontology_node:  "(:" label [properties] ")"
-pair:           property_key ":" ESCAPED_STRING
-properties:     "{" [pair ("," pair)*] "}"
-property_key:   CNAME | ESCAPED_KEY
+label:             CNAME | ESCAPED_KEY
+ontology_node:     "(:" label [properties] ")"
+pair:              property_key ":" ESCAPED_STRING
+properties:        "{" [pair ("," pair)*] "}"
+property_key:      CNAME | ESCAPED_KEY
+relationship_node: "[:" label [properties]"]"
 
 ESCAPED_KEY:    /`[^`]+`/
-ONTOLOGY_TYPE:  "object" | "relationship" | "property"
+ONTOLOGY_TYPE:  "object" | "relationship" | "property" | "set_property" | "set_relationship"
 
 %import common.CNAME
 %import common.ESCAPED_STRING
