@@ -32,6 +32,9 @@ class Container:
             return False
 
     def backup(self):
+        """
+        Backup docker container and associated data.
+        """
         if not self.container_name:
             raise ValueError("Container name not provided.")
         else:
@@ -67,7 +70,10 @@ class Container:
             self.container_name,
             "--format", "{{json .Mounts}}"
         ], stdout=subprocess.PIPE)
-        mounts = json.loads(result.stdout)
+        try:
+            mounts = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            raise Exception(f"Container not found: {self.container_name}")
         data_mount = dict()
         for mount in mounts:
             if mount["Destination"] == "/data":
@@ -87,6 +93,7 @@ class Container:
             "cd /from && cp -a . /to"
         ])
         print(f"Copied /data volume to {data_backup_volume_name}")
+        self.dirty["volume"].append(data_backup_volume_name)
 
         # Verify
         result = subprocess.run([
@@ -115,16 +122,18 @@ class Container:
             "commit",
             self.container_name,
             container_backup_name
-        ])
+        ], stdout=subprocess.DEVNULL)
         print(f"Saved {self.container_name} to {container_backup_name}")
 
         # Verify
         result = subprocess.run([
             "docker",
-            "images"
+            "images",
+            "--format", "{{.Repository}}:{{.Tag}}"
         ], stdout=subprocess.PIPE)
-        if self.instant not in result.stdout.decode():
+        if f"{self.container_name}:{self.instant}" not in result.stdout.decode().strip().split("\n"):
             raise Exception(f"Backup error: image {container_backup_name} not found.")
+        self.dirty["image"].append(container_backup_name)
 
         # Archive container
         subprocess.run([
