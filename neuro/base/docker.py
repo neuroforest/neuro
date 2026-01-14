@@ -13,8 +13,8 @@ from neuro.utils import config, internal_utils, time_utils
 
 
 class Container:
-    def __init__(self, container_name=None, archive=None):
-        self.container_name = container_name
+    def __init__(self, name=None, archive=None):
+        self.name = name
         self.instant = str()
         self.archive = archive or internal_utils.get_path("archive") + "/base"
         self.backup_location = str()
@@ -35,12 +35,12 @@ class Container:
         """
         Backup docker container and associated data.
         """
-        if not self.container_name:
+        if not self.name:
             raise ValueError("Container name not provided.")
         else:
-            print(f"Starting backup of {self.container_name}")
+            print(f"Starting backup of {self.name}")
         self.instant = time_utils.MOMENT_4
-        self.backup_location = f"{self.archive}/{self.container_name}-{self.instant}"
+        self.backup_location = f"{self.archive}/{self.name}-{self.instant}"
         os.makedirs(self.backup_location)
         start_time = time.time()
         self.backup_data()
@@ -54,9 +54,9 @@ class Container:
         valid_backups = list()
         for b in backups:
             if self.is_valid_backup(b):
-                if self.container_name and self.container_name in b.rsplit("/", 1)[1]:
+                if self.name and self.name in b.rsplit("/", 1)[1]:
                     valid_backups.append(b)
-                elif not self.container_name:
+                elif not self.name:
                     valid_backups.append(b)
 
         for b in valid_backups:
@@ -67,13 +67,13 @@ class Container:
         result = subprocess.run([
             "docker",
             "inspect",
-            self.container_name,
+            self.name,
             "--format", "{{json .Mounts}}"
         ], stdout=subprocess.PIPE)
         try:
             mounts = json.loads(result.stdout)
         except json.JSONDecodeError:
-            raise Exception(f"Container not found: {self.container_name}")
+            raise Exception(f"Container not found: {self.name}")
         data_mount = dict()
         for mount in mounts:
             if mount["Destination"] == "/data":
@@ -83,7 +83,7 @@ class Container:
         print(f"Found /data volume: {data_mount_id}")
 
         # Copy /data volume to an independent volume
-        data_backup_volume_name = f"{self.container_name}-{self.instant}"
+        data_backup_volume_name = f"{self.name}-{self.instant}"
         subprocess.run([
             "docker",
             "run", "--rm",
@@ -116,14 +116,14 @@ class Container:
         print(f"Archived /data to {archive_location}")
 
     def backup_container(self):
-        container_backup_name = f"{self.container_name}:{self.instant}"
+        backup_name = f"{self.name}:{self.instant}"
         subprocess.run([
             "docker",
             "commit",
-            self.container_name,
-            container_backup_name
+            self.name,
+            backup_name
         ], stdout=subprocess.DEVNULL)
-        print(f"Saved {self.container_name} to {container_backup_name}")
+        print(f"Saved {self.name} to {backup_name}")
 
         # Verify
         result = subprocess.run([
@@ -131,15 +131,15 @@ class Container:
             "images",
             "--format", "{{.Repository}}:{{.Tag}}"
         ], stdout=subprocess.PIPE)
-        if f"{self.container_name}:{self.instant}" not in result.stdout.decode().strip().split("\n"):
-            raise Exception(f"Backup error: image {container_backup_name} not found.")
-        self.dirty["image"].append(container_backup_name)
+        if f"{self.name}:{self.instant}" not in result.stdout.decode().strip().split("\n"):
+            raise Exception(f"Backup error: image {backup_name} not found.")
+        self.dirty["image"].append(backup_name)
 
         # Archive container
         subprocess.run([
             "docker",
             "save",
-            container_backup_name,
+            backup_name,
             "-o", f"{self.backup_location}/container.tar"
         ])
 
@@ -153,14 +153,14 @@ class Container:
             else:
                 raise ValueError(f"Backup location invalid: {backup_location}")
 
-        self.container_name, self.instant = self.backup_location.rsplit("/", 1)[1].split("-", 1)
+        self.name, self.instant = self.backup_location.rsplit("/", 1)[1].split("-", 1)
 
         self.restore_data()
         self.restore_container()
 
     def restore_data(self):
         print("Restoring data")
-        volume_name = f"{self.container_name}-{self.instant}"
+        volume_name = f"{self.name}-{self.instant}"
         subprocess.run([
             "docker",
             "run", "--rm",
@@ -178,11 +178,11 @@ class Container:
             "load",
             "-i", f"{self.backup_location}/container.tar"
         ])
-        self.dirty["image"].append(f"{self.container_name}:{self.instant}")
+        self.dirty["image"].append(f"{self.name}:{self.instant}")
 
     def run_restored_neo4j(self, neo4j_http_port=7474, neo4j_bolt_port=7687, neo4j_auth="none"):
         print("Running container")
-        container_full_name = f"{self.container_name}-{self.instant}"
+        container_full_name = f"{self.name}-{self.instant}"
         subprocess.run([
             "docker",
             "run",
@@ -190,7 +190,7 @@ class Container:
             "-p", f"{neo4j_http_port}:7474", "-p", f"{neo4j_bolt_port}:7687",
             "-e", f"NEO4J_AUTH={neo4j_auth}",
             "-v", f"{container_full_name}:/data",
-            f"{self.container_name}:{self.instant}"
+            f"{self.name}:{self.instant}"
         ])
         self.dirty["container"].append(container_full_name)
 
