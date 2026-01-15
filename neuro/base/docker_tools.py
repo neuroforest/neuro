@@ -79,7 +79,7 @@ class Container:
             if mount["Destination"] == "/data":
                 data_mount = mount
                 break
-        data_mount_id = data_mount['Name']
+        data_mount_id = data_mount["Name"]
         print(f"Found /data volume: {data_mount_id}")
 
         # Copy /data volume to an independent volume
