@@ -7,6 +7,8 @@ import os
 import subprocess
 import time
 
+import docker
+
 from neuro.core.deep import Dir
 from neuro.tools.terminal import style
 from neuro.utils import config, internal_utils, time_utils
@@ -225,3 +227,22 @@ class Container:
                     "rm",
                     volume
                 ])
+
+
+def rename_volume(old_volume, new_volume):
+    client = docker.from_env()
+
+    volumes = client.volumes.list()
+    assert any(v.name == old_volume for v in volumes), f"Volume not found: {old_volume}"
+    assert not any(v.name == new_volume for v in volumes), f"Volume already exists: {new_volume}"
+
+    client.volumes.create(name=new_volume)
+    client.containers.run(
+        "alpine",
+        command="sh -c 'cp -av /old/. /new/'",
+        volumes={
+            old_volume: {"bind": "/old", "mode": "ro"},
+            new_volume: {"bind": "/new", "mode": "rw"}
+        },
+        remove=True
+    )
