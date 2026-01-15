@@ -20,7 +20,8 @@ def session():
     - Ctrl+C: clear current input
     - Ctrl+D: exit session
     """
-    history_file = FileHistory(os.path.expanduser("~/.nql_history"))
+    nql_history_path = os.getenv("NQL_HISTORY", os.path.expanduser("~/.nql_history"))
+    history_file = FileHistory(nql_history_path)
     s = PromptSession(history=history_file)
     while True:
         try:
