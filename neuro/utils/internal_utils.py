@@ -38,14 +38,14 @@ def get_path(keyword):
         "desktop": os.getenv("DESKTOP"),
         "neuro": os.getenv("NEURO"),
         "plugins": f"{os.getenv('TW5')}/plugins",
-        "resources": f"{os.getenv('NEURO')}/resources",
-        "templates": f"{os.getenv('NEURO')}/resources/templates",
+        "resources": f"{os.getenv('RESOURCES')}",
+        "templates": f"{os.getenv('RESOURCES')}/templates",
         "tests": f"{os.getenv('NEURO')}/tests",
         "themes": f"{os.getenv('tw5')}/themes",
         "tiddlers": f"{os.getenv('STORAGE')}/tiddlers",
         "tiddlywiki.js": f"{os.getenv("TW5")}/tiddlywiki.js",
         "tw5": os.getenv("TW5"),
-        "wd_queries": f"{os.getenv('NEURO')}/resources/queries"
+        "wd_queries": f"{os.getenv('RESOURCES')}/queries"
     }
 
     if keyword not in keyword_index:
