@@ -8,7 +8,7 @@ import shutil
 import tqdm
 
 from neuro.core import Moment
-from neuro.core.tid import WikiFolder, NeuroTW
+from neuro.core.tid import WikiFolder, TiddlywikiHtml
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.base.api import nb_get
 from neuro.utils import config, internal_utils
@@ -108,8 +108,8 @@ def migrate_wf_to_json(wf_path, json_path, port=8222, **kwargs):
 
 def migrate_html_to_wf(html_path, wf_path, port=8222, **kwargs):
     try:
-        ntw = NeuroTW().from_html(html_path)
+        ntw = TiddlywikiHtml().from_html(html_path)
     except AttributeError:
-        ntw = NeuroTW().from_html_legacy(html_path)
+        ntw = TiddlywikiHtml().from_html_legacy(html_path)
 
     ntw.write_to_wf(wf_path, port=port, **kwargs)
