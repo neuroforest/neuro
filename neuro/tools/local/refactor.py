@@ -1,13 +1,11 @@
 """
 Refactor local directories and update the wiki accordingly.
 """
-import json
+
 import logging
 import os
 import shlex
-import subprocess
 
-from neuro.core.deep import Dir, File
 from neuro.tools.terminal import style
 
 logging.basicConfig(level=logging.INFO)

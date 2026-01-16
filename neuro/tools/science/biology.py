@@ -4,7 +4,7 @@ Biology tools.
 import logging
 import os
 
-from neuro.core.deep import File
+from neuro.core import File
 from neuro.tools.tw5api import tw_get
 
 

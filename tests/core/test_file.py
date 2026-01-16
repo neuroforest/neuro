@@ -7,7 +7,7 @@ from ..helper import get_test_file
 
 class TestFileUtils:
     def test_are_identical(self):
-        from neuro.core.files.file import FileUtils
+        from neuro.core.file.file import FileUtils
         file_1 = get_test_file("input/files/text.txt")
         file_2 = get_test_file("input/files/text_identical.txt")
         file_3 = get_test_file("input/files/text.json")

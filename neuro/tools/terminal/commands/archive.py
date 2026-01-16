@@ -11,7 +11,7 @@ from neuro.tools.terminal import style, components
 from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.terminal.commands import qa, local
 from neuro.utils import internal_utils, time_utils
-from neuro.core.deep import Dir, Moment, File
+from neuro.core import Dir, File, Moment
 from neuro.tools import migrate
 
 

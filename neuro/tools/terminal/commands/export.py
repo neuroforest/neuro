@@ -6,7 +6,7 @@ import re
 
 import click
 
-from neuro.core.files.text import TextCsv
+from neuro.core.file.text import TextCsv
 from neuro.tools.tw5api import tw_get
 from neuro.tools.terminal.cli import pass_environment
 

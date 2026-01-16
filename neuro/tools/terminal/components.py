@@ -2,7 +2,7 @@
 General terminal interaction components.
 """
 
-from neuro.core.files.text import Text
+from neuro.core.file.text import Text
 from neuro.tools.terminal import style
 
 

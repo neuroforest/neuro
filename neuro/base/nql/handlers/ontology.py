@@ -1,4 +1,4 @@
-from neuro.core.deep import NeuroNode, Moment
+from neuro.core import NeuroNode, Moment
 from neuro.base.api import NeuroBase
 from neuro.base.nql.components import NqlTransformer, NqlGenerator
 from neuro.tools.terminal import style

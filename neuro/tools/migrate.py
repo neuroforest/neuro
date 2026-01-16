@@ -7,7 +7,7 @@ import shutil
 
 import tqdm
 
-from neuro.core.deep import Moment
+from neuro.core import Moment
 from neuro.core.tid import NeuroWF, NeuroTW
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.base.api import nb_get

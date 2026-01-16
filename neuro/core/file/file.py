@@ -1,156 +1,15 @@
-"""
-The deepest objects upon which the platform relies.
-"""
-
-import datetime
+import filecmp
 import glob
+import itertools
 import logging
+import magic
 import math
 import os
 import pathlib
 import shutil
-import time
-import uuid
 
-import magic
-import pytz
-
-from neuro.core.data.dict import DictUtils
-from neuro.utils import oop_utils, time_utils
-
-
-class NeuroObject(object):
-    pass
-
-
-class Moment(NeuroObject):
-    def __init__(self, moment=None, form="unix"):
-        """
-        Initialized the Moment object and determines unix time.
-        :param moment: date and time input
-        :param form: form of moment input
-        """
-        if not moment:
-            moment = time.time()
-
-        if form == "unix":
-            self.unix = moment
-        elif form == "utc":
-            if len(moment) == 24 and moment[-1] == "Z":
-                moment.replace("Z", "+0000")
-            self.unix = datetime.datetime.strptime(moment, "%Y-%m-%dT%H:%M:%S.%f%z").timestamp()
-        elif form == "now":
-            self.unix = time.time()
-        elif form == "tw5":
-            self.unix = datetime.datetime.strptime(moment + "+0000", "%Y%m%d%H%M%S%f%z").timestamp()
-        else:
-            logging.error("Form not recognized.")
-
-    def __bool__(self):
-        return bool(self.unix)
-
-    def __eq__(self, other):
-        return self.unix == other.unix
-
-    def __gt__(self, other):
-        return self.unix > other.unix
-
-    def __lt__(self, other):
-        return self.unix < other.unix
-
-    def __repr__(self):
-        return datetime.datetime.fromtimestamp(self.unix).strftime(time_utils.CODE_MOMENT_SI)
-
-    def __sub__(self, other):
-        if isinstance(other, Moment):
-            return self.unix - other.unix
-        else:
-            return NotImplemented
-
-    @classmethod
-    def from_string(cls, datetime_string, datetime_format):
-        """
-        Import from UTC string.
-
-        :param datetime_string:
-        :param datetime_format: refer to https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
-        :return:
-        """
-        try:
-            dt = datetime.datetime.strptime(datetime_string, datetime_format)
-            dt = dt.replace(tzinfo=datetime.timezone.utc)
-            unix = dt.timestamp()
-        except ValueError:
-            logging.error(f"Time data {datetime_string} does not match format {datetime_format}")
-            return cls()
-
-        return cls(unix)
-
-    @classmethod
-    def from_tid_val(cls, tid_val):
-        return cls.from_string(tid_val, "%Y%m%d%H%M%S%f")
-
-    @classmethod
-    def from_iso(cls, iso_string):
-        return cls.from_string(iso_string, "%Y-%m-%dT%H:%M:%S.%f%z")
-
-    def to_format(self, time_format):
-        return datetime.datetime.fromtimestamp(self.unix, tz=datetime.UTC).strftime(time_format)
-        dt = datetime.datetime.fromtimestamp(self.unix, tz=tzinfo)
-        return dt.strftime(time_format)
-
-    def to_prog(self):
-        return self.to_format("%Y%m%d%H%M%S")
-
-    def to_slv(self):
-        return self.to_format("%d.%m.%Y %H:%M:%S")
-
-    def to_tid_val(self):
-        return self.to_format("%Y%m%d%H%M%S%f")
-
-    def to_tid_date(self):
-        tid_date = self.to_format("%Y-%m-%d")
-        if tid_date[0] == "0":
-            tid_date = tid_date[1:]
-        return tid_date
-
-    def to_iso(self):
-        return self.to_format("%Y-%m-%dT%H:%M:%S.%f")
-
-    def to_iso_z(self):
-        return self.to_format("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
-class GeoLocation(NeuroObject):
-    def __init__(self, longitude=float(), latitude=float(), elevation=float()):
-        self.longitude = longitude
-        self.latitude = latitude
-        self.elevation = elevation
-
-    def __bool__(self):
-        return bool(self.longitude and self.latitude)
-
-    def __eq__(self, other):
-        lat = self.latitude == other.latitude
-        lon = self.longitude == other.longitude
-        ele = self.elevation == other.elevation
-        return all([lat, lon, ele])
-
-    @staticmethod
-    def to_dms(decimal):
-        """
-        DMS = degrees minutes seconds
-        :param decimal: decimal degrees
-        :return: DMS
-        """
-        mnt, sec = divmod(decimal * 3600, 60)
-        deg, mnt = divmod(mnt, 60)
-        return str(int(deg)) + "°" + str(int(mnt)) + "'" + str(sec) + "\""
-
-    def from_gps_dict(self, gps_dict, key_lon="lon", key_lat="lat", key_ele="ele"):
-        self.longitude = gps_dict[key_lon]
-        self.latitude = gps_dict[key_lat]
-        self.elevation = gps_dict[key_ele]
+from neuro.core import Moment, NeuroObject
+from neuro.utils import oop_utils
 
 
 class MIME(NeuroObject):
@@ -484,133 +343,64 @@ class Symlink(NeuroObject):
         self.target = new_target
 
 
-class NeuroNode(NeuroObject):
-    """
-    NeuroNode represents the specific position of a node inside primary tree
-    and the NeuroForest platform.
-    """
-    def __init__(self, **kwargs):
-        self.uuid = kwargs.get("uuid", self.generate_neuro_id())
-        self.edges = kwargs.get("edges", Edges())
+class FileInfo:
+    def __init__(self, file_path):
+        self.path = file_path
 
-    def __eq__(self, other):
-        if isinstance(other, NeuroNode):
-            return other.uuid == self.uuid
-        else:
-            return NotImplemented
-
-    def __getitem__(self, item):
-        return getattr(self, item)
-
-    def __hash__(self):
-        return int(self.uuid, 16)
-
-    def __repr__(self, ignore=tuple()):
+    def get_file_extension(self):
         """
-        Display the node data in the terminal.
-        :return:
+        Returns the extension of a file (dot included).
+
+        :return: file_ext
+        :rtype: str
         """
-        attrs_keys = oop_utils.get_attr_keys(self, modes={"no_func", "simple"})
+        return os.path.splitext(self.path)[1]
 
-        attrs = {k: self[k] for k in attrs_keys if k not in ignore}
-        return DictUtils.represent(attrs, display=False)
 
-    def __setitem__(self, key, value):
-        setattr(self, key, value)
+class FileUtils:
+    @staticmethod
+    def are_identical(path_list, times=False):
+        """
+        Determine if the files given are identical to each other.
+        :param path_list:
+        :param times: check accessed, created and modified times
+        :rtype: bool
+        """
+        combinations = list(itertools.combinations(path_list, 2))
+        results = list()
+        for file_path1, file_path2 in combinations:
+            file1, file2 = File(file_path1), File(file_path2)
+            if times:
+                r = file1 == file2
+            else:
+                r = filecmp.cmp(file_path1, file_path2)
 
-    def __str__(self):
-        return str(self.uuid)
+            results.append(r)
 
-    def display(self):
-        print(self.__repr__())
+        return all(results)
 
     @staticmethod
-    def generate_neuro_id():
+    def get_latest(file_list, mode="created"):
         """
-        Generate NeuroID.
+        Calculate and return the file from file list that was created / modified
+        latest.
+
+        :param file_list: list of file pathnames
+        :param mode:
+            - created
+            - modified
+        :return: latest pathname
         """
-        return uuid.uuid4().__str__()
-
-    def get_methods(self):
-        method_dict = dict()
-        attr_dict = self.to_dict()
-        for attr_name in attr_dict:
-            type_name = type(attr_dict[attr_name]).__name__
-            if type_name == "method":
-                method_dict[attr_name] = attr_dict[attr_name]
-        return method_dict
-
-    def to_dict(self):
-        attrs = oop_utils.get_attr_keys(self)
-        attr_dict = dict()
-        for attr_name in attrs:
-            attr_dict[attr_name] = getattr(self, attr_name)
-        return attr_dict
-
-
-class Edge(NeuroObject):
-    def __init__(self, source, target):
-        super().__init__()
-        self.weight = 0
-        self.source = source
-        self.target = target
-
-    def __str__(self):
-        string = "{} --> {}"
-        return string.format(
-            self.source.name,
-            self.target.name)
-
-    def apply_to(self, neuro_nodes):
-        for neuro_node in neuro_nodes:
-            edges = neuro_node.edges
-            if self not in edges:
-                edges.append(self)
-
-
-class Edges(list):
-    """
-    NeuroEdges is an array of object of type NeuroEdgs with some special
-    functionality.
-    """
-    def __init__(self, edges=None):
-        self.edges = edges
-        if self.are_edges_ok():
-            super().__init__(edges)
+        if mode == "created":
+            try:
+                latest = max(file_list, key=os.path.getctime)
+            except FileNotFoundError as e:
+                logging.error(f"BROKEN: symbolic link '{e.filename}'")
+                return False
+        elif mode == "modified":
+            latest = max(file_list, key=os.path.getmtime)
         else:
-            super().__init__()
-
-    def __str__(self):
-        collected_string = str()
-        for edge in self:
-            collected_string += edge.__str__() + "\n"
-        return collected_string
-
-    def are_edges_ok(self):
-        """
-        Checks if edges given at construction are valid.
-        :return:
-        """
-        try:
-            it = iter(self.edges)
-            for i in it:
-                if not isinstance(i, Edge):
-                    return False
-            return True
-        except TypeError:
+            logging.error("Function mode not supported.")
             return False
 
-    def get_edge(self, edge_type):
-        """
-        Returns an edge
-        :param edge_type:
-        :return:
-        :rtype:
-        """
-        for edge in self:
-            print(edge.type)
-            if edge.type == edge_type:
-                return edge
-
-    def get_primary(self):
-        return self.get_edge("primary")
+        return latest
