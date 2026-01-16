@@ -20,12 +20,7 @@ from neuro.utils import oop_utils, time_utils
 
 
 class NeuroObject(object):
-    @staticmethod
-    def generate_neuro_id():
-        """
-        Generate NeuroID.
-        """
-        return uuid.uuid4().__str__()
+    pass
 
 
 class Moment(NeuroObject):
@@ -526,12 +521,15 @@ class NeuroNode(NeuroObject):
     def __str__(self):
         return str(self.uuid)
 
-    def to_dict(self):
-        attrs = oop_utils.get_attr_keys(self)
-        attr_dict = dict()
-        for attr_name in attrs:
-            attr_dict[attr_name] = getattr(self, attr_name)
-        return attr_dict
+    def display(self):
+        print(self.__repr__())
+
+    @staticmethod
+    def generate_neuro_id():
+        """
+        Generate NeuroID.
+        """
+        return uuid.uuid4().__str__()
 
     def get_methods(self):
         method_dict = dict()
@@ -542,8 +540,12 @@ class NeuroNode(NeuroObject):
                 method_dict[attr_name] = attr_dict[attr_name]
         return method_dict
 
-    def display(self):
-        print(self.__repr__())
+    def to_dict(self):
+        attrs = oop_utils.get_attr_keys(self)
+        attr_dict = dict()
+        for attr_name in attrs:
+            attr_dict[attr_name] = getattr(self, attr_name)
+        return attr_dict
 
 
 class Edge(NeuroObject):
