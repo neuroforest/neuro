@@ -99,11 +99,11 @@ class TestNeuroTid:
 
 class TestNeuroTids:
     def test_list(self):
-        from neuro.core.tid import Tiddler, NeuroTids
+        from neuro.core.tid import Tiddler, Tiddlers
 
-        # Test function NeuroTids.extend and NeuroTids.append
+        # Test function Tiddlers.extend and Tiddlers.append
         neuro_tid_3 = Tiddler("test3")
-        neuro_tids = NeuroTids([
+        neuro_tids = Tiddlers([
             Tiddler("test1"),
             Tiddler("test2"),
             neuro_tid_3
@@ -112,15 +112,15 @@ class TestNeuroTids:
         assert "test2" in neuro_tids
         assert neuro_tids.index(neuro_tid_3) == 2
 
-        # Test function NeuroTids.remove
+        # Test function Tiddlers.remove
         neuro_tids.remove("test2")
         assert "test2" not in neuro_tids
         assert len(neuro_tids) == 2
         assert len(neuro_tids) == len(neuro_tids.object_index)
 
     def test_chain(self):
-        from neuro.core.tid import Tiddler, NeuroTids
-        neuro_tids = NeuroTids()
+        from neuro.core.tid import Tiddler, Tiddlers
+        neuro_tids = Tiddlers()
         neuro_tids.extend([
             Tiddler("test1"),
             Tiddler("test2"),
@@ -136,8 +136,8 @@ class TestNeuroTids:
         Ensure the property `neuro
         :return:
         """
-        from neuro.core.tid import Tiddler, NeuroTids
-        neuro_tids = NeuroTids()
+        from neuro.core.tid import Tiddler, Tiddlers
+        neuro_tids = Tiddlers()
         neuro_tids.extend([
             Tiddler("test1"),
             Tiddler("test2"),

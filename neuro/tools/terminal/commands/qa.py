@@ -12,7 +12,7 @@ import pyperclip
 from rich.console import Console
 import tqdm
 
-from neuro.core.tid import NeuroTids
+from neuro.core.tid import Tiddlers
 from neuro.tools.tw5api import tw_actions, tw_del, tw_get, tw_put
 from neuro.tools.terminal.cli import pass_environment
 from neuro.utils import terminal_components, terminal_style
@@ -111,7 +111,7 @@ def set_roles(port):
 
 
 def set_model_roles(port):
-    update_tids = NeuroTids()
+    update_tids = Tiddlers()
     for model_role in json.loads(os.getenv("MODEL_ROLES")):
         regexp_pattern = r"^\S+\s\S+$"
         model_tids = tw_get.neuro_tids(f"[prefix[.]suffix[ {model_role}]!has[neuro.role]"

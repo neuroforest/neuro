@@ -9,7 +9,7 @@ import requests
 from rich.console import Console
 import tqdm
 
-from neuro.core.tid import Tiddler, NeuroTids
+from neuro.core.tid import Tiddler, Tiddlers
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.tools.terminal.cli import pass_environment
 from neuro.utils import terminal_components, terminal_style
@@ -23,7 +23,7 @@ def integrate_local(tid_title):
     neuro_tids = tw_get.neuro_tids(tw_filter=neuro_tids_filter)
     current_path = str()
 
-    unrooted_neuro_tids = NeuroTids()
+    unrooted_neuro_tids = Tiddlers()
     for neuro_tid in reversed(neuro_tids):
         if "local" not in neuro_tid.fields:
             unrooted_neuro_tids.insert(0, neuro_tid)
@@ -65,7 +65,7 @@ def integrate_local(tid_title):
 def integrate_system_files(port):
     update_tids = False
     root_file_neuro_tids = tw_get.neuro_tids("[prefix[/]] [prefix[~]]", port=port)
-    neuro_tids_to_update = NeuroTids()
+    neuro_tids_to_update = Tiddlers()
     for neuro_tid in root_file_neuro_tids:
         if neuro_tid.title.startswith("~"):
             path = os.path.expanduser(neuro_tid.title)
