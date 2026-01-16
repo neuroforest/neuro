@@ -10,7 +10,7 @@ import tqdm
 from neuro.core.deep import Moment
 from neuro.core.tid import NeuroWF, NeuroTW
 from neuro.tools.tw5api import tw_get, tw_put
-from neuro.base import api
+from neuro.base.api import nb_get
 from neuro.utils import config, internal_utils
 
 
@@ -93,7 +93,7 @@ def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
 
 
 def migrate_neo4j_to_json(json_path):
-    objects = api.get_all_tiddlers()
+    objects = nb_get.all_tiddlers()
     with open(json_path, "w+") as f:
         json.dump(objects, f)
 
