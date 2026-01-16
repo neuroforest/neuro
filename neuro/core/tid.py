@@ -426,7 +426,7 @@ class NeuroTW(TextHtml):
         :return:
         """
         # Create WikiFolder
-        neuro_wf = NeuroWF(wf_path, exists=exists, **kwargs)
+        neuro_wf = WikiFolder(wf_path, exists=exists, **kwargs)
         p = subprocess.Popen([
             "node",
             neuro_wf.tw5,
@@ -441,7 +441,7 @@ class NeuroTW(TextHtml):
         self.neuro_tids.write_tiddlers(wf_path)
 
 
-class NeuroWF:
+class WikiFolder:
     """
     Wrapper for WikiFolder. It operates on port 8099 by default.
     """

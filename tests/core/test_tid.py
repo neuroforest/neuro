@@ -160,16 +160,16 @@ class TestNeuroTW:
 
 class TestNeuroWF:
     def test_init(self):
-        from neuro.core.tid import NeuroWF
+        from neuro.core.tid import WikiFolder
         process = create_and_run_wiki_folder("init",8099)
         process.kill()
 
         wf_path = get_test_file("output/wf-init")
-        wf = NeuroWF(wf_path)
-        assert isinstance(wf, NeuroWF)
+        wf = WikiFolder(wf_path)
+        assert isinstance(wf, WikiFolder)
 
         wf_path_nonexistent = get_test_file("output/wf-init-nonexistent", exists=False)
         with pytest.raises(exceptions.FileNotWiki):
-            NeuroWF(wf_path_nonexistent)
-        wf_nonexistent = NeuroWF(wf_path_nonexistent, exists=False)
-        assert isinstance(wf_nonexistent, NeuroWF)
+            WikiFolder(wf_path_nonexistent)
+        wf_nonexistent = WikiFolder(wf_path_nonexistent, exists=False)
+        assert isinstance(wf_nonexistent, WikiFolder)
