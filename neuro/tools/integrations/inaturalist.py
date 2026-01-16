@@ -7,7 +7,7 @@ import urllib.parse
 
 import requests
 
-from neuro.core.tid import NeuroTid, NeuroTids
+from neuro.core.tid import Tiddler, NeuroTids
 from neuro.utils import exceptions, internal_utils
 
 
@@ -55,7 +55,7 @@ def get_taxon_tid(taxon_id):
     """
     Get basic taxon tid, without the fields `neuro.primary` or `tags`.
     :param taxon_id: iNaturalist taxon id
-    :return: NeuroTid object
+    :return: Tiddler object
     """
     taxon_data = get_taxon(taxon_id)
 
@@ -74,10 +74,10 @@ def get_taxon_tid(taxon_id):
                 break
         if not neuro_code and taxon_rank_level != 100:
             print(f"Taxon not found: {taxon_data['rank']} ({taxon_rank_level})")
-            return NeuroTid()
+            return Tiddler()
     tid_title = f"{neuro_code} {taxon_name}"
 
-    neuro_tid = NeuroTid(tid_title)
+    neuro_tid = Tiddler(tid_title)
     neuro_tid.add_fields({
         "neuro.role": f"taxon.{taxon_rank}",
         "inat.taxon.id": taxon_id

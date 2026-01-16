@@ -12,7 +12,7 @@ def get_prefix(taxon_rank, port=None):
     """
     Get the prefix according to the taxon rank.
     :param taxon_rank:
-    :return: NeuroTid object
+    :return: Tiddler object
     """
     port = port or os.getenv("PORT")
     neuro_keyword = f"taxon.{taxon_rank}"

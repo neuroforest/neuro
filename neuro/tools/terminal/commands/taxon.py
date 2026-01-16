@@ -8,7 +8,7 @@ import os
 import click
 from rich.console import Console
 
-from neuro.core.tid import NeuroTids, NeuroTid
+from neuro.core.tid import NeuroTids, Tiddler
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.tools.science import biology
 from neuro.tools.terminal.cli import pass_environment
@@ -151,7 +151,7 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
         try:
             neuro_tid = tw_get.neuro_tid(taxon_data["title"], port=port)
         except exceptions.TiddlerDoesNotExist:
-            neuro_tid = NeuroTid(taxon_data["title"])
+            neuro_tid = Tiddler(taxon_data["title"])
         neuro_tid.add_fields(taxon_data)
         neuro_tids.append(neuro_tid)
     neuro_tids = filter_neuro_tids(neuro_tids, port)

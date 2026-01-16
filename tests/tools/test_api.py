@@ -135,7 +135,7 @@ class TestTwPut:
         from neuro.tools.tw5api import tw_get, tw_put
         from neuro.core import tid
         text = f"text{time.time()}"
-        neuro_tid = tid.NeuroTid("test_put_neuro_tid", fields={"text": text})
+        neuro_tid = tid.Tiddler("test_put_neuro_tid", fields={"text": text})
         tw_put.neuro_tid(neuro_tid, **kwargs)
         tiddler = tw_get.tiddler("test_put_neuro_tid", **kwargs)
         assert tiddler["text"] == text

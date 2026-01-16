@@ -8,7 +8,7 @@ import webbrowser
 import json
 import html
 
-from neuro.core.tid import NeuroTid, NeuroTids
+from neuro.core.tid import Tiddler, NeuroTids
 from neuro.tools.tw5api import tw_api
 from neuro.utils import exceptions
 
@@ -111,10 +111,10 @@ def lineage(root="$:/plugins/neuroforest/front/tags/Contents", tw_filter="[!is[s
 def neuro_tid(tid_title, **kwargs):
     t = tiddler(tid_title, **kwargs)
     if t:
-        nt = NeuroTid.from_tiddler(t)
+        nt = Tiddler.from_tiddler(t)
         return nt
     else:
-        return NeuroTid(tid_title)
+        return Tiddler(tid_title)
 
 
 def neuro_tids(tw_filter, **kwargs):

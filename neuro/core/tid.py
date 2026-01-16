@@ -19,9 +19,9 @@ from neuro.core.file.text import TextHtml
 from neuro.utils import oop_utils, exceptions, internal_utils, network_utils
 
 
-class NeuroTid(Node):
+class Tiddler(Node):
     """
-    NeuroTid is a Python representation of tiddler, that is an element of
+    Tiddler is a Python representation of tiddler, that is an element of
     NeuroForest platform.
     There are 3 fundamental object properties:
         - uuid - inherited from Node
@@ -44,7 +44,7 @@ class NeuroTid(Node):
             del self.fields[key]
 
     def __eq__(self, other):
-        if not isinstance(other, NeuroTid):
+        if not isinstance(other, Tiddler):
             return False
 
         ignore_keys = ["modified", "revision"]
@@ -89,7 +89,7 @@ class NeuroTid(Node):
             self.fields[key] = value
 
     def __str__(self):
-        return f"<NeuroTid title=\"{self.title}\">"
+        return f"<Tiddler title=\"{self.title}\">"
 
     def add_fields(self, fields, overwrite=False):
         """
@@ -144,12 +144,12 @@ class NeuroTid(Node):
     @classmethod
     def from_tiddler(cls, tiddler):
         """
-        Populate NeuroTid properties from a tiddler.
+        Populate Tiddler properties from a tiddler.
 
         :param tiddler:
         :param kwargs:
             - ignore: list of fields to ignore when importing from tiddler
-            - override: override NeuroTid properties
+            - override: override Tiddler properties
         :return:
         """
         try:
@@ -264,7 +264,7 @@ class NeuroTid(Node):
 
 class NeuroTids(list):
     """
-    A collection of NeuroTid instances. This class exhibits functionality of
+    A collection of Tiddler instances. This class exhibits functionality of
     list and dict data types.
     """
     def __init__(self, neuro_tids=None, *args):
@@ -289,13 +289,13 @@ class NeuroTids(list):
     def __contains__(self, tid_title):
         return tid_title in self.object_index
 
-    def append(self, neuro_tid: NeuroTid):
-        if not isinstance(neuro_tid, NeuroTid):
+    def append(self, neuro_tid: Tiddler):
+        if not isinstance(neuro_tid, Tiddler):
             logging.error(f"Cannot append object of type {type(neuro_tid)}")
             return
 
         # Checking for conflicts.
-        conflict_message = "NeuroTids object already contains NeuroTid with {}: {}"
+        conflict_message = "NeuroTids object already contains Tiddler with {}: {}"
         if neuro_tid.title in [nt.title for nt in self]:
             logging.warning(conflict_message.format("title", neuro_tid.title))
             return
@@ -393,7 +393,7 @@ class NeuroTW(TextHtml):
         store_area_div = tw_soup.find(id="storeArea")
         tiddler_divs = store_area_div.find_all("div", recursive=False)
         for tiddler_div in tiddler_divs:
-            neuro_tid = NeuroTid.from_html(tiddler_div)
+            neuro_tid = Tiddler.from_html(tiddler_div)
             neuro_tw.neuro_tids.append(neuro_tid)
 
         return neuro_tw
@@ -414,7 +414,7 @@ class NeuroTW(TextHtml):
         json_object = json.loads(store_area_json)
         neuro_tids = NeuroTids()
         for tiddler in tqdm.tqdm(json_object):
-            neuro_tid = NeuroTid.from_tiddler(tiddler)
+            neuro_tid = Tiddler.from_tiddler(tiddler)
             neuro_tids.append(neuro_tid)
         neuro_tw.neuro_tids.extend(neuro_tids)
 

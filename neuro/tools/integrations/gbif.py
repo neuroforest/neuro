@@ -73,7 +73,7 @@ def collect_fields(data, field_list, transform=False):
 
 def get_taxon_tid(taxon_id):
     """
-    Get an instance of NeuroTid that hold the parsed data.
+    Get an instance of Tiddler that hold the parsed data.
     :param taxon_id: GBIF taxon id
     :return:
     """
@@ -96,7 +96,7 @@ def get_taxon_tid(taxon_id):
                 break
     tid_title = f"{neuro_code} {taxon_name}"
 
-    neuro_tid = tid.NeuroTid(tid_title)
+    neuro_tid = tid.Tiddler(tid_title)
     fields = collect_fields(taxon_data, ["canonicalName", "vernacularName"], transform=True)
     neuro_tid.add_fields({
         **fields,
