@@ -10,10 +10,9 @@ from rich.console import Console
 import tqdm
 
 from neuro.core.tid import NeuroTid, NeuroTids
-from neuro.tools.terminal import components
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.tools.terminal.cli import pass_environment
-from neuro.utils import terminal_style
+from neuro.utils import terminal_components, terminal_style
 
 
 def integrate_local(tid_title):
@@ -47,14 +46,14 @@ def integrate_local(tid_title):
                 candidate_path = f"{current_path}/{name}"
 
             if os.path.isdir(candidate_path):
-                if components.bool_prompt(f"Connect {candidate_path} to {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}?"):
+                if terminal_components.bool_prompt(f"Connect {candidate_path} to {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}?"):
                     neuro_tid.fields["local"] = f"file://{candidate_path}"
                     tw_put.neuro_tid(neuro_tid)
                     current_path = candidate_path
                 else:
                     break
             else:
-                if components.bool_prompt(f"Establish {candidate_path} for {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}?"):
+                if terminal_components.bool_prompt(f"Establish {candidate_path} for {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}?"):
                     os.mkdir(candidate_path)
                     neuro_tid.fields["local"] = f"file://{candidate_path}"
                     tw_put.neuro_tid(neuro_tid)

@@ -14,9 +14,8 @@ import tqdm
 
 from neuro.core.tid import NeuroTids
 from neuro.tools.tw5api import tw_actions, tw_del, tw_get, tw_put
-from neuro.tools.terminal import components
 from neuro.tools.terminal.cli import pass_environment
-from neuro.utils import terminal_style
+from neuro.utils import terminal_components, terminal_style
 
 
 def remove_ghost_tiddlers(port):
@@ -359,7 +358,7 @@ class Primary:
             else:
                 print()
             pyperclip.copy(tid_title)
-            tiddler_chosen = components.selector(tid_tags)
+            tiddler_chosen = terminal_components.selector(tid_tags)
 
             if tiddler_chosen:
                 neuro_tid = tw_get.neuro_tid(tid_title, port=self.port)

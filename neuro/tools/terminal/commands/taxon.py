@@ -11,10 +11,9 @@ from rich.console import Console
 from neuro.core.tid import NeuroTids, NeuroTid
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.tools.science import biology
-from neuro.tools.terminal import components
 from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.integrations import wikidata, ncbi
-from neuro.utils import exceptions, internal_utils, terminal_style
+from neuro.utils import exceptions, internal_utils, terminal_components, terminal_style
 
 
 OBLIGATORY_TAXA = [
@@ -133,7 +132,7 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
     else:
         print("Multiple taxa with this name found")
         metadata = [ncbi.get_taxon_info(i)['Division'] for i in id_list]
-        taxon_id = components.selector(id_list, metadata)
+        taxon_id = terminal_components.selector(id_list, metadata)
         if not taxon_id:
             return
 
@@ -169,7 +168,7 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
             changes = True
         elif overwrite or not tw_get.is_tiddler(neuro_tid.title, port=port):
             neuro_tid = add_translations(neuro_tid)
-            if components.bool_prompt(f"Put tiddler \"{neuro_tid.title}\"?"):
+            if terminal_components.bool_prompt(f"Put tiddler \"{neuro_tid.title}\"?"):
                 tw_put.neuro_tid(neuro_tid, port=port)
                 changes = True
 
@@ -190,7 +189,7 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
                 continue
 
             if not os.path.isdir(current_path):
-                if components.bool_prompt(f"Establish subpath \"{subpath}\"?"):
+                if terminal_components.bool_prompt(f"Establish subpath \"{subpath}\"?"):
                     os.mkdir(current_path)
                     neuro_tid.fields["local"] = f"file://{current_path}"
                     tw_put.neuro_tid(neuro_tid, port=port)
