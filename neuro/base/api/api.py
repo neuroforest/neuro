@@ -48,9 +48,9 @@ class NeuroBase:
             raise ValueError(f"Object must have a 'neuro.id' field {o}")
 
         query = """
-            MERGE (o:Object {title: $title, `neuro.id`: $neuro_id})
-            SET o += $fields
-            RETURN o
+        MERGE (o:Object {title: $title, `neuro.id`: $neuro_id})
+        SET o += $fields
+        RETURN o
         """
         parameters = {"title": o["title"], "neuro_id": o["neuro.id"], "fields": o}
         self.run_query(query, parameters=parameters)
@@ -60,8 +60,8 @@ class NeuroBase:
             raise ValueError("Refusing to clear database without confirm=True")
 
         query = """
-            MATCH (o)
-            DETACH DELETE o;
+        MATCH (o)
+        DETACH DELETE o;
         """
         self.run_query(query)
 
