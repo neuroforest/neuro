@@ -9,7 +9,7 @@ import requests
 from rich.console import Console
 import tqdm
 
-from neuro.core.tid import NeuroTid, NeuroTids
+from neuro.core.tid import Tiddler, NeuroTids
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.tools.terminal.cli import pass_environment
 from neuro.utils import terminal_components, terminal_style
@@ -42,7 +42,7 @@ def integrate_local(tid_title):
             if "name" in neuro_tid.fields:
                 candidate_path = f"{current_path}/{neuro_tid.fields['name']}"
             else:
-                name = NeuroTid.get_local_name(tid_title)
+                name = Tiddler.get_local_name(tid_title)
                 candidate_path = f"{current_path}/{name}"
 
             if os.path.isdir(candidate_path):
