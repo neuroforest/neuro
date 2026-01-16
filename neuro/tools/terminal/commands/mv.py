@@ -8,8 +8,9 @@ import subprocess
 import click
 
 from neuro.core import Dir
-from neuro.tools.terminal import common, style
+from neuro.tools.terminal import common
 from neuro.tools.terminal.cli import pass_environment
+from neuro.utils import terminal_style
 
 
 def move_file(src_path, dst_path):
@@ -31,9 +32,9 @@ def move_file(src_path, dst_path):
                 os.system(f"ln -s {new_symlink_target} {symlink}")
 
     if symlink_count == 0:
-        print(f"{style.FAIL} 0 symlinks affected")
+        print(f"{terminal_style.FAIL} 0 symlinks affected")
     else:
-        print(f"{style.SUCCESS} {symlink_count} symlinks affected")
+        print(f"{terminal_style.SUCCESS} {symlink_count} symlinks affected")
 
     src_dir.move(dst_path)
 

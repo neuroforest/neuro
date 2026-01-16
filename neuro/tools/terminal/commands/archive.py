@@ -8,11 +8,12 @@ import click
 from rich.console import Console
 
 from neuro.tools.terminal import style, components
+from neuro.core import Dir, File, Moment
+from neuro.tools.terminal import components
 from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.terminal.commands import qa, local
-from neuro.utils import internal_utils, time_utils
-from neuro.core import Dir, File, Moment
 from neuro.tools import migrate
+from neuro.utils import internal_utils, terminal_style, time_utils
 
 
 def archive():
@@ -28,7 +29,7 @@ def archive():
         json_path = f"{archive_path}/{moment_prog}.json"
 
         migrate.migrate_neo4j_to_json(json_path)
-        print(f"{style.SUCCESS} Wiki archived")
+        print(f"{terminal_style.SUCCESS} Wiki archived")
 
 
 def print_time_from_last_archive():
@@ -39,7 +40,7 @@ def print_time_from_last_archive():
     current_moment = Moment()
     second_passed = current_moment - last_timestamp
     time_string = time_utils.get_time_string(second_passed)
-    print(f"Time since last archive: {style.BOLD}{time_string}{style.RESET}")
+    print(f"Time since last archive: {terminal_style.BOLD}{time_string}{terminal_style.RESET}")
 
 
 def remove_latest():
@@ -51,7 +52,7 @@ def remove_latest():
     timestamp_path = max(Dir(month_path).get_children())
     if components.bool_prompt(f"Delete archive entry {timestamp_path.replace(archive_path, '')}?"):
         os.remove(timestamp_path)
-        print(f"{style.SUCCESS} Removed")
+        print(f"{terminal_style.SUCCESS} Removed")
 
 
 @click.command("archive", short_help="archive tiddlers")

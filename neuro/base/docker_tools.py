@@ -10,8 +10,7 @@ import time
 import docker
 
 from neuro.core import Dir
-from neuro.tools.terminal import style
-from neuro.utils import config, internal_utils, time_utils
+from neuro.utils import config, internal_utils, time_utils, terminal_style
 
 
 class Container:
@@ -48,7 +47,7 @@ class Container:
         self.backup_data()
         self.backup_container()
         end_time = time.time()
-        print(f"{style.BOLD}Finished in {end_time-start_time:.1f} s.{style.RESET}")
+        print(f"{terminal_style.BOLD}Finished in {end_time-start_time:.1f} s.{terminal_style.RESET}")
 
     def list_backups(self):
         archive_dir = Dir(self.archive)

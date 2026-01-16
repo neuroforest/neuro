@@ -14,8 +14,9 @@ import tqdm
 
 from neuro.core.tid import NeuroTids
 from neuro.tools.tw5api import tw_actions, tw_del, tw_get, tw_put
-from neuro.tools.terminal import style, components
+from neuro.tools.terminal import components
 from neuro.tools.terminal.cli import pass_environment
+from neuro.utils import terminal_style
 
 
 def remove_ghost_tiddlers(port):
@@ -65,9 +66,9 @@ def resolve_neuro_ids(port, verbose=False):
         print("neuro.id length variability detected")
 
     if resolved:
-        print(f"{style.SUCCESS} Neuro ID")
+        print(f"{terminal_style.SUCCESS} Neuro ID")
     else:
-        print(f"{style.FAIL} Neuro ID")
+        print(f"{terminal_style.FAIL} Neuro ID")
 
     return resolved
 
@@ -85,7 +86,7 @@ def set_journal(port):
                 pbar.update(1)
             pbar.set_description("")
 
-    print(f"{style.SUCCESS} Journal")
+    print(f"{terminal_style.SUCCESS} Journal")
 
 
 def set_roles(port):
@@ -107,7 +108,7 @@ def set_roles(port):
                 pbar.update(1)
             pbar.set_description("")
 
-    print(f"{style.SUCCESS} Roles set")
+    print(f"{terminal_style.SUCCESS} Roles set")
 
 
 def set_model_roles(port):
@@ -128,7 +129,7 @@ def set_model_roles(port):
                 neuro_tid.add_fields({"neuro.role": "model"})
                 tw_put.neuro_tid(neuro_tid, port=port)
             pbar.set_description("")
-    print(f"{style.SUCCESS} Model roles")
+    print(f"{terminal_style.SUCCESS} Model roles")
 
 
 def validate_tags(port, interactive=False, verbose=True):
@@ -165,37 +166,37 @@ def validate_tags(port, interactive=False, verbose=True):
         if invalid_tags:
             validated = False
             if interactive:
-                print(f"{style.YELLOW}{style.BOLD}{tid_title}{style.RESET} has invalid tags:")
+                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET} has invalid tags:")
                 tw_actions.open_tiddler(tid_title)
                 for tag in invalid_tags:
                     print(f"    - {tag}")
                 input()
             else:
-                print(f"{style.YELLOW}{style.BOLD}{tid_title}{style.RESET} has invalid tags {' | '.join(invalid_tags)}")
+                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET} has invalid tags {' | '.join(invalid_tags)}")
 
     # Resolve no tag tiddlers
     if no_tags:
         validated = False
         if interactive:
             for tid_title in no_tags:
-                print(f"{style.YELLOW}{style.BOLD}{no_tags[0]}{style.RESET} has no tags")
+                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{no_tags[0]}{terminal_style.RESET} has no tags")
                 tw_actions.open_tiddler(tid_title)
                 input()
         else:
             no_tags_len = len(no_tags)
             if no_tags_len == 1:
-                print(f"{style.YELLOW}{style.BOLD}{no_tags[0]}{style.RESET} has no tags")
+                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{no_tags[0]}{terminal_style.RESET} has no tags")
             else:
-                print(f"{style.YELLOW}{style.BOLD}NOTE:{style.RESET} {no_tags_len} "
+                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}NOTE:{terminal_style.RESET} {no_tags_len} "
                       f"tiddlers have no tags")
                 for tid_title in no_tags:
                     print(f"    - {tid_title}")
 
     if verbose:
         if validated:
-            print(f"{style.SUCCESS} Tags resolved")
+            print(f"{terminal_style.SUCCESS} Tags resolved")
         else:
-            print(f"{style.FAIL} Invalid tags")
+            print(f"{terminal_style.FAIL} Invalid tags")
 
     return validated
 
@@ -209,17 +210,17 @@ def resolve_missing_tiddlers(port, interactive=False, verbose=True):
         backlinks = tw_get.filter_output(f"[[{missing_tiddler}]backlinks[]]", port=port)
         for backlink in backlinks:
             if interactive:
-                print(f"{style.YELLOW}{style.BOLD}{backlink}{style.RESET} has a broken link")
+                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{backlink}{terminal_style.RESET} has a broken link")
                 tw_actions.open_tiddler(backlink)
                 input()
             else:
-                print(f"{style.YELLOW}{style.BOLD}{backlink}{style.RESET} has a broken link")
+                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{backlink}{terminal_style.RESET} has a broken link")
 
     if verbose:
         if validated:
-            print(f"{style.SUCCESS} Missing tiddlers resolved")
+            print(f"{terminal_style.SUCCESS} Missing tiddlers resolved")
         else:
-            print(f"{style.FAIL} Missing tiddlers")
+            print(f"{terminal_style.FAIL} Missing tiddlers")
 
     return validated
 
@@ -307,7 +308,7 @@ class Primary:
                 else:
                     self.lineage_integrity = False
                     print(
-                        f"Lineage problem for tiddler {style.YELLOW}{style.BOLD}{tid_title}{style.RESET}:")
+                        f"Lineage problem for tiddler {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}:")
                     print(" - ".join(lineage_item))
             else:
                 pass
@@ -352,7 +353,7 @@ class Primary:
             tid_title = tf["title"]
             tid_tags = sorted(tf['tags'])
             tw_actions.open_tiddler(tid_title)
-            print(f"\n{'-' * 30}\nSetting primary for {style.BOLD}{tf['title']}{style.RESET}", end="")
+            print(f"\n{'-' * 30}\nSetting primary for {terminal_style.BOLD}{tf['title']}{terminal_style.RESET}", end="")
             if "neuro.primary" in tf:
                 print(f" (current {tf['neuro.primary']})")
             else:
@@ -377,13 +378,13 @@ class Primary:
             raise exceptions.InternalError("Automated corrections")
         if self.complex_tfs:
             self.validated = False
-            print(f"{style.FAIL} Manual corrections were not resolved")
+            print(f"{terminal_style.FAIL} Manual corrections were not resolved")
         if not self.lineage_integrity:
             self.validated = False
-            print(f"{style.FAIL} Lineage problems")
+            print(f"{terminal_style.FAIL} Lineage problems")
 
         if self.validated:
-            print(f"{style.SUCCESS} Primary resolved")
+            print(f"{terminal_style.SUCCESS} Primary resolved")
 
     def run(self):
         self.analyse()
