@@ -2,6 +2,7 @@ from neuro.core.deep.object import Object
 from neuro.core.deep.graph import Node
 from neuro.core.deep.spacetime import Moment, Location
 from neuro.core.file.file import File, Dir
+from neuro.core.tid import Tiddler
 
 
 __all__ = [
@@ -10,5 +11,6 @@ __all__ = [
     "Location",
     "Moment",
     "Node",
-    "Object"
+    "Object",
+    "Tiddler"
 ]
