@@ -8,7 +8,7 @@ import shutil
 import tqdm
 
 from neuro.core import Moment
-from neuro.core.tid import NeuroWF, NeuroTW
+from neuro.core.tid import WikiFolder, NeuroTW
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.base.api import nb_get
 from neuro.utils import config, internal_utils
@@ -61,7 +61,7 @@ def migrate_wf_to_neo4j(wf_path, port=8222, **kwargs):
 
     # Run a WikiFolder
     tw_path = internal_utils.get_path("tiddlywiki.js")
-    wf = NeuroWF(wf_path, tw5=tw_path, silent=True, **kwargs)
+    wf = WikiFolder(wf_path, tw5=tw_path, silent=True, **kwargs)
     with wf:
         tid_titles = tw_get.tid_titles(
             "[all[tiddlers]!is[system]] [is[system]has[neuro.id]]",
@@ -85,7 +85,7 @@ def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
     # Run a WikiFolder
     tw_path = internal_utils.get_path("tiddlywiki.js")
     shutil.rmtree(wf_path, ignore_errors=True)
-    wf = NeuroWF(wf_path, exists=False, tw5=tw_path, port=port, **kwargs)
+    wf = WikiFolder(wf_path, exists=False, tw5=tw_path, port=port, **kwargs)
     with wf:
         for o in objects:
             o = prepare_object(o)
@@ -99,7 +99,7 @@ def migrate_neo4j_to_json(json_path):
 
 
 def migrate_wf_to_json(wf_path, json_path, port=8222, **kwargs):
-    wf = NeuroWF(wf_path, port=port, silent=True, **kwargs)
+    wf = WikiFolder(wf_path, port=port, silent=True, **kwargs)
     process = wf.start()
     tiddlers = tw_get.all_tiddlers(port=port, params={"exclude": ","})
     with open(json_path, "w+") as f:
