@@ -14,17 +14,17 @@ from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
 import requests
 
-from neuro.core import NeuroNode, Moment
+from neuro.core import Node, Moment
 from neuro.core.file.text import TextHtml
 from neuro.utils import oop_utils, exceptions, internal_utils, network_utils
 
 
-class NeuroTid(NeuroNode):
+class NeuroTid(Node):
     """
     NeuroTid is a Python representation of tiddler, that is an element of
     NeuroForest platform.
     There are 3 fundamental object properties:
-        - uuid - inherited from NeuroNode
+        - uuid - inherited from Node
         - title - tiddler title, also serves as identifier
         - fields - a dictionary of all fields, some with special handling (tags, list)
     """

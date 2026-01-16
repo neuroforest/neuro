@@ -1,4 +1,4 @@
-from neuro.core import NeuroNode, Moment
+from neuro.core import Node, Moment
 from neuro.base.api import NeuroBase
 from neuro.base.nql.components import NqlTransformer, NqlGenerator
 from neuro.core.data.dict import DictUtils
@@ -28,7 +28,7 @@ def handle_node(data):
         return
 
     properties = {
-        "neuro.id": NeuroNode.generate_neuro_id(),
+        "neuro.id": Node.generate_neuro_id(),
         "title": f".ontology {label}",
         **data["properties"]
     }

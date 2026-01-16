@@ -1,5 +1,5 @@
-from neuro.core.deep.object import NeuroObject
-from neuro.core.deep.graph import NeuroNode
+from neuro.core.deep.object import Object
+from neuro.core.deep.graph import Node
 from neuro.core.deep.spacetime import Moment, Location
 from neuro.core.file.file import File, Dir
 
@@ -9,6 +9,6 @@ __all__ = [
     "File",
     "Location",
     "Moment",
-    "NeuroNode",
-    "NeuroObject"
+    "Node",
+    "Object"
 ]
