@@ -3,7 +3,7 @@ General terminal interaction components.
 """
 
 from neuro.core.file.text import Text
-from neuro.tools.terminal import style
+from neuro.utils import terminal_style
 
 
 def bool_prompt(question):
@@ -13,7 +13,7 @@ def bool_prompt(question):
     :return: bool
     """
     while True:
-        text = style.get_colored(f"{question} (y/n)", "BOLD")
+        text = terminal_style.get_colored(f"{question} (y/n)", "BOLD")
         res = input(text)
         if res.lower() == "y":
             return True
@@ -31,7 +31,7 @@ def bool_prompt_show(question, file_path):
     :return: bool
     """
     while True:
-        text = style.get_colored(question + " (y/n/s)", "BASE")
+        text = terminal_style.get_colored(question + " (y/n/s)", "BASE")
         res = input(text)
         if res.lower() == "y":
             return True
@@ -59,5 +59,5 @@ def selector(options, metadata=None):
     elif temp.isnumeric() and int(temp) - 1 in indices:
         return options[int(temp) - 1]
     else:
-        print(f"{style.RED}Not valid: {temp}{style.RESET}")
+        print(f"{terminal_style.RED}Not valid: {temp}{terminal_style.RESET}")
         return None

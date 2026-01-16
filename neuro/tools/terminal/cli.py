@@ -8,7 +8,7 @@ import importlib.metadata
 
 import click
 
-from neuro.tools.terminal import style
+from neuro.utils import terminal_style
 
 
 CONTEXT_SETTINGS = dict(auto_envvar_prefix="NEURO")
@@ -58,7 +58,7 @@ def load_commands(cli_group):
         try:
             mod = importlib.import_module(f"neuro.tools.terminal.commands.{name}")
         except Exception as e:
-            print(f"{style.RED}ERROR:neuro {name}:{e}{style.RESET}")
+            print(f"{terminal_style.RED}ERROR:neuro {name}:{e}{terminal_style.RESET}")
             continue
 
         if hasattr(mod, "cli"):

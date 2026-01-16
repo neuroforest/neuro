@@ -1,9 +1,9 @@
 from neuro.core import NeuroNode, Moment
 from neuro.base.api import NeuroBase
 from neuro.base.nql.components import NqlTransformer, NqlGenerator
-from neuro.tools.terminal import style
 from neuro.core.data.dict import DictUtils
 from neuro.core.data.list import ListUtils
+from neuro.utils import terminal_style
 
 
 NB = NeuroBase()
@@ -162,7 +162,7 @@ def traverse_ontology(label, lineage, properties, relationships):
 def handle_info(label):
     label = label.strip("`")
     lineage, properties, relationships = traverse_ontology(label, [label], dict(), list())
-    print(f"Ontology info for {style.BOLD}{label}{style.RESET}")
+    print(f"Ontology info for {terminal_style.BOLD}{label}{terminal_style.RESET}")
     print("-"*50)
     print("Lineage:")
     print("    ", " ➜  ".join(lineage))

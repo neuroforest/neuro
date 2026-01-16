@@ -6,7 +6,7 @@ import logging
 import os
 import shlex
 
-from neuro.tools.terminal import style
+from neuro.utils import terminal_style
 
 logging.basicConfig(level=logging.INFO)
 
@@ -35,4 +35,4 @@ def update_tiddlers(old, new, tiddlers_path):
         with open(tiddler_path, "w") as f:
             f.write(new_text)
 
-    print(f"{style.SUCCESS} {len(fts_lines)} tiddlers affected")
+    print(f"{terminal_style.SUCCESS} {len(fts_lines)} tiddlers affected")

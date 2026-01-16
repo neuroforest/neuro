@@ -10,15 +10,16 @@ from rich.console import Console
 import tqdm
 
 from neuro.core.tid import NeuroTid, NeuroTids
-from neuro.tools.terminal import components, style
+from neuro.tools.terminal import components
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.tools.terminal.cli import pass_environment
+from neuro.utils import terminal_style
 
 
 def integrate_local(tid_title):
     tw_filter = f"[title[{tid_title}]]"
     lineage = tw_get.lineage(tw_filter=tw_filter)[tid_title]
-    print(f"{style.BOLD}Lineage{style.RESET}: {" ➜  ".join(lineage[1:])}\n")
+    print(f"{terminal_style.BOLD}Lineage{terminal_style.RESET}: {" ➜  ".join(lineage[1:])}\n")
     neuro_tids_filter = " ".join(f"[[{element}]]" for element in lineage)
     neuro_tids = tw_get.neuro_tids(tw_filter=neuro_tids_filter)
     current_path = str()
@@ -46,14 +47,14 @@ def integrate_local(tid_title):
                 candidate_path = f"{current_path}/{name}"
 
             if os.path.isdir(candidate_path):
-                if components.bool_prompt(f"Connect {candidate_path} to {style.YELLOW}{style.BOLD}{tid_title}{style.RESET}?"):
+                if components.bool_prompt(f"Connect {candidate_path} to {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}?"):
                     neuro_tid.fields["local"] = f"file://{candidate_path}"
                     tw_put.neuro_tid(neuro_tid)
                     current_path = candidate_path
                 else:
                     break
             else:
-                if components.bool_prompt(f"Establish {candidate_path} for {style.YELLOW}{style.BOLD}{tid_title}{style.RESET}?"):
+                if components.bool_prompt(f"Establish {candidate_path} for {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}?"):
                     os.mkdir(candidate_path)
                     neuro_tid.fields["local"] = f"file://{candidate_path}"
                     tw_put.neuro_tid(neuro_tid)
@@ -78,7 +79,7 @@ def integrate_system_files(port):
                 update_tids = True
             else:
                 if neuro_tid.fields["file"] != f"file://{path}":
-                    print(f"Incorrect file path for {style.BOLD}{path}{style.RESET}")
+                    print(f"Incorrect file path for {terminal_style.BOLD}{path}{terminal_style.RESET}")
         elif os.path.isdir(path):
             if "local" not in neuro_tid.fields:
                 neuro_tid.fields["local"] = f"file://{path}"
@@ -86,7 +87,7 @@ def integrate_system_files(port):
                 update_tids = True
             else:
                 if neuro_tid.fields["local"] != f"file://{path}":
-                    print(f"Incorrect local path for {style.BOLD}{path}{style.RESET}")
+                    print(f"Incorrect local path for {terminal_style.BOLD}{path}{terminal_style.RESET}")
         else:
             pass
             print(f"Missing file: {path}")
@@ -115,14 +116,14 @@ def check_local_integration(port, verbose=True):
     for neuro_tid in locally_integrated_neuro_tids:
         local_path = neuro_tid.fields["local"]
         if not os.path.isdir(local_path.replace("file://", "")):
-            print(f"Local integration for {style.BOLD}{neuro_tid.title}{style.RESET} is broken.")
+            print(f"Local integration for {terminal_style.BOLD}{neuro_tid.title}{terminal_style.RESET} is broken.")
             validated = False
 
     if verbose:
         if validated:
-            print(f"{style.SUCCESS} Local integration")
+            print(f"{terminal_style.SUCCESS} Local integration")
         else:
-            print(f"{style.FAIL} Local integration broken")
+            print(f"{terminal_style.FAIL} Local integration broken")
 
     return validated
 
@@ -140,7 +141,7 @@ def check_images(port, verbose=True):
         img_path = neuro_tid.fields["img"]
         if img_path.startswith("file://"):
             if not os.path.isfile(img_path.replace("file://", "")):
-                print(f"Image integration for {style.BOLD}{neuro_tid.title}{style.RESET} is broken.")
+                print(f"Image integration for {terminal_style.BOLD}{neuro_tid.title}{terminal_style.RESET} is broken.")
                 validated = False
         elif img_path.startswith("http://") or img_path.startswith("https://"):
             headers = {

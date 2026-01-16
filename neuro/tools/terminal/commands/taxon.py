@@ -11,10 +11,10 @@ from rich.console import Console
 from neuro.core.tid import NeuroTids, NeuroTid
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.tools.science import biology
-from neuro.tools.terminal import components, style
+from neuro.tools.terminal import components
 from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.integrations import wikidata, ncbi
-from neuro.utils import exceptions, internal_utils
+from neuro.utils import exceptions, internal_utils, terminal_style
 
 
 OBLIGATORY_TAXA = [
@@ -140,11 +140,11 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
     with Console().status("Gathering taxon data...", spinner="dots"):
         ncbi_lineage = ncbi.get_lineage(taxon_id)
         if not ncbi_lineage:
-            print(f"{style.FAIL} {taxon_name}: NCBI bad request, try again")
+            print(f"{terminal_style.FAIL} {taxon_name}: NCBI bad request, try again")
             return
         else:
             lineage_data = process_ncbi_lineage(ncbi_lineage, port=port)
-            print(f"{style.SUCCESS} {lineage_data[-1]['name']}: NCBI Taxonomy data")
+            print(f"{terminal_style.SUCCESS} {lineage_data[-1]['name']}: NCBI Taxonomy data")
 
     # Create lineage NeuroTids
     neuro_tids = NeuroTids()
