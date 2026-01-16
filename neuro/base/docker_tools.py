@@ -9,7 +9,7 @@ import time
 
 import docker
 
-from neuro.core.deep import Dir
+from neuro.core import Dir
 from neuro.tools.terminal import style
 from neuro.utils import config, internal_utils, time_utils
 

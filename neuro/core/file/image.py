@@ -8,8 +8,8 @@ from PIL import (
     ExifTags)
 import pyexiv2
 
+from neuro.core import File, Location, Moment
 from neuro.core.data.str import PathInfo
-from neuro.core.deep import File, GeoLocation, Moment
 from neuro.utils import time_utils
 
 
@@ -44,7 +44,7 @@ class Exif(object):
         return rational[0] / rational[1]
 
     def get_location(self):
-        location = GeoLocation()
+        location = Location()
         try:
             gps_info = self.raw[34853]
             location.longitude = round(self._convert_to_degrees(gps_info[4]), 4)
@@ -72,7 +72,7 @@ class Image(File):
     """Image object."""
     def __init__(self, image_path, **kwargs):
         self.img_exif = dict()
-        self.img_location = GeoLocation()
+        self.img_location = Location()
         self.img_time = Moment(moment=None)
         super().__init__(image_path, **kwargs)
         self.pil = PIL_Image.open(self.path)

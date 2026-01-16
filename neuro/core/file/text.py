@@ -11,7 +11,7 @@ import os
 import re
 
 from neuro.core.data.dict import DictUtils
-from neuro.core.deep import File
+from neuro.core import File
 from neuro.utils import exceptions
 
 

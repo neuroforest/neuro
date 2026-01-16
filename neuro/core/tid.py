@@ -14,8 +14,8 @@ from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
 import requests
 
-from neuro.core.deep import NeuroNode, Moment
-from neuro.core.files.text import TextHtml
+from neuro.core import NeuroNode, Moment
+from neuro.core.file.text import TextHtml
 from neuro.utils import oop_utils, exceptions, internal_utils, network_utils
 
 

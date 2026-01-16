@@ -7,7 +7,7 @@ import subprocess
 
 import click
 
-from neuro.core.deep import Dir
+from neuro.core import Dir
 from neuro.tools.terminal import common, style
 from neuro.tools.terminal.cli import pass_environment
 
