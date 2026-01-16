@@ -8,7 +8,7 @@ import os
 import click
 from rich.console import Console
 
-from neuro.core.tid import NeuroTids, Tiddler
+from neuro.core.tid import Tiddlers, Tiddler
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.tools.science import biology
 from neuro.tools.terminal.cli import pass_environment
@@ -54,7 +54,7 @@ def filter_neuro_tids(neuro_tids, port):
     Filter and repair neuro_tids.
     :return: True | False
     """
-    filtered_neuro_tids = NeuroTids()
+    filtered_neuro_tids = Tiddlers()
     for neuro_tid in neuro_tids:
         tid_title = neuro_tid.title
         if neuro_tid.fields["neuro.role"] in OBLIGATORY_TAXA:
@@ -145,8 +145,8 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
             lineage_data = process_ncbi_lineage(ncbi_lineage, port=port)
             print(f"{terminal_style.SUCCESS} {lineage_data[-1]['name']}: NCBI Taxonomy data")
 
-    # Create lineage NeuroTids
-    neuro_tids = NeuroTids()
+    # Create lineage Tiddlers
+    neuro_tids = Tiddlers()
     for taxon_data in lineage_data:
         try:
             neuro_tid = tw_get.neuro_tid(taxon_data["title"], port=port)
