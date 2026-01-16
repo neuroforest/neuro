@@ -2,10 +2,10 @@ import datetime
 import time
 import logging
 
-from neuro.core import NeuroObject
+from neuro.core.deep.object import Object
 
 
-class Location(NeuroObject):
+class Location(Object):
     def __init__(self, longitude=float(), latitude=float(), elevation=float()):
         self.longitude = longitude
         self.latitude = latitude
@@ -37,7 +37,7 @@ class Location(NeuroObject):
         self.elevation = gps_dict[key_ele]
 
 
-class Moment(NeuroObject):
+class Moment(Object):
     def __init__(self, moment=None, form="unix"):
         """
         Initialized the Moment object and determines unix time.

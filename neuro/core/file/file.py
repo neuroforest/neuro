@@ -8,11 +8,11 @@ import os
 import pathlib
 import shutil
 
-from neuro.core import Moment, NeuroObject
+from neuro.core import Moment, Object
 from neuro.utils import oop_utils
 
 
-class MIME(NeuroObject):
+class MIME(Object):
     """
     MIME is the media type according to specification by Internet Assigned
     Numbers Authority (IANA) - https://tools.ietf.org/html/rfc2046
@@ -50,7 +50,7 @@ class MIME(NeuroObject):
         return f"{self.major}/{self.minor}"
 
 
-class File(NeuroObject):
+class File(Object):
     """
     File object for collecting file data and local utilities.
 
@@ -323,7 +323,7 @@ class Dir(File):
             logging.warning(f"Dircetory {dst_path} already exists, use 'force' to overwrite")
 
 
-class Symlink(NeuroObject):
+class Symlink(Object):
     def __init__(self, symlink_path):
         self.path = symlink_path
         self.target = os.path.realpath(symlink_path)

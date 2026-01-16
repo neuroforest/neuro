@@ -1,11 +1,11 @@
 import uuid
 
 from neuro.core.data.dict import DictUtils
-from neuro.core import NeuroObject
+from neuro.core.deep.object import Object
 from neuro.utils import oop_utils
 
 
-class Edge(NeuroObject):
+class Edge(Object):
     def __init__(self, source, target):
         super().__init__()
         self.weight = 0
@@ -73,9 +73,9 @@ class Edges(list):
         return self.get_edge("primary")
 
 
-class NeuroNode(NeuroObject):
+class Node(Object):
     """
-    NeuroNode represents the specific position of a node inside primary tree
+    Node represents the specific position of a node inside primary tree
     and the NeuroForest platform.
     """
     def __init__(self, **kwargs):
@@ -83,7 +83,7 @@ class NeuroNode(NeuroObject):
         self.edges = kwargs.get("edges", Edges())
 
     def __eq__(self, other):
-        if isinstance(other, NeuroNode):
+        if isinstance(other, Node):
             return other.uuid == self.uuid
         else:
             return NotImplemented
