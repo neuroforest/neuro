@@ -149,10 +149,10 @@ class TestNeuroTids:
 
 class TestNeuroTW:
     def test_from_html(self):
-        from neuro.core.tid import NeuroTW
+        from neuro.core.tid import TiddlywikiHtml
         tw_html_path = get_test_file("input/wikis/tw5.html")
 
-        neuro_tw = NeuroTW.from_html(tw_html_path)
+        neuro_tw = TiddlywikiHtml.from_html(tw_html_path)
         assert len(neuro_tw.neuro_tids) == 9
         assert neuro_tw.__contains__("$:/isEncrypted")
         assert neuro_tw.neuro_tids.object_index["$:/isEncrypted"].fields["text"] == "no"

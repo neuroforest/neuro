@@ -359,7 +359,7 @@ class Tiddlers(list):
                     f.write(tid_text)
 
 
-class NeuroTW(TextHtml):
+class TiddlywikiHtml(TextHtml):
     """
     Wrapper for TiddlyWiki HTML file.
     """
@@ -422,7 +422,7 @@ class NeuroTW(TextHtml):
 
     def write_to_wf(self, wf_path, exists=False, **kwargs):
         """
-        Write NeuroTW to WikiFolder.
+        Write TiddlywikiHtml to WikiFolder.
         :return:
         """
         # Create WikiFolder
