@@ -8,7 +8,6 @@ import subprocess
 import click
 
 from neuro.core import Dir
-from neuro.tools.terminal import common
 from neuro.tools.terminal.cli import pass_environment
 from neuro.utils import terminal_style
 
@@ -49,16 +48,4 @@ def cli(ctx, src_path, dst_path):
     :param src_path: current file pathname
     :param dst_path: target file pathname
     """
-    if not os.path.exists(src_path):
-        print(f"Error: not found {src_path}")
-        return
-    if os.path.exists(dst_path):
-        print(f"Error: already exists {dst_path}")
-        return
-
-    # Replace text in NeuroWiki
-    res = common.replace_text(src_path, dst_path, "")
-
-    # Move file locally
-    if res:
-        move_file(src_path, dst_path)
+    raise NotImplementedError
