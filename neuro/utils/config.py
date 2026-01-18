@@ -45,11 +45,10 @@ def main():
     global CONFIG_INITIALIZED
     if CONFIG_INITIALIZED:
         return
-
-    CONFIG_INITIALIZED = True
-
-    load_env_files()
-    config_logging()
+    else:
+        load_env_files()
+        config_logging()
+        CONFIG_INITIALIZED = True
 
 
 main()
