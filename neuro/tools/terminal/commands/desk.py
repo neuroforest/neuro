@@ -9,7 +9,7 @@ import sys
 import click
 
 from neuro.tools.terminal.cli import pass_environment
-from neuro.utils import config, internal_utils
+from neuro.utils import internal_utils
 
 
 def run_desktop_script(script_name, *args):

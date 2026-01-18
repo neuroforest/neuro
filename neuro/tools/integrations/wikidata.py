@@ -1,7 +1,6 @@
-import logging
 import requests
 
-from neuro.utils import internal_utils, exceptions
+from neuro.utils import exceptions
 
 
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
@@ -29,8 +28,3 @@ def fetch(query_file_path, params: dict = None, wikidata_sparql_url=WIKIDATA_SPA
         return res.json()["results"]["bindings"]
     else:
         raise exceptions.UnhandledStatusCode(f"{res.status_code} {res.reason}")
-
-
-if __name__ == "__main__":
-    data = fetch("taxon.rq", {"ncbi-taxon-id": "57570"})
-    print(data)

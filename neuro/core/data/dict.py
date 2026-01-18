@@ -24,7 +24,7 @@ class DictUtils:
         :param name:
         :param value:
         """
-        if type(value) == dict:
+        if type(value) is dict:
             if name not in d:
                 d[name] = dict()
             for subkey, subname in value.items():
@@ -110,10 +110,10 @@ class DictUtils:
         new_json_dict = copy.deepcopy(d)
         for key in d:
             value = d[key]
-            if type(value) == dict:
+            if type(value) is dict:
                 new_value = DictUtils.remove_keys(value, keys)
                 new_json_dict[key] = new_value
-            elif type(value) == list and len(value) > 0 and type(value[0]) == dict:
+            elif type(value) is list and len(value) > 0 and type(value[0]) is dict:
                 new_value = list()
                 for subvalue in value:
                     temp_value = DictUtils.remove_keys(subvalue, keys)
@@ -141,7 +141,7 @@ class DictUtils:
             sorted_keys = d
 
         for key in sorted_keys:
-            if type(d[key]) == dict:
+            if type(d[key]) is dict:
                 value = DictUtils.sort_alpha(d[key])
             else:
                 value = d[key]

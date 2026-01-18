@@ -10,7 +10,8 @@ import time
 import docker
 
 from neuro.core import Dir
-from neuro.utils import config, internal_utils, time_utils, terminal_style
+from neuro.utils import config  # noqa: F401
+from neuro.utils import internal_utils, time_utils, terminal_style
 
 
 class Container:
@@ -112,7 +113,7 @@ class Container:
             "-v", f"{data_backup_volume_name}:/data",
             "-v", f"{self.backup_location}:/backup",
             "alpine", "sh", "-c",
-            f"cd /data && tar czf /backup/data.tar.gz ."
+            "cd /data && tar czf /backup/data.tar.gz ."
         ])
         print(f"Archived /data to {archive_location}")
 

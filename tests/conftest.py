@@ -2,7 +2,8 @@ import os
 import subprocess
 import shutil
 
-from neuro.utils import network_utils, exceptions, config
+from neuro.utils import config  # noqa: F401
+from neuro.utils import exceptions, network_utils
 
 from .helper import create_and_run_wiki_folder
 

@@ -20,7 +20,7 @@ def cli(ctx, title):
         try:
             title = tw_get.filter_output(f"[search:neuro.id[{title}]]")[0]
         except IndexError:
-            print(f"Not found: {uuid}")
+            print(f"Not found: {title}")
             return
     response = tw_actions.open_tiddler(title)
     if response.status_code == 204:

@@ -3,8 +3,6 @@ from xml.etree import ElementTree
 
 import requests
 
-from neuro.utils import exceptions
-
 
 def resolve_taxon_name(taxon_name):
     url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"

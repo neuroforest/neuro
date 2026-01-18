@@ -1,11 +1,9 @@
 """
 Unit tests for the package neuro.tools.local.
 """
-import logging
-import os
 import shutil
 
-from ..helper import get_test_file, are_dirs_identical, get_path
+from ..helper import get_test_file, are_dirs_identical
 
 
 class TestRefactor:
