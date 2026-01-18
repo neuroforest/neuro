@@ -8,7 +8,7 @@ import pytest
 
 from neuro.utils import exceptions
 
-from ..helper import get_test_file, get_path, create_and_run_wiki_folder
+from ..helper import get_test_file, create_and_run_wiki_folder
 
 
 class TestNeuroTid:

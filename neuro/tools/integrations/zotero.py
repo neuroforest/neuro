@@ -3,7 +3,7 @@ import subprocess
 
 from bs4 import BeautifulSoup
 
-from neuro.utils import config
+from neuro.utils import config  # noqa: F401
 
 
 def get_citation_text(item_id,

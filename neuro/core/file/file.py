@@ -37,7 +37,7 @@ class MIME(Object):
             return super().__repr__(self)
 
     def __eq__(self, other):
-        if type(self) != type(other):
+        if type(self) is type(other):
             return False
         if self.major != other.major:
             return False

@@ -1,12 +1,10 @@
 """
 GET wrapper.
 """
-import html
+
 import logging
 import os
 import webbrowser
-import json
-import html
 
 from neuro.core.tid import Tiddler, Tiddlers
 from neuro.tools.tw5api import tw_api
@@ -128,7 +126,7 @@ def neuro_tids(tw_filter, **kwargs):
     return nts
 
 
-def rendered_tiddler(tid_title):
+def rendered_tiddler(tid_title, **kwargs):
     with tw_api.API(**kwargs) as api:
         parsed_response = api.get("/{}".format(tid_title), content_type="text/html")
         path = os.path.abspath("temp.html")
@@ -141,7 +139,7 @@ def rendered_tiddler(tid_title):
         webbrowser.open(url)
 
 
-def server_status():
+def server_status(**kwargs):
     with tw_api.API(**kwargs) as api:
         parsed_response = api.get("/status")
         return parsed_response

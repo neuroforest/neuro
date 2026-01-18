@@ -79,10 +79,11 @@ class Image(File):
 
     def __eq__(self, other):
         size = self.size == other.size
+        ctime = self.ctime == other.ctime
         mtime = self.mtime == other.mtime
         name = PathInfo.get_name(self.path) == PathInfo.get_name(other.path)
         location = self.img_location == other.img_location
-        return all([size, name, location])
+        return all([size, ctime, mtime, name, location])
 
     def set_basic(self, **kwargs):
         super().set_basic(**kwargs)
@@ -114,7 +115,7 @@ class Image(File):
     def set_exif(self):
         try:
             img_exif = self.pil.getexif()
-        except:
+        except BaseException("Could not get EXIF data from image."):
             img_exif = None
         if img_exif:
             self.img_exif = Exif(img_exif)

@@ -2,7 +2,6 @@ import csv
 import json
 import logging
 import multiprocessing
-import sys
 import urllib.parse
 
 import requests
@@ -66,7 +65,7 @@ def get_taxon_tid(taxon_id):
     taxon_ranks_path = internal_utils.get_path("resources") + "/data/taxon-ranks.csv"
     with open(taxon_ranks_path) as f:
         csv_reader = csv.reader(f)
-        header = next(csv_reader)  # Assume name,inat.rank.level,encoding
+        next(csv_reader)  # Skip header, assume name,inat.rank.level,encoding
         neuro_code = str()
         for row in csv_reader:
             if str(taxon_rank_level) == row[1] and taxon_rank == row[0]:

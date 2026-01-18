@@ -4,7 +4,7 @@ Unit tests of the module neuro.core.data.dict
 
 import json
 
-from ..helper import get_test_file, Capturing, get_hash
+from ..helper import get_test_file
 
 
 class TestDictUtils:

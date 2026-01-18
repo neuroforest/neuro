@@ -10,8 +10,9 @@ import tqdm
 from neuro.core import Moment
 from neuro.core.tid import WikiFolder, TiddlywikiHtml
 from neuro.tools.tw5api import tw_get, tw_put
-from neuro.base.api import nb_get
-from neuro.utils import config, internal_utils
+from neuro.base.api import NeuroBase, nb_get
+from neuro.utils import config  # noqa: F401
+from neuro.utils import internal_utils
 
 
 def prepare_tiddler(tiddler):
@@ -52,7 +53,7 @@ def migrate_wf_to_neo4j(wf_path, port=8222, **kwargs):
     :param wf_path:
     :param port: WF port
     """
-    nb = api.NeuroBase(**kwargs)
+    nb = NeuroBase(**kwargs)
     try:
         nb.driver.verify_connectivity()
     except Exception as e:
@@ -80,7 +81,7 @@ def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
     :param wf_path:
     :param port: WF port
     """
-    objects = api.get_all_objects(**kwargs)
+    objects = nb_get.all_tiddlers(**kwargs)
 
     # Run a WikiFolder
     tw_path = internal_utils.get_path("tiddlywiki.js")
@@ -105,6 +106,7 @@ def migrate_wf_to_json(wf_path, json_path, port=8222, **kwargs):
     with open(json_path, "w+") as f:
         json.dump(tiddlers, f)
     process.kill()
+
 
 def migrate_html_to_wf(html_path, wf_path, port=8222, **kwargs):
     try:

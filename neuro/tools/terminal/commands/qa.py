@@ -13,9 +13,10 @@ from rich.console import Console
 import tqdm
 
 from neuro.core.tid import Tiddlers
+from neuro.core.data.dict import DictUtils
 from neuro.tools.tw5api import tw_actions, tw_del, tw_get, tw_put
 from neuro.tools.terminal.cli import pass_environment
-from neuro.utils import terminal_components, terminal_style
+from neuro.utils import exceptions, terminal_components, terminal_style
 
 
 def remove_ghost_tiddlers(port):
@@ -278,8 +279,8 @@ class Primary:
 
         if self.verbose:
             counter = dict()
-            for key in sorting_bin:
-                counter[key] = len(sorting_bin[key])
+            for key in self.sorting_bin:
+                counter[key] = len(self.sorting_bin[key])
 
             print("")
             print("-" * 30)

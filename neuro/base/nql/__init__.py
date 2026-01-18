@@ -25,7 +25,7 @@ def session():
     s = PromptSession(history=history_file)
     while True:
         try:
-            query = s.prompt(f"⬤  ")
+            query = s.prompt("⬤  ")
             try:
                 tree = NqlParser().parse(query)
             except Exception as e:
@@ -36,7 +36,7 @@ def session():
             try:
                 handler = getattr(handlers, statement_type)
                 handler.handler(tree)
-            except AttributeError as e:
+            except AttributeError:
                 print(f"No handler available for statement '{statement_type}'")
                 continue
 

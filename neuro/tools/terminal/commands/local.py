@@ -134,6 +134,7 @@ def check_images(port, verbose=True):
     :param verbose:
     :return:
     """
+    validated = True
     img_neuro_tids = tw_get.neuro_tids("[has[img]]", port=port)
 
     for neuro_tid in tqdm.tqdm(img_neuro_tids):
@@ -157,6 +158,8 @@ def check_images(port, verbose=True):
                 print(f"Request failed: {e}")
             validated = False
 
+    return validated
+
 
 @click.command("local", short_help="local file management")
 @click.argument("tid_title", required=False)
@@ -173,7 +176,8 @@ def cli(ctx, tid_title, img, quality, port):
     :param port:
     """
     if img:
-        check_images(port=os.getenv("PORT"))
+        validated = check_images(port=os.getenv("PORT"))
+        return validated
 
     if quality:
         with Console().status("Integrating system files...", spinner="dots"):

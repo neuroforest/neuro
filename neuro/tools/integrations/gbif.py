@@ -1,6 +1,7 @@
 """
 Global Biodiversity Information Facility (GBIF) API wrapper.
 """
+
 import csv
 import json
 import multiprocessing
@@ -8,7 +9,6 @@ import requests
 import urllib.parse
 
 from neuro.core import tid
-from neuro.core.data.dict import DictUtils
 from neuro.utils import exceptions, internal_utils
 
 
@@ -19,7 +19,7 @@ FIELD_MAP = {
 
 
 def request_get(endpoint):
-    gbif_api = f"https://api.gbif.org/v1/"
+    gbif_api = "https://api.gbif.org/v1/"
     url = urllib.parse.urljoin(gbif_api, endpoint)
     res = requests.get(url)
     status_code = res.status_code
@@ -79,7 +79,7 @@ def get_taxon_tid(taxon_id):
     """
     taxon_data = get_taxon(taxon_id)
 
-    # Select title.
+    # Select title
     try:
         taxon_name = taxon_data["canonicalName"]
     except KeyError:
@@ -88,7 +88,7 @@ def get_taxon_tid(taxon_id):
     taxon_ranks_path = internal_utils.get_path("resources") + "/data/taxon-ranks.csv"
     with open(taxon_ranks_path) as f:
         csv_reader = csv.reader(f)
-        header = next(csv_reader)  # Assume name,inat.rank.level,encoding
+        next(csv_reader)  # Skip header, assume name,inat.rank.level,encoding
         neuro_code = str()
         for row in csv_reader:
             if taxon_rank == row[0]:
