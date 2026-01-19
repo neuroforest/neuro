@@ -6,7 +6,7 @@ from neuro.core.data.list import ListUtils
 from neuro.utils import terminal_style
 
 
-NB = NeuroBase()
+NB: NeuroBase
 
 
 def handle_node(data):
@@ -173,7 +173,9 @@ def handle_info(label):
     print(list_represent[2:-3])
 
 
-def handler(tree):
+def handler(nb, tree):
+    global NB
+    NB = nb
     connection_type = {
         "require_property": "REQUIRE_PROPERTY",
         "set_property": "HAS_PROPERTY",
@@ -189,6 +191,5 @@ def handler(tree):
         handle_set_relationship(data)
     elif ontology_type == "info":
         handle_info(data["label"])
-
     else:
         print(f"Action not supported: {data['type']}")
