@@ -43,6 +43,10 @@ class NqlTransformer(Transformer):
             return dict(items)
 
     @staticmethod
+    def property_key(items):
+        return items[0].value
+
+    @staticmethod
     def pair(items):
         key = str(items[0])
         val = str(items[1]).strip('"')
