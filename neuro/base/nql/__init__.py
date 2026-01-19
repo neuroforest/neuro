@@ -7,6 +7,7 @@ import os
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 
+from neuro.base.api import NeuroBase
 import neuro.base.nql.handlers as handlers
 from neuro.base.nql.components import NqlParser
 
@@ -20,6 +21,7 @@ def session():
     - Ctrl+C: clear current input
     - Ctrl+D: exit session
     """
+    nb = NeuroBase()
     nql_history_path = os.getenv("NQL_HISTORY", os.path.expanduser("~/.nql_history"))
     history_file = FileHistory(nql_history_path)
     s = PromptSession(history=history_file)
@@ -35,7 +37,7 @@ def session():
             statement_type = tree.data
             try:
                 handler = getattr(handlers, statement_type)
-                handler.handler(tree)
+                handler.handler(nb, tree)
             except AttributeError:
                 print(f"No handler available for statement '{statement_type}'")
                 continue
