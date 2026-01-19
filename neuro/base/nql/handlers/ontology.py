@@ -39,11 +39,11 @@ def handle_node(data):
            MERGE (o:{ontology_label} {{label: "{label}"}})
            ON CREATE SET
                o += {properties_string},
-               o.created = "{current_iso_z}",
-               o.modified = "{current_iso_z}"
+               o.created = datetime("{current_iso_z}"),
+               o.modified = datetime("{current_iso_z}")
            ON MATCH SET
                o += {properties_string},
-               o.modified = "{current_iso_z}";
+               o.modified = datetime("{current_iso_z}");
        """
     NB.run_query(merge_query)
 

@@ -4,6 +4,7 @@ Neuro Query Language - NQL
 
 import os
 
+import neo4j
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 
@@ -45,4 +46,8 @@ def session():
         except KeyboardInterrupt:
             continue
         except EOFError:
+            nb.close()
             break
+        except neo4j.exceptions.CypherSyntaxError as e:
+            print(f"Cypher syntax error: {e.message}")
+            continue
