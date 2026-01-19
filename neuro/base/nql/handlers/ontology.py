@@ -1,5 +1,6 @@
 from neuro.core import Node, Moment
 from neuro.base.api import NeuroBase
+from neuro.base.api.ontology import NodeOntology
 from neuro.base.nql.components import NqlTransformer, NqlGenerator
 from neuro.core.data.dict import DictUtils
 from neuro.core.data.list import ListUtils
@@ -108,68 +109,17 @@ def handle_set_relationship(data):
         print("Relationship already set.")
 
 
-def traverse_ontology(label, lineage, properties, relationships):
-    subclass_query = f"""
-        MATCH (o:OntologyNode {{label: "{label}"}})
-        MATCH (o)-[r:SUBCLASS_OF]->(t)
-        RETURN t.label as label;
-    """
-    subclass_data = NB.get_data(subclass_query)
-    properties_query = f"""
-        MATCH (o:OntologyNode {{label: "{label}"}})
-        MATCH (o)-[r]->(p:OntologyProperty)
-        RETURN type(r) as type, p.label as property
-    """
-    properties_data = NB.get_data(properties_query)
-    outgoing_relationship_query = f"""
-        MATCH (o:OntologyNode {{label: "{label}"}})
-        MATCH (o)-[:HAS_RELATIONSHIP]->(r:OntologyRelationship)-[:HAS_TARGET]->(t)
-        RETURN r.label as relationship, t.label as target;
-    """
-    relationship_data = NB.get_data(outgoing_relationship_query)
-    if relationship_data:
-        for r in relationship_data:
-            relationships.append((r["relationship"], "outgoing", r["target"], label),)
-    incoming_relationship_query = f"""
-        MATCH (o:OntologyNode {{label: "{label}"}})
-        MATCH (t)-[:HAS_RELATIONSHIP]->(r:OntologyRelationship)-[:HAS_TARGET]->(o)
-        RETURN r.label as relationship, t.label as target;
-    """
-    relationship_data = NB.get_data(incoming_relationship_query)
-    if relationship_data:
-        for r in relationship_data:
-            relationships.append((r["relationship"], "incoming", r["target"], label),)
-
-    if properties_data:
-        property_map = {
-            "HAS_PROPERTY": "allowed",
-            "REQUIRE_PROPERTY": "required"
-        }
-        for p in properties_data:
-            property_type = p["type"]
-            property_label = p["property"].strip("`")
-            if property_label not in properties:
-                properties[property_label] = [property_map[property_type], label]
-
-    if not subclass_data:
-        return lineage, properties, relationships
-    else:
-        superclass_label = subclass_data[0]["label"].strip("`")
-        lineage.append(superclass_label)
-        return traverse_ontology(superclass_label, lineage, properties, relationships)
-
-
 def handle_info(label):
     label = label.strip("`")
-    lineage, properties, relationships = traverse_ontology(label, [label], dict(), list())
+    node_ontology = NodeOntology(NB, label)
     print(f"Ontology info for {terminal_style.BOLD}{label}{terminal_style.RESET}")
     print("-"*50)
     print("Lineage:")
-    print("    ", " ➜  ".join(lineage))
+    print("    ", " ➜  ".join(node_ontology.lineage))
     print("\nProperties:")
-    DictUtils.represent(properties, level=1, display=True, ignore_list=True)
+    DictUtils.represent(node_ontology.properties, level=1, display=True, ignore_list=True)
     print("Relationships:")
-    list_represent = ListUtils.represent(relationships, level=0, display=False)
+    list_represent = ListUtils.represent(node_ontology.relationships, level=0, display=False)
     print(list_represent[2:-3])
 
 
