@@ -10,7 +10,6 @@ class NeuroBase:
     """
     def __init__(self, neo4j_uri=None, neo4j_user=None, neo4j_password=None, **kwargs):
         uri = neo4j_uri or os.getenv("NEO4J_URI")
-        print(uri)
         user = neo4j_user or os.getenv("NEO4J_USER")
         password = neo4j_password or os.getenv("NEO4J_PASSWORD")
         try:
@@ -31,6 +30,7 @@ class NeuroBase:
         """
         Run a Cypher query and return the data as a list of records.
         """
+        logging.debug(f"NeuroBase.get_data query: {query}")
         with self.driver.session() as session:
             result = session.run(query, parameters or {})
             records = [record.data() for record in result]
