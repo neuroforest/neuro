@@ -5,88 +5,21 @@ from neuro.core.deep.object import Object
 from neuro.utils import oop_utils
 
 
-class Edge(Object):
-    def __init__(self, source, target):
-        super().__init__()
-        self.weight = 0
-        self.source = source
-        self.target = target
-
-    def __str__(self):
-        string = "{} --> {}"
-        return string.format(
-            self.source.name,
-            self.target.name)
-
-    def apply_to(self, neuro_nodes):
-        for neuro_node in neuro_nodes:
-            edges = neuro_node.edges
-            if self not in edges:
-                edges.append(self)
-
-
-class Edges(list):
-    """
-    NeuroEdges is an array of object of type NeuroEdgs with some special
-    functionality.
-    """
-    def __init__(self, edges=None):
-        self.edges = edges
-        if self.are_edges_ok():
-            super().__init__(edges)
-        else:
-            super().__init__()
-
-    def __str__(self):
-        collected_string = str()
-        for edge in self:
-            collected_string += edge.__str__() + "\n"
-        return collected_string
-
-    def are_edges_ok(self):
-        """
-        Checks if edges given at construction are valid.
-        :return:
-        """
-        try:
-            it = iter(self.edges)
-            for i in it:
-                if not isinstance(i, Edge):
-                    return False
-            return True
-        except TypeError:
-            return False
-
-    def get_edge(self, edge_type):
-        """
-        Returns an edge
-        :param edge_type:
-        :return:
-        :rtype:
-        """
-        for edge in self:
-            print(edge.type)
-            if edge.type == edge_type:
-                return edge
-
-    def get_primary(self):
-        return self.get_edge("primary")
-
-
 class Node(Object):
     """
     Node represents the specific position of a node inside primary tree
     and the NeuroForest platform.
     """
-    def __init__(self, **kwargs):
+    def __init__(self, labels, **kwargs):
+        self.labels = labels
         self.uuid = kwargs.get("uuid", self.generate_neuro_id())
-        self.edges = kwargs.get("edges", Edges())
+        self.properties = kwargs.get("properties", dict())
 
     def __eq__(self, other):
         if isinstance(other, Node):
             return other.uuid == self.uuid
         else:
-            return NotImplemented
+            return False
 
     def __getitem__(self, item):
         return getattr(self, item)
@@ -109,6 +42,18 @@ class Node(Object):
 
     def __str__(self):
         return str(self.uuid)
+
+    @classmethod
+    def from_neurobase(cls, nb, neuro_id):
+        query = f"""
+        MATCH (o {{`neuro.id`: "{neuro_id}"}})
+        RETURN properties(o) as properties, labels(o) as labels;
+        """
+        data = nb.get_data(query)
+        assert len(data) == 1
+        properties = data[0]["properties"]
+        labels = data[0]["labels"]
+        return cls(labels, uuid=neuro_id, properties=properties)
 
     def display(self):
         print(self.__repr__())

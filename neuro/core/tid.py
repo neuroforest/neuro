@@ -29,7 +29,7 @@ class Tiddler(Node):
         - fields - a dictionary of all fields, some with special handling (tags, list)
     """
     def __init__(self, tid_title="", fields=None, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__("Tiddler", **kwargs)
         self.title = tid_title
         if fields and isinstance(fields, dict):
             self.fields = fields
@@ -62,7 +62,7 @@ class Tiddler(Node):
         return self.title == other.title and self_fields == other_fields
 
     def __getitem__(self, key):
-        if key in ["title", "edges", "uuid", "fields"]:
+        if key in ["title", "uuid", "fields"]:
             return super().__getitem__(key)
         else:
             return self.fields[key]
@@ -70,7 +70,6 @@ class Tiddler(Node):
     def __contains__(self, key):
         d = {
             **self.fields,
-            "edges": self.edges,
             "title": self.title,
             "uuid": self.uuid
         }
