@@ -11,7 +11,7 @@ NB: NeuroBase
 
 
 def handle_node(data):
-    label = data["label"]
+    label = data["label"].strip("`")
     ontology_label = "Ontology" + data["type"].title()
     properties = {
         "label": label,
@@ -50,12 +50,12 @@ def handle_node(data):
 
 def handle_connect(data, relationship_type):
     properties = {
-        "label": data["label"],
+        "label": data["label"].strip("`"),
         **data["properties"]
     }
     properties_string = NqlGenerator().properties_string(properties)
     target_properties = {
-        "label": data["target_node"]["label"],
+        "label": data["target_node"]["label"].strip("`"),
         **data["target_node"]["properties"]
     }
     target_properties_string = NqlGenerator().properties_string(target_properties)
