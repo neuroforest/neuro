@@ -8,7 +8,14 @@ def all_tiddlers(**kwargs):
     nb = NeuroBase(**kwargs)
     try:
         nb.driver.verify_connectivity()
-        query = "MATCH (t:Tiddler) RETURN t;"
+        query = """
+        MATCH (t:Tiddler)
+        RETURN t { 
+            .*, 
+            created: toString(t.created),
+            modified: toString(t.modified) 
+        } as properties;
+        """
         result = nb.get_data(query)
         tiddlers = [next(iter(record.values())) for record in result]
     except Exception as e:
