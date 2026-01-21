@@ -2,6 +2,7 @@
 Transferring image file data into NeuroForest.
 """
 import logging
+from pathlib import Path
 
 from PIL import (
     Image as PIL_Image,
@@ -9,7 +10,6 @@ from PIL import (
 import pyexiv2
 
 from neuro.core import File, Location, Moment
-from neuro.core.data.str import PathInfo
 from neuro.utils import time_utils
 
 
@@ -81,7 +81,7 @@ class Image(File):
         size = self.size == other.size
         ctime = self.ctime == other.ctime
         mtime = self.mtime == other.mtime
-        name = PathInfo.get_name(self.path) == PathInfo.get_name(other.path)
+        name = Path(self.path).name == Path(other.path).name
         location = self.img_location == other.img_location
         return all([size, ctime, mtime, name, location])
 
