@@ -1,6 +1,6 @@
 from neuro.base.nql.handlers import (
-    ontology
+    ontology_handler
 )
 
 
-__all__ = ["ontology"]
+__all__ = ["ontology_handler"]

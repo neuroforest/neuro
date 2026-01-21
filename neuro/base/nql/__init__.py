@@ -37,7 +37,7 @@ def session():
 
             statement_type = tree.data
             try:
-                handler = getattr(handlers, statement_type)
+                handler = getattr(handlers, f"{statement_type}_handler")
                 handler.handler(nb, tree)
             except AttributeError:
                 print(f"No handler available for statement '{statement_type}'")
