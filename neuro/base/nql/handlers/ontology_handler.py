@@ -1,10 +1,7 @@
 from neuro.core import Node, Moment
 from neuro.base.api import NeuroBase
-from neuro.base.api.ontology import NodeOntology
+from neuro.base.api.ontology import OntologyNodeInfo
 from neuro.base.nql.components import NqlTransformer, NqlGenerator
-from neuro.core.data.dict import DictUtils
-from neuro.core.data.list import ListUtils
-from neuro.utils import terminal_style
 
 
 NB: NeuroBase
@@ -111,16 +108,11 @@ def handle_set_relationship(data):
 
 def handle_info(label):
     label = label.strip("`")
-    node_ontology = NodeOntology(NB, label)
-    print(f"Ontology info for {terminal_style.BOLD}{label}{terminal_style.RESET}")
-    print("-"*50)
-    print("Lineage:")
-    print("    ", " ➜  ".join(node_ontology.lineage))
-    print("\nProperties:")
-    DictUtils.represent(node_ontology.properties, level=1, display=True, ignore_list=True)
-    print("Relationships:")
-    list_represent = ListUtils.represent(node_ontology.relationships, level=0, display=False)
-    print(list_represent[2:-3])
+    try:
+        info = OntologyNodeInfo(NB, label)
+        info.display()
+    except ValueError as e:
+        print(e)
 
 
 def handler(nb, tree):
