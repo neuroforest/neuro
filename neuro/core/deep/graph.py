@@ -10,8 +10,8 @@ class Node(Object):
     Node represents the specific position of a node inside primary tree
     and the NeuroForest platform.
     """
-    def __init__(self, labels, **kwargs):
-        self.labels = labels
+    def __init__(self, labels: list, **kwargs):
+        super().__init__(labels=labels)
         self.uuid = kwargs.get("uuid", self.generate_neuro_id())
         self.properties = kwargs.get("properties", dict())
 
@@ -41,7 +41,7 @@ class Node(Object):
         setattr(self, key, value)
 
     def __str__(self):
-        return str(self.uuid)
+        return str(self.__repr__())
 
     @classmethod
     def from_neurobase(cls, nb, neuro_id):

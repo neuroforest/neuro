@@ -21,15 +21,15 @@ from neuro.utils import oop_utils, exceptions, internal_utils, network_utils
 
 class Tiddler(Node):
     """
-    Tiddler is a Python representation of tiddler, that is an element of
-    NeuroForest platform.
+    Tiddler is a Python representation of tiddler that is an element of
+    the NeuroForest platform.
     There are 3 fundamental object properties:
         - uuid - inherited from Node
         - title - tiddler title, also serves as identifier
         - fields - a dictionary of all fields, some with special handling (tags, list)
     """
     def __init__(self, tid_title="", fields=None, **kwargs):
-        super().__init__("Tiddler", **kwargs)
+        super().__init__(["Tiddler"], **kwargs)
         self.title = tid_title
         if fields and isinstance(fields, dict):
             self.fields = fields
@@ -95,7 +95,7 @@ class Tiddler(Node):
         Add fields to neuro_tid.
 
         :param fields: dict
-        :param overwrite: override existing fields
+        :param overwrite: overrides existing fields
         :return:
         """
         for field_name, field_value in fields.items():
@@ -145,10 +145,7 @@ class Tiddler(Node):
         """
         Populate Tiddler properties from a tiddler.
 
-        :param tiddler:
-        :param kwargs:
-            - ignore: list of fields to ignore when importing from tiddler
-            - override: override Tiddler properties
+        :param tiddler: dict
         :return:
         """
         try:
@@ -478,10 +475,6 @@ class WikiFolder:
             if os.path.isdir(wf_path):
                 raise FileExistsError
             self.create(**kwargs)
-
-    def __enter__(self):
-        self.open()
-        return self
 
     def __exit__(self, exc_type, exc_value, tb):
         # Ensure everything is saved
