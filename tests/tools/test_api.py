@@ -6,6 +6,8 @@ import time
 
 import pytest
 
+from neuro.utils import network_utils
+
 from ..helper import create_and_run_wiki_folder
 
 
@@ -13,6 +15,14 @@ kwargs = {
     "port": os.getenv("TEST_PORT"),
     "host": os.getenv("HOST")
 }
+
+
+@pytest.fixture(scope="module", autouse=True)
+def run_wiki_server():
+    process = create_and_run_wiki_folder("universal", kwargs.get("port"))
+    network_utils.wait_for_socket(kwargs.get("host"), kwargs.get("port"))
+    yield
+    process.kill()
 
 
 class TestTwActions:
@@ -114,7 +124,6 @@ class TestTwGet:
 
 
 class TestTwPut:
-    @pytest.mark.integration
     def test_put_tiddler(self):
         from neuro.tools.tw5api import tw_get, tw_put
         text = f"text{time.time()}"
@@ -131,7 +140,6 @@ class TestTwPut:
         tiddler = tw_get.tiddler("test_put_neuro_tid", **kwargs)
         assert tiddler["text"] == text
 
-    @pytest.mark.integration
     def test_replace_neuro_tid(self):
         from neuro.tools.tw5api import tw_get, tw_put
         nt1 = tw_get.neuro_tid("test", **kwargs)
