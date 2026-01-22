@@ -16,7 +16,6 @@ kwargs = {
 
 
 class TestTwActions:
-    @pytest.mark.integration
     def test_merge(self):
         from neuro.tools.tw5api import tw_actions, tw_get
         r = tw_actions.merge_tiddlers(["merge1", "merge2", "merge3"], **kwargs)
@@ -30,7 +29,6 @@ class TestTwActions:
         assert merged_tiddler["merge2"] == "yes"
         assert merged_tiddler["merge3"] == "yes"
 
-    @pytest.mark.integration
     def test_rename(self):
         from neuro.tools.tw5api import tw_actions, tw_get
         r = tw_actions.rename_tiddler("rename1", "rename2", **kwargs)
@@ -53,7 +51,6 @@ class TestTwActions:
 
 
 class TestTwDel:
-    @pytest.mark.integration
     def test_del_tiddler(self):
         from neuro.tools.tw5api import tw_del, tw_get
         assert tw_get.is_tiddler("delete", **kwargs) is True
@@ -62,7 +59,6 @@ class TestTwDel:
 
 
 class TestTwGet:
-    @pytest.mark.integration
     def test_filter_output(self):
         from neuro.tools.tw5api import tw_get
         tw_filter = "[title[test]get[created]] [title[test]get[neuro.id]]"
@@ -70,7 +66,6 @@ class TestTwGet:
         assert type(filter_output) is list
         assert len(filter_output) == 2
 
-    @pytest.mark.integration
     def test_get_lineage(self):
         from neuro.tools.tw5api import tw_get
         create_and_run_wiki_folder("lineage", 8069)
@@ -81,13 +76,11 @@ class TestTwGet:
         assert "lineage-6-1" not in lineage
         assert "lineage-branch-3-1" not in lineage
 
-    @pytest.mark.integration
     def test_get_neuro_tid(self):
         from neuro.tools.tw5api import tw_get
         neuro_tid = tw_get.neuro_tid("test", **kwargs)
         assert "created" in neuro_tid.fields
 
-    @pytest.mark.integration
     def test_get_tiddler(self):
         from neuro.tools.tw5api import tw_get
         tiddler = tw_get.tiddler("test", **kwargs)
@@ -95,7 +88,6 @@ class TestTwGet:
         assert "created" in tiddler
         assert tiddler["created"] == "2019-01-30T20:02:31.703Z"
 
-    @pytest.mark.integration
     def test_get_tw_index(self):
         from neuro.tools.tw5api import tw_get
         tw_index = tw_get.tw_index("[all[]]", **kwargs)
@@ -103,7 +95,6 @@ class TestTwGet:
         assert len(tw_index) > 0
         assert all([True if set(d.keys()).issubset({"title", "tmap.id", "tags"}) else False for d in tw_index])
 
-    @pytest.mark.integration
     def test_get_tw_fields(self):
         from neuro.tools.tw5api import tw_get
         fields = ["title", "created"]

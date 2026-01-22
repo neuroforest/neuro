@@ -21,7 +21,6 @@ def get_inaturalist_mocks():
 
 
 class TestGbif:
-    @pytest.mark.integration
     def test_request_get(self):
         from neuro.tools.integrations import gbif
         taxon_data = gbif.get_taxon("2597892")
@@ -30,7 +29,6 @@ class TestGbif:
 
 
 class TestInaturalist:
-    @pytest.mark.integration
     def test_request_get(self):
         from neuro.tools.integrations import inaturalist
 
@@ -42,7 +40,6 @@ class TestInaturalist:
 
 
 class TestNCBI:
-    @pytest.mark.integration
     def test_resolve_taxon_name(self):
         from neuro.tools.integrations import ncbi
         taxon_ids = ncbi.resolve_taxon_name("Amata phegea")
@@ -70,7 +67,6 @@ class TestNCBI:
 
 
 class TestWikiData:
-    @pytest.mark.integration
     def test_fetch(self):
         from neuro.tools.integrations import wikidata
         params = {
@@ -83,7 +79,6 @@ class TestWikiData:
 
 
 class TestZotero:
-    @pytest.mark.integration
     def test_get_citation_text(self):
         """
         Using this open Zotero group for testing:
