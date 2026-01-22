@@ -3,7 +3,6 @@ import subprocess
 import sys
 
 import click
-import dotenv
 import pytest
 
 from neuro.utils import internal_utils
@@ -18,8 +17,6 @@ from neuro.utils import internal_utils
 def cli(mode, command_args):
     neuro_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     os.chdir(neuro_path)
-    dotenv.load_dotenv(os.path.abspath(".env.defaults"))
-    dotenv.load_dotenv(os.path.abspath(".env.testing"), override=True)
     os.environ["ENVIRONMENT"] = "TESTING"
 
     if mode in ["p", "production"]:
