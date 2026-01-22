@@ -18,12 +18,10 @@ from neuro.utils import internal_utils
 
 @click.command("ntest", short_help="test Python package neuro")
 @click.argument("path", required=False, type=click.Path(resolve_path=True))
-@click.option("-i", "--integration", is_flag=True)
 @click.option("-l", "--local", is_flag=True)
-@click.option("-n", "--notintegration", is_flag=True)
 @click.option("-p", "--production", is_flag=True)
 @click.argument("file", nargs=-1)
-def cli(path, integration, notintegration, local, file, production):
+def cli(path, local, file, production):
     neuro_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     os.chdir(neuro_path)
     dotenv.load_dotenv(os.path.abspath(".env.defaults"))
@@ -58,10 +56,6 @@ def cli(path, integration, notintegration, local, file, production):
         subprocess.run(["venv/bin/pip", "install", f"git+file://{neuro_path}"])
         subprocess.run("git archive HEAD tests | tar -x -C venv/", shell=True, check=True)
         subprocess.run(["venv/bin/pytest", "venv/tests"])
-    elif integration:
-        pytest.main(["-v", "-m", "integration", path])
-    elif notintegration:
-        pytest.main(["-v", "-m", "non integration", path])
     else:
         pytest.main([path])
 
