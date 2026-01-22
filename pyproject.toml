@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools==78.0.1"]
+requires = ["setuptools==80.9.0"]
 build_backend = "setuptools.build_meta"
 
 [project]
@@ -14,7 +14,7 @@ dependencies = [
     "killport>=1.2.0",
     "lark>=1.3.1",
     "lxml>=5.1.0",
-    "neo4j>=6.0.3",
+    "neo4j>=6.1.0",
     "pillow>=10.2.0",
     "prompt_toolkit>=3.0.52",
     "psutil>=5.9.7",
@@ -26,6 +26,7 @@ dependencies = [
     "pytz>=2024.1",
     "requests>=2.31.0",
     "rich>=13.9.4",
+    "ruff>=0.14.13",
     "tqdm>=4.66.1",
     "urllib3>=2.1.0"
 ]
