@@ -5,7 +5,7 @@ on:
       - develop
 
 jobs:
-  test:
+  ruff:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +20,17 @@ jobs:
         uses: astral-sh/ruff-action@v1
         with:
           args: "check"
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          architecture: 'x64'
 
       - name: Install dependencies and test
         run: |
