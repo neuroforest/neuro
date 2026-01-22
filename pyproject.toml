@@ -38,11 +38,6 @@ ntest = "neuro.utils.ntest:cli"
 [project.urls]
 repository = "https://github.com/neuroforest/neuro"
 
-[tool.pytest.ini_options]
-markers = [
-    "integration: integration test"
-]
-
 [tool.setuptools.packages.find]
 include = ["neuro*"]
 exclude = ["build*", "tests*", "venv*"]

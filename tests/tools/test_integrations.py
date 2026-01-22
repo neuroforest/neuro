@@ -1,7 +1,7 @@
 """
 Unit tests for the package .
 """
-import pytest
+
 import json
 
 from ..helper import get_test_file, get_path
