@@ -136,14 +136,14 @@ class TestTwPut:
         from neuro.core import tid
         text = f"text{time.time()}"
         neuro_tid = tid.Tiddler("test_put_neuro_tid", fields={"text": text})
-        tw_put.neuro_tid(neuro_tid, **kwargs)
+        tw_put.tiddler(neuro_tid, **kwargs)
         tiddler = tw_get.tiddler("test_put_neuro_tid", **kwargs)
         assert tiddler["text"] == text
 
     def test_replace_neuro_tid(self):
         from neuro.tools.tw5api import tw_get, tw_put
         nt1 = tw_get.neuro_tid("test", **kwargs)
-        tw_put.neuro_tid(nt1, **kwargs)
+        tw_put.tiddler(nt1, **kwargs)
         nt2 = tw_get.neuro_tid("test", **kwargs)
         from neuro.core.data.dict import DictUtils
         DictUtils.represent(nt1.fields)

@@ -161,15 +161,15 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
     changes = False
     for neuro_tid in neuro_tids:
         if overwrite and yes:
-            tw_put.neuro_tid(neuro_tid, port=port)
+            tw_put.tiddler(neuro_tid, port=port)
             changes = True
         elif yes and not tw_get.is_tiddler(neuro_tid.title, port=port):
-            tw_put.neuro_tid(neuro_tid, port=port)
+            tw_put.tiddler(neuro_tid, port=port)
             changes = True
         elif overwrite or not tw_get.is_tiddler(neuro_tid.title, port=port):
             neuro_tid = add_translations(neuro_tid)
             if terminal_components.bool_prompt(f"Put tiddler \"{neuro_tid.title}\"?"):
-                tw_put.neuro_tid(neuro_tid, port=port)
+                tw_put.tiddler(neuro_tid, port=port)
                 changes = True
 
     # Establish local filesystem architecture
@@ -192,13 +192,13 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
                 if terminal_components.bool_prompt(f"Establish subpath \"{subpath}\"?"):
                     os.mkdir(current_path)
                     neuro_tid.fields["local"] = f"file://{current_path}"
-                    tw_put.neuro_tid(neuro_tid, port=port)
+                    tw_put.tiddler(neuro_tid, port=port)
                 else:
                     break
             else:
                 if "local" not in neuro_tid.fields:
                     neuro_tid.fields["local"] = f"file://{current_path}"
-                    tw_put.neuro_tid(neuro_tid, port=port)
+                    tw_put.tiddler(neuro_tid, port=port)
                     added = True
 
     if not changes:

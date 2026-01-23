@@ -64,7 +64,7 @@ def extract_url_data(mode="default"):
         else:
             neuro_tid = tw_get.neuro_tid(tid_title)
             neuro_tid.fields["g.lat"], neuro_tid.fields["g.lon"] = lat, lon
-            tw_put.neuro_tid(neuro_tid)
+            tw_put.tiddler(neuro_tid)
 
     print(f"Geocoding failed for: {failed}")
 
