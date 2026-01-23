@@ -86,7 +86,7 @@ def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
     # Run a WikiFolder
     tw_path = internal_utils.get_path("tiddlywiki.js")
     shutil.rmtree(wf_path, ignore_errors=True)
-    wf = WikiFolder(wf_path, exists=False, tw5=tw_path, port=port, **kwargs)
+    wf = WikiFolder(wf_path, tw5=tw_path, port=port, **kwargs)
     with wf:
         for o in objects:
             o = prepare_object(o)

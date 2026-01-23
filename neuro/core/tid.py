@@ -7,12 +7,10 @@ import os
 import re
 import shutil
 import subprocess
-import time
 
 import tqdm
 from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
-import requests
 
 from neuro.core import Node, Moment
 from neuro.core.file.text import TextHtml
@@ -416,13 +414,13 @@ class TiddlywikiHtml(TextHtml):
 
         return neuro_tw
 
-    def write_to_wf(self, wf_path, exists=False, **kwargs):
+    def write_to_wf(self, wf_path, **kwargs):
         """
         Write TiddlywikiHtml to WikiFolder.
         :return:
         """
         # Create WikiFolder
-        neuro_wf = WikiFolder(wf_path, exists=exists, **kwargs)
+        neuro_wf = WikiFolder(wf_path, **kwargs)
         p = subprocess.Popen([
             "node",
             neuro_wf.tw5,
@@ -446,71 +444,46 @@ class WikiFolder:
         Initialize and verify WikiFolder
         :param wf_path: WikiFolder path
         :param exists: should the WikiFolder already exist
-        :param tw_info_template: template used for creating WF
         :param tw5: path to the tiddlywiki.js file
         :param silent: supress stdout
+        :param port:
+        :param host:
+        :param tw_info: template used for creating WF
+        :param tiddlers_folder: folder with tiddlers to copy into WF
         """
         self.process: subprocess.Popen
         self.wf_path = wf_path
         self.tw5 = tw5
         self.port = kwargs.get("port", 8099)
-        self.url = kwargs.get("url", "127.0.0.1")
+        self.host = kwargs.get("host", "127.0.0.1")
         self.silent = kwargs.get("silent", False)
-        if exists:
-            tiddlywiki_info = f"{wf_path}/tiddlywiki.info"
-            tiddlers = f"{wf_path}/tiddlers"
-            if not os.path.isdir(wf_path):
-                raise exceptions.FileNotWiki(f"Not a directory: {wf_path}")
-            if not os.path.isdir(tiddlers):
-                raise exceptions.FileNotWiki(f"No directory found: {tiddlers}")
-
-            if not os.path.isfile(tiddlywiki_info):
-                raise exceptions.FileNotWiki("No tiddlywiki.info file found.")
-            with open(tiddlywiki_info) as f:
-                try:
-                    json.load(f)
-                except ValueError:
-                    raise exceptions.FileNotWiki("File tiddlywiki.info could not be parsed as JSON.")
+        if os.path.exists(wf_path):
+            self.validate()
         else:
             if os.path.isdir(wf_path):
                 raise FileExistsError
             self.create(**kwargs)
 
-    def __exit__(self, exc_type, exc_value, tb):
-        # Ensure everything is saved
-        while True:
-            status = requests.get(f"http://{self.url}:{self.port}/neuro/info")
-            if status.json()["dirty"]:
-                time.sleep(0.2)
-            else:
-                break
-
-        self.close()
-        return False
-
     def close(self):
         self.process.kill()
 
-    def create(self, tid_folder=None, **kwargs):
+    def create(self, tiddlers_folder=None, **kwargs):
         """
-        Create new WikiFolder.
+        Create a new WikiFolder.
         """
-        if "tw_info_template" in kwargs:
-            tw_info_template = kwargs.get("tw_info_template")
-        else:
-            tw_info_template = internal_utils.get_path("templates") + "/tiddlywiki.info"
-        with open(tw_info_template) as f:
-            tw_info = json.load(f)
-        for key in kwargs:
-            tw_info[key] = kwargs.get(key)
-
         os.makedirs(self.wf_path)
-        tw_info_path = self.wf_path + "/tiddlywiki.info"
-        with open(tw_info_path, "w+") as f:
-            json.dump(tw_info, f, indent=4)
 
-        if tid_folder:
-            shutil.copytree(tid_folder, f"{self.wf_path}/tiddlers")
+        if "tw_info" in kwargs:
+            tw_info = kwargs.get("tw_info")
+        else:
+            tw_info = internal_utils.get_path("templates") + "/tiddlywiki.info"
+        tw_info_path = self.wf_path + "/tiddlywiki.info"
+        shutil.copy(tw_info, tw_info_path)
+
+        if tiddlers_folder:
+            shutil.copytree(tiddlers_folder, f"{self.wf_path}/tiddlers")
+        else:
+            os.makedirs(f"{self.wf_path}/tiddlers")
 
     def start(self):
         if self.silent:
@@ -527,9 +500,29 @@ class WikiFolder:
             self.wf_path,
             "--listen",
             f"port={self.port}",
-            f"host={self.url}"
+            f"host={self.host}"
         ], **params)
 
-        network_utils.wait_for_socket(self.url, self.port)
+        network_utils.wait_for_socket(self.host, self.port)
 
         return self.process
+
+    def validate(self):
+        """
+        Validate WikiFolder structure.
+        """
+        tiddlywiki_info = f"{self.wf_path}/tiddlywiki.info"
+        tiddlers = f"{self.wf_path}/tiddlers"
+        if not os.path.isdir(self.wf_path):
+            raise exceptions.FileNotWiki(f"Not a directory: {self.wf_path}")
+        if not os.path.isdir(tiddlers):
+            raise exceptions.FileNotWiki(f"No directory found: {tiddlers}")
+
+        if not os.path.isfile(tiddlywiki_info):
+            raise exceptions.FileNotWiki("No tiddlywiki.info file found.")
+        with open(tiddlywiki_info) as f:
+            try:
+                json.load(f)
+            except ValueError:
+                raise exceptions.FileNotWiki("File tiddlywiki.info could not be parsed as JSON.")
+        return True

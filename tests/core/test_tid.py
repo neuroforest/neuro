@@ -8,7 +8,7 @@ import pytest
 
 from neuro.utils import exceptions
 
-from ..helper import get_test_file, create_and_run_wiki_folder
+from ..helper import get_test_file
 
 
 class TestNeuroTid:
@@ -158,18 +158,35 @@ class TestNeuroTW:
         assert neuro_tw.neuro_tids.object_index["$:/isEncrypted"].fields["text"] == "no"
 
 
-class TestNeuroWF:
-    def test_init(self):
+class TestWikiFolder:
+    @pytest.fixture(scope="function", autouse=True)
+    def setup(self):
+        self.tiddlywiki_info = get_test_file("input/tiddlywiki.info")
+
+    def test_create(self):
+        import os
         from neuro.core.tid import WikiFolder
-        process = create_and_run_wiki_folder("init",8099)
-        process.kill()
+        wf_path = get_test_file("output/wf-test_create", exists=False)
+        assert not os.path.exists(wf_path)
+        wf = WikiFolder(wf_path, tiddlywiki_info=self.tiddlywiki_info)
+        assert wf.validate()
 
-        wf_path = get_test_file("output/wf-init")
-        wf = WikiFolder(wf_path)
-        assert isinstance(wf, WikiFolder)
+    def test_start(self):
+        from neuro.core.tid import WikiFolder
+        from neuro.utils import network_utils
+        wf_path = get_test_file("output/wf-test_start", exists=False)
+        wf = WikiFolder(wf_path, tiddlywiki_info=self.tiddlywiki_info)
+        wf.start()
+        assert network_utils.is_port_in_use(wf.port, host=wf.host)
 
-        wf_path_nonexistent = get_test_file("output/wf-init-nonexistent", exists=False)
-        with pytest.raises(exceptions.FileNotWiki):
-            WikiFolder(wf_path_nonexistent)
-        wf_nonexistent = WikiFolder(wf_path_nonexistent, exists=False)
-        assert isinstance(wf_nonexistent, WikiFolder)
+    def test_api_exposed(self):
+        from neuro.core.tid import WikiFolder
+        import requests
+        wf_path = get_test_file("output/wf-test_api_exposed", exists=False)
+        wf = WikiFolder(wf_path, tiddlywiki_info=self.tiddlywiki_info)
+        wf.start()
+        response = requests.get(f"http://{wf.host}:{wf.port}/neuro/info", timeout=5)
+        assert response.status_code == 200
+        info = json.loads(response.text)
+        assert type(info["local-path"]) is str
+        assert not info["dirty"]
