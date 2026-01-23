@@ -23,8 +23,10 @@ class TestFixtures:
 
 
 class TestTwActions:
-    def test_merge(self):
+    def test_merge(self, wf):
         from neuro.tools.tw5api import tw_actions, tw_get
+        populate_wf("merge")
+
         r = tw_actions.merge_tiddlers(["merge1", "merge2", "merge3"], **kwargs)
         assert r.status_code == 204
         assert not tw_get.is_tiddler("merge1", **kwargs)
@@ -36,14 +38,25 @@ class TestTwActions:
         assert merged_tiddler["merge2"] == "yes"
         assert merged_tiddler["merge3"] == "yes"
 
-    def test_rename(self):
+    def test_rename(self, wf):
         from neuro.tools.tw5api import tw_actions, tw_get
-        r = tw_actions.rename_tiddler("rename1", "rename2", **kwargs)
-        assert r.reason == "0 tiddlers affected"
+        populate_wf(wf, "rename")
+        r = tw_actions.rename_tiddler("Old Name", "New Name", **kwargs)
+
+        assert r.reason == "8 tiddlers affected"
         assert r.status_code == 200
-        assert not tw_get.is_tiddler("rename1", **kwargs)
-        renamed_tiddler = tw_get.tiddler("rename2", **kwargs)
-        assert renamed_tiddler["text"] == "rename1"
+        assert not tw_get.is_tiddler("Old Name", **kwargs)
+        assert tw_get.is_tiddler("New Name", **kwargs)
+
+        assert tw_get.tiddler("Primary", **kwargs)["neuro.primary"] == "New Name"
+        assert tw_get.tiddler("Tag", **kwargs)["tags"] == ["New Name"]
+        assert "New Name" in tw_get.tiddler("MultiTag", **kwargs)["tags"]
+        assert tw_get.tiddler("Text 1", **kwargs)["text"] == "[[New Name]]"
+        assert tw_get.tiddler("Text 2", **kwargs)["text"] == "[[old name|New Name]]"
+        complex_text_3 = tw_get.tiddler("Complex Text 3", **kwargs)["text"]
+        assert complex_text_3.count("|New Name]]") == 3
+        assert "New Name" in tw_get.tiddler("List", **kwargs)["list"]
+        assert tw_get.tiddler("Field", **kwargs)["random"] == "Old Name"
 
     def test_replace(self):
         from neuro.tools.tw5api import tw_actions, tw_get
