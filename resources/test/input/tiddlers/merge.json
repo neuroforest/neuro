@@ -1,0 +1,64 @@
+[
+    {
+        "created": "20260123171930520",
+        "text": "️∑Obsi$dian@echoes# fra[cture∞silently—te [[merge 2|Merge 2]] mporal↻ [[old text|Old Name]] vectors entwine⚡   logic§memory🔮&recursive↯ [[old text|Old Name]] pa$$$radoxes [[h$@`h|Old Name]] 🧩\",",
+        "tags": "",
+        "title": "Complex Text",
+        "modified": "20260123171954852"
+    },
+    {
+        "created": "20260123171334035",
+        "tags": "[[Tag 3]]",
+        "text": "This text is from Merge Target",
+        "title": "Merge Target",
+        "modified": "20260123171433698",
+        "neuro.id": "6de49971-faf9-424f-b7c2-22cf51d95105"
+    },
+    {
+        "created": "20260123164227976",
+        "text": "This text is from merge 2\n\n!!!''Properties''\n*2",
+        "tags": "[[Tag 2]]",
+        "title": "Merge 2",
+        "modified": "20260123171450964",
+        "field2": "merge2",
+        "override": "2",
+        "neuro.id": "9bd40ef6-2ec5-4952-abc2-57dd34df847b"
+    },
+    {
+        "created": "20260123171434338",
+        "text": "This text is from merge 1\n\n!!!''Related''\n*[[Merge 2]]",
+        "tags": "[[Tag 1]]",
+        "title": "Merge 1",
+        "field1": "merge1",
+        "override": "1",
+        "neuro.id": "7a29a758-aab4-4a70-99a8-87e4b5ffe233"
+    },
+    {
+        "title": "Tag 3"
+    },
+    {
+        "title": "Tag 2"
+    },
+    {
+        "title": "Tag 1"
+    },
+    {
+        "created": "20260123171349871",
+        "text": "[[Merge 2]]",
+        "tags": "",
+        "title": "Text",
+        "modified": "20260123171354285"
+    },
+    {
+        "title": "Primary",
+        "neuro.primary": "Merge 1"
+    },
+    {
+
+        "text": "",
+        "tags": "",
+        "title": "List",
+        "modified": "20260123171332715",
+        "list": "[[Merge 2]] test 7"
+    }
+]
