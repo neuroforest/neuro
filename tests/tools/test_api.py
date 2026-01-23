@@ -17,6 +17,10 @@ class TestFixtures:
     def test_wf(self, wf):
         assert wf.port == os.getenv("TEST_PORT")
 
+    def test_wf_universal(self, wf_universal):
+        from neuro.tools.tw5api.tw_get import tid_titles
+        assert len(tid_titles("[!is[system]]", **kwargs)) == 9
+
 
 class TestTwActions:
     def test_merge(self):
@@ -53,12 +57,17 @@ class TestTwActions:
         assert r.reason == "0 tiddlers affected"
 
 
-class TestTwDel:
-    def test_del_tiddler(self, wf_universal):
+class TestTwDelete:
+    def test_delete_tiddler(self, wf_universal):
         from neuro.tools.tw5api import tw_del, tw_get
         assert tw_get.is_tiddler("delete", **kwargs) is True
         tw_del.tiddler("delete", **kwargs)
         assert tw_get.is_tiddler("delete", **kwargs) is False
+
+    def test_delete_all_tiddlers(self, wf_universal):
+        from neuro.tools.tw5api import tw_del, tw_get
+        tw_del.all_tiddlers(**kwargs)
+        assert len(tw_get.tid_titles(["!is[system]"], **kwargs)) == 0
 
 
 class TestTwGet:
@@ -91,7 +100,7 @@ class TestTwGet:
         assert "created" in tiddler
         assert tiddler["created"] == "2019-01-30T20:02:31.703Z"
 
-    def test_get_tw_fields_form(self, wf_universal):
+    def test_get_tw_fields_general(self, wf_universal):
         from neuro.tools.tw5api import tw_get
         fields = ["title", "created"]
         tw_fields = tw_get.tw_fields(fields, "[!is[system]]", **kwargs)
