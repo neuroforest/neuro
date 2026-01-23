@@ -1,0 +1,48 @@
+[
+    {
+        "title": "lineage-branch-1",
+        "tags": "lineage-root",
+        "neuro.primary": "lineage-root"
+    },
+    {
+        "title": "lineage-branch-1-1",
+        "tags": "lineage-branch-1",
+        "neuro.primary": "lineage-branch-1"
+    },
+    {
+        "title": "lineage-branch-2",
+        "tags": "lineage-root",
+        "neuro.primary": "lineage-root"
+    },
+    {
+        "title": "lineage-branch-3"
+    },
+    {
+        "title": "lineage-branch-3-1",
+        "tags": "lineage-branch-3",
+        "neuro.primary": "lineage-branch-3"
+    },
+    {
+        "title": "lineage-branch-4",
+        "tags": "lineage-branch-5",
+        "neuro.primary": "lineage-branch-5"
+    },
+    {
+        "title": "lineage-branch-5",
+        "tags": "lineage-branch-4",
+        "neuro.primary": "lineage-branch-4"
+    },
+    {
+        "title": "lineage-branch-6",
+        "tags": "lineage-nonexistent",
+        "neuro.primary": "lineage-nonexistent"
+    },
+    {
+        "title": "lineage-branch-6-1",
+        "tags": "lineage-branch-6",
+        "neuro.primary": "lineage-branch-6"
+    },
+    {
+        "title": "lineage-root"
+    }
+]
