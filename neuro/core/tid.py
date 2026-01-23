@@ -454,7 +454,7 @@ class WikiFolder:
     """
     Wrapper for WikiFolder. It operates on port 8099 by default.
     """
-    def __init__(self, wf_path, exists=True, tw5="tw5/tiddlywiki.js", **kwargs):
+    def __init__(self, wf_path, tw5="tw5/tiddlywiki.js", **kwargs):
         """
         Initialize and verify WikiFolder
         :param wf_path: WikiFolder path
@@ -472,15 +472,14 @@ class WikiFolder:
         self.port = kwargs.get("port", 8099)
         self.host = kwargs.get("host", "127.0.0.1")
         self.silent = kwargs.get("silent", False)
+        self.readers = kwargs.get("readers", "(anon)")
+        self.writers = kwargs.get("writers", "(anon)")
         if os.path.exists(wf_path):
             self.validate()
         else:
             if os.path.isdir(wf_path):
                 raise FileExistsError
             self.create(**kwargs)
-
-    def close(self):
-        self.process.kill()
 
     def create(self, tiddlers_folder=None, **kwargs):
         """
@@ -515,7 +514,9 @@ class WikiFolder:
             self.wf_path,
             "--listen",
             f"port={self.port}",
-            f"host={self.host}"
+            f"host={self.host}",
+            f"readers={self.readers}",
+            f"writers={self.writers}"
         ], **params)
 
         network_utils.wait_for_socket(self.host, self.port)
