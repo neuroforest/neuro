@@ -48,7 +48,7 @@ def integrate_local(tid_title):
             if os.path.isdir(candidate_path):
                 if terminal_components.bool_prompt(f"Connect {candidate_path} to {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}?"):
                     neuro_tid.fields["local"] = f"file://{candidate_path}"
-                    tw_put.neuro_tid(neuro_tid)
+                    tw_put.tiddler(neuro_tid)
                     current_path = candidate_path
                 else:
                     break
@@ -56,7 +56,7 @@ def integrate_local(tid_title):
                 if terminal_components.bool_prompt(f"Establish {candidate_path} for {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}?"):
                     os.mkdir(candidate_path)
                     neuro_tid.fields["local"] = f"file://{candidate_path}"
-                    tw_put.neuro_tid(neuro_tid)
+                    tw_put.tiddler(neuro_tid)
                     current_path = candidate_path
                 else:
                     break
@@ -96,7 +96,7 @@ def integrate_system_files(port):
         with tqdm.tqdm(total=len(neuro_tids_to_update)) as pbar:
             for neuro_tid in neuro_tids_to_update:
                 pbar.set_description(neuro_tid.title.ljust(width)[:width])
-                tw_put.neuro_tid(neuro_tid, port=port)
+                tw_put.tiddler(neuro_tid, port=port)
                 pbar.update(1)
             pbar.set_description("")
 

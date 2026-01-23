@@ -37,7 +37,7 @@ def resolve_neuro_ids(port, verbose=False):
         with tqdm.tqdm(total=len(unidentified)) as pbar:
             for neuro_tid in unidentified:
                 pbar.set_description(neuro_tid.title.ljust(width))
-                tw_put.neuro_tid(neuro_tid, port=port)
+                tw_put.tiddler(neuro_tid, port=port)
                 pbar.update(1)
             pbar.set_description("")
 
@@ -82,7 +82,7 @@ def set_journal(port):
             for neuro_tid in update_tids:
                 pbar.set_description(neuro_tid.title.ljust(width))
                 neuro_tid.add_fields({"neuro.role": "journal"})
-                tw_put.neuro_tid(neuro_tid, port=port)
+                tw_put.tiddler(neuro_tid, port=port)
                 pbar.update(1)
             pbar.set_description("")
 
@@ -104,7 +104,7 @@ def set_roles(port):
                 pbar.set_description(tid_title.ljust(width))
                 neuro_tid = tw_get.neuro_tid(tid_title, port=port)
                 neuro_tid.add_fields({"neuro.role": role})
-                tw_put.neuro_tid(neuro_tid, port=port)
+                tw_put.tiddler(neuro_tid, port=port)
                 pbar.update(1)
             pbar.set_description("")
 
@@ -127,7 +127,7 @@ def set_model_roles(port):
                 pbar.set_description(neuro_tid.title.ljust(width))
                 pbar.update(1)
                 neuro_tid.add_fields({"neuro.role": "model"})
-                tw_put.neuro_tid(neuro_tid, port=port)
+                tw_put.tiddler(neuro_tid, port=port)
             pbar.set_description("")
     print(f"{terminal_style.SUCCESS} Model roles")
 
@@ -340,7 +340,7 @@ class Primary:
                 else:
                     pbar.set_description(title.ljust(width)[:width])
                     pbar.update(1)
-                tw_put.neuro_tid(neuro_tid, port=self.port)
+                tw_put.tiddler(neuro_tid, port=self.port)
             pbar.set_description("")
 
     def resolve_complex(self):
@@ -364,7 +364,7 @@ class Primary:
             if tiddler_chosen:
                 neuro_tid = tw_get.neuro_tid(tid_title, port=self.port)
                 neuro_tid.fields["neuro.primary"] = tiddler_chosen
-                tw_put.neuro_tid(neuro_tid, port=self.port)
+                tw_put.tiddler(neuro_tid, port=self.port)
             else:
                 self.validated = False
 

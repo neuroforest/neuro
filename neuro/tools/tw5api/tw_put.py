@@ -32,7 +32,7 @@ def fields(tw_fields, **kwargs):
         return response
 
 
-def neuro_tid(nt, **kwargs):
+def tiddler(nt, **kwargs):
     tid = nt.fields
     tid["title"] = nt.title
     if "neuro.id" not in tid:
