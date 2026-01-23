@@ -15,6 +15,14 @@ import sys
 from neuro.utils import network_utils
 
 
+def populate_wf(wf, test_case):
+    from neuro.core import TiddlerList
+    from neuro.tools.tw5api import tw_put
+    tiddler_json = get_test_file(f"input/tiddlers/{test_case}.json")
+    tiddler_list = TiddlerList.from_json(tiddler_json)
+    tw_put.tiddler_list(tiddler_list, port=wf.port)
+
+
 def are_dirs_identical(dir1, dir2):
     cmp_object = filecmp.dircmp(dir1, dir2)
     if not cmp_object.diff_files:
@@ -81,7 +89,7 @@ def run_wiki_folder(path, port):
         "writers=(anon)"
     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    network_utils.wait_for_socket(os.getenv("HOST"), port)
+    network_utils.wait_for_socket("127.0.0.1", port)
 
     return process
 
