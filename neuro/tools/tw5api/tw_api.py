@@ -40,13 +40,14 @@ class API:
     def __exit__(self, exc_type, exc_value, traceback):
         pass
 
-    def delete(self, path):
+    def delete(self, path, **kwargs):
         full_url = self.url + urllib.parse.quote(path)
+        params = kwargs.get("params", dict())
         headers = {
             "User-Agent": "Mozilla/5.0",
             "X-Requested-With": "TiddlyWiki"
         }
-        self.response = self.session.delete(url=full_url, headers=headers)
+        self.response = self.session.delete(url=full_url, headers=headers, params=params)
         if self.response.status_code == 204:
             return True
         else:
