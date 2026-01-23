@@ -187,26 +187,6 @@ def tw_fields(fields: list, tw_filter: str, **kwargs):
         return parsed_response
 
 
-def tw_index(tw_filter=None, **kwargs):
-    """
-    Return a list of objects representing tiddler including shadow.
-    {
-        "tmap.id": "gkqo50qg803yjqeg95y",
-        "tags": ["tag1", "long tag 2"],
-        "title": "Example"
-    }
-    :param tw_filter:
-    :return:
-    :rtype: list
-    """
-    with tw_api.API(**kwargs) as api:
-        params = dict()
-        if tw_filter:
-            params["filter"] = tw_filter
-        response = api.get("/neuro/index.json", params=params)
-        return response["parsed"]
-
-
 def wiki(**kwargs):
     """
     Returns the full wiki html.
