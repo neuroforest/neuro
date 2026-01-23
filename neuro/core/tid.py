@@ -258,7 +258,7 @@ class Tiddler(Node):
             f.write(text)
 
 
-class Tiddlers(list):
+class TiddlerList(list):
     """
     A collection of Tiddler instances. This class exhibits functionality of
     list and dict data types.
@@ -291,7 +291,7 @@ class Tiddlers(list):
             return
 
         # Checking for conflicts.
-        conflict_message = "Tiddlers object already contains Tiddler with {}: {}"
+        conflict_message = "TiddlerList object already contains Tiddler with {}: {}"
         if neuro_tid.title in [nt.title for nt in self]:
             logging.warning(conflict_message.format("title", neuro_tid.title))
             return
@@ -305,7 +305,7 @@ class Tiddlers(list):
 
     def chain(self, initial_tag=""):
         """
-        Chain the Tiddlers by setting `tags` and `neuro.primary` fields.
+        Chain the TiddlerList by setting `tags` and `neuro.primary` fields.
         :return:
         """
         current_tag = initial_tag
@@ -331,7 +331,7 @@ class Tiddlers(list):
 
     def write_tiddlers(self, dir_path):
         """
-        Write Tiddlers to tid text files.
+        Write TiddlerList to tid text files.
         :param dir_path: absolute pathname to directory
         :return:
         """
@@ -361,7 +361,7 @@ class TiddlywikiHtml(TextHtml):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.neuro_tids = Tiddlers()
+        self.neuro_tids = TiddlerList()
 
     def __contains__(self, tid_title):
         return self.neuro_tids.__contains__(tid_title)
@@ -408,7 +408,7 @@ class TiddlywikiHtml(TextHtml):
 
         store_area_json = tw_soup.find('script', class_='tiddlywiki-tiddler-store').text
         json_object = json.loads(store_area_json)
-        neuro_tids = Tiddlers()
+        neuro_tids = TiddlerList()
         for tiddler in tqdm.tqdm(json_object):
             neuro_tid = Tiddler.from_tiddler(tiddler)
             neuro_tids.append(neuro_tid)

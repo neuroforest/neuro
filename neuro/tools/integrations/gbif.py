@@ -124,7 +124,7 @@ def get_taxon_tids(taxon_id):
     with p:
         neuro_tid_list = p.map(get_taxon_tid, ancestor_taxon_ids)
 
-    neuro_tids = tid.Tiddlers()
+    neuro_tids = tid.TiddlerList()
     for neuro_tid in neuro_tid_list:
         if not neuro_tid:
             continue
