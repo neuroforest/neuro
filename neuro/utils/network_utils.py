@@ -3,7 +3,13 @@ import socket
 import subprocess
 
 
-def is_port_in_use(port, host="localhost"):
+def get_free_port(host="127.0.0.1"):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((host, 0))
+        return s.getsockname()[1]
+
+
+def is_port_in_use(port, host="127.0.0.1"):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
             return s.connect_ex((host, int(port))) == 0

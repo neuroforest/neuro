@@ -45,6 +45,7 @@ def cli(mode, command_args):
             *command_args
         ])
     else:  # mode in ["l", "local"]
+        from neuro.utils import config  # noqa: F401
         internal_utils.copy_plugins_and_themes()
         tw5_src = internal_utils.get_path("tw5")
         subprocess.run(["rsync", "-a", "--exclude=tw5/.git", tw5_src, neuro_path, "--delete"])

@@ -12,15 +12,16 @@ from neuro.utils import exceptions
 
 
 def copy_plugins_and_themes():
+    tw5_path = get_path("tw5")
     for plugin in json.loads(os.getenv("EXTERNAL_PLUGINS")):
         plugin_source_path = plugin["path"]
-        plugin_target_path = get_path("tw5") + "/plugins/" + plugin["name"]
+        plugin_target_path = tw5_path + "/plugins/" + plugin["name"]
         shutil.rmtree(plugin_target_path, ignore_errors=True)
         shutil.copytree(plugin_source_path, plugin_target_path)
 
     for theme in json.loads(os.getenv("EXTERNAL_THEMES")):
         theme_source_path = theme["path"]
-        theme_target_path = get_path("tw5") + "/themes/" + theme["name"]
+        theme_target_path = tw5_path + "/themes/" + theme["name"]
         shutil.rmtree(theme_target_path, ignore_errors=True)
         shutil.copytree(theme_source_path, theme_target_path)
 
