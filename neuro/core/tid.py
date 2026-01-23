@@ -283,6 +283,21 @@ class TiddlerList(list):
     def __contains__(self, tid_title):
         return tid_title in self.object_index
 
+    @classmethod
+    def from_json(cls, json_path):
+        """
+        Create TiddlerList from JSON object.
+        :param json_path:
+        :return:
+        """
+        tiddler_list = cls()
+        with open(json_path) as f:
+            json_object = json.load(f)
+        for tiddler in json_object:
+            tiddler = Tiddler.from_tiddler(tiddler)
+            tiddler_list.append(tiddler)
+        return tiddler_list
+
     def append(self, neuro_tid: Tiddler):
         if not isinstance(neuro_tid, Tiddler):
             logging.error(f"Cannot append object of type {type(neuro_tid)}")
