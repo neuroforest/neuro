@@ -90,7 +90,7 @@ def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
     with wf:
         for o in objects:
             o = prepare_object(o)
-            tw_put.tiddler(o, port=port, params={"preserve": "yes"})
+            tw_put.fields(o, port=port, params={"preserve": "yes"})
 
 
 def migrate_neo4j_to_json(json_path):

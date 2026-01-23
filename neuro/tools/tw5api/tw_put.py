@@ -8,7 +8,7 @@ import logging
 from neuro.tools.tw5api import tw_api
 
 
-def tiddler(tw_fields, **kwargs):
+def fields(tw_fields, **kwargs):
     """
     Api tiddler is not even necessary.
     :param tw_fields: dict, with obligatory key "title"
@@ -37,4 +37,4 @@ def neuro_tid(nt, **kwargs):
     tid["title"] = nt.title
     if "neuro.id" not in tid:
         tid["neuro.id"] = nt.uuid
-    tiddler(tid, **kwargs)
+    fields(tid, **kwargs)

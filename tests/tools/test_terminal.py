@@ -41,18 +41,18 @@ class TestQa:
 
         # Validate tags
         assert qa.validate_tags(port)
-        tw_put.tiddler({"title": "untagged-tiddler"}, port=port)
+        tw_put.fields({"title": "untagged-tiddler"}, port=port)
         assert not qa.validate_tags(port)
         tw_del.tiddler("untagged-tiddler", port=port)
         assert qa.validate_tags(port)
-        tw_put.tiddler({"title": "untagged-tiddler", "tags": "inexistent-tag"}, port=port)
+        tw_put.fields({"title": "untagged-tiddler", "tags": "inexistent-tag"}, port=port)
         assert not qa.validate_tags(port)
         tw_del.tiddler("untagged-tiddler", port=port)
         assert qa.validate_tags(port)
 
         # Recognize missing tiddlers
         assert not qa.resolve_missing_tiddlers(port)
-        tw_put.tiddler({"title": "missing-tiddler"}, port=port)
+        tw_put.fields({"title": "missing-tiddler"}, port=port)
         assert qa.resolve_missing_tiddlers(port)
         tw_del.tiddler("missing-tiddler", port=port)
         assert not qa.resolve_missing_tiddlers(port)
@@ -60,7 +60,7 @@ class TestQa:
         # Resolve neuro.primary
         journal_entry = tw_get.tiddler("2025-04-09", port=port)
         assert journal_entry["neuro.primary"] == "JOURNAL"
-        tw_put.tiddler({"title": "multitag-tiddler", "tags": ["example", "JOURNAL"]}, port=port)
+        tw_put.fields({"title": "multitag-tiddler", "tags": ["example", "JOURNAL"]}, port=port)
         qa_primary_result = qa.Primary(False, port, False).run()
         multitag_tiddler = tw_get.tiddler("multitag-tiddler", port=port)
         assert "neuro.primary" not in multitag_tiddler
