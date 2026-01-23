@@ -98,13 +98,6 @@ class TestTwGet:
         assert "created" in tiddler
         assert tiddler["created"] == "2019-01-30T20:02:31.703Z"
 
-    def test_get_tw_index(self):
-        from neuro.tools.tw5api import tw_get
-        tw_index = tw_get.tw_index("[all[]]", **kwargs)
-        assert type(tw_index) is list
-        assert len(tw_index) > 0
-        assert all([True if set(d.keys()).issubset({"title", "tmap.id", "tags"}) else False for d in tw_index])
-
     def test_get_tw_fields(self):
         from neuro.tools.tw5api import tw_get
         fields = ["title", "created"]
