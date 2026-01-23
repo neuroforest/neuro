@@ -6,7 +6,7 @@ import logging
 import os
 import webbrowser
 
-from neuro.core.tid import Tiddler, Tiddlers
+from neuro.core.tid import Tiddler, TiddlerList
 from neuro.tools.tw5api import tw_api
 from neuro.utils import exceptions
 
@@ -117,7 +117,7 @@ def neuro_tid(tid_title, **kwargs):
 
 def neuro_tids(tw_filter, **kwargs):
     titles = tw_fields(["title"], tw_filter=tw_filter, **kwargs)
-    nts = Tiddlers()
+    nts = TiddlerList()
     for t in titles:
         tid_title = t["title"]
         nt = neuro_tid(tid_title, **kwargs)

@@ -6,7 +6,7 @@ import urllib.parse
 
 import requests
 
-from neuro.core.tid import Tiddler, Tiddlers
+from neuro.core.tid import Tiddler, TiddlerList
 from neuro.utils import exceptions, internal_utils
 
 
@@ -86,15 +86,15 @@ def get_taxon_tid(taxon_id):
 
 def get_taxon_tids(taxon_id):
     """
-    Return a Tiddlers object, that contains tiddler for every element in the taxon chain.
+    Return a TiddlerList object, that contains tiddler for every element in the taxon chain.
     :param taxon_id:
     :return:
     """
     taxon_data = get_taxon(taxon_id)
     if not taxon_data:
-        return Tiddlers()
+        return TiddlerList()
     ancestor_taxon_ids = taxon_data["ancestor_ids"]
-    neuro_tids = Tiddlers()
+    neuro_tids = TiddlerList()
 
     # Recruit a pool of workers, every worker making a request for ancestor taxon
     p = multiprocessing.Pool(processes=len(ancestor_taxon_ids))
