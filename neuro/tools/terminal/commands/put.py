@@ -14,4 +14,4 @@ from neuro.tools.tw5api import tw_put
 @click.argument("tiddler", required=False)
 @pass_environment
 def cli(ctx, tiddler):
-    tw_put.tiddler(json.loads(tiddler))
+    tw_put.fields(json.loads(tiddler))

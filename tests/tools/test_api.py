@@ -127,7 +127,7 @@ class TestTwPut:
     def test_put_tiddler(self):
         from neuro.tools.tw5api import tw_get, tw_put
         text = f"text{time.time()}"
-        tw_put.tiddler({"title": "put_test", "text": text}, **kwargs)
+        tw_put.fields({"title": "put_test", "text": text}, **kwargs)
         tiddler = tw_get.tiddler("put_test", **kwargs)
         assert tiddler["text"] == text
 
