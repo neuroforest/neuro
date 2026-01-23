@@ -62,16 +62,21 @@ class TestTwActions:
         assert "New Name" in tw_get.tiddler("List", **kwargs)["list"]
         assert tw_get.tiddler("Field", **kwargs)["random"] == "Old Name"
 
-    def test_replace(self):
+    def test_replace(self, wf):
         from neuro.tools.tw5api import tw_actions, tw_get
-        r = tw_actions.replace_text("replace1", "replace2", **kwargs)
-        assert r.reason == "1 tiddlers affected"
-        assert r.status_code == 200
-        replaced_tiddler = tw_get.tiddler("replace1", **kwargs)
-        assert replaced_tiddler["text"] == "replace2"
-        r = tw_actions.replace_text("replace1uncommontext", "replace2", **kwargs)
-        assert r.status_code == 500
-        assert r.reason == "0 tiddlers affected"
+        populate_wf(wf, "replace")
+        old = "LKtdNnjU"
+        new = "9L5nBGqv"
+        r = tw_actions.replace_text(old, new, **kwargs)
+        assert r.reason == "6 tiddlers affected"
+        assert tw_get.tiddler("Primary", **kwargs)["neuro.primary"] == new
+        assert tw_get.tiddler("Tag", **kwargs)["tags"] == [old]
+        assert new in tw_get.tiddler("Text", **kwargs)["text"]
+        assert old in tw_get.tiddler("List", **kwargs)["list"]
+        assert new in tw_get.tiddler("Complex Text", **kwargs)["text"]
+        assert tw_get.tiddler("Field Value", **kwargs)["field"] == new
+        assert new in tw_get.tiddler("Inside Field Value", **kwargs)["test"]
+        assert not tw_get.is_tiddler(new, **kwargs)
 
 
 class TestTwDelete:
