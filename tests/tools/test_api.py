@@ -25,18 +25,22 @@ class TestFixtures:
 class TestTwActions:
     def test_merge(self, wf):
         from neuro.tools.tw5api import tw_actions, tw_get
-        populate_wf("merge")
+        populate_wf(wf, "merge")
 
-        r = tw_actions.merge_tiddlers(["merge1", "merge2", "merge3"], **kwargs)
+        r = tw_actions.merge_tiddlers(["Merge 1", "Merge 2", "Merge Target"], **kwargs)
         assert r.status_code == 204
-        assert not tw_get.is_tiddler("merge1", **kwargs)
-        assert not tw_get.is_tiddler("merge2", **kwargs)
-        merged_tiddler = tw_get.tiddler("merge3", **kwargs)
-        assert merged_tiddler["text"] == "merge3"
-        assert merged_tiddler["created"] == "2022-02-04T11:55:42.968Z"
-        assert merged_tiddler["merge1"] == "yes"
-        assert merged_tiddler["merge2"] == "yes"
-        assert merged_tiddler["merge3"] == "yes"
+        assert not tw_get.is_tiddler("Merge 1", **kwargs)
+        assert not tw_get.is_tiddler("Merge 2", **kwargs)
+
+        merge_target = tw_get.tiddler("Merge Target", **kwargs)
+        assert merge_target["created"] == "2026-01-23T16:42:27.976Z"
+        assert merge_target["field1"] == "merge1"
+        assert merge_target["override"] == "2"
+        assert merge_target["neuro.id"] == "6de49971-faf9-424f-b7c2-22cf51d95105"
+
+        assert tw_get.tiddler("Primary", **kwargs)["neuro.primary"] == "Merge Target"
+        assert tw_get.tiddler("Text", **kwargs)["text"] == "[[Merge Target]]"
+        assert "|Merge Target]]" in tw_get.tiddler("Complex Text", **kwargs)["text"]
 
     def test_rename(self, wf):
         from neuro.tools.tw5api import tw_actions, tw_get
