@@ -6,7 +6,7 @@ import pytest
 @pytest.fixture
 def dummy_port():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(("localhost", 0))
+    sock.bind(("127.0.0.1", 0))
     sock.listen()
     port = sock.getsockname()[1]
     yield port

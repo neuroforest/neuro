@@ -6,10 +6,6 @@ class InternalError(BaseException):
     pass
 
 
-class ScopeError(BaseException):
-    pass
-
-
 class TiddlerDoesNotExist(BaseException):
     pass
 
