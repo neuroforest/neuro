@@ -16,7 +16,7 @@ def get_tiddler(tid_title, **kwargs):
     :return: tiddler
     """
     tid_tags = kwargs.get("tags", False)
-    tiddler = tw_get.tiddler(tid_title, **kwargs)
+    tiddler = tw_get.fields(tid_title, **kwargs)
 
     if tiddler:
         tiddler["title"] = tid_title

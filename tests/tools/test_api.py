@@ -32,15 +32,15 @@ class TestTwActions:
         assert not tw_get.is_tiddler("Merge 1", **kwargs)
         assert not tw_get.is_tiddler("Merge 2", **kwargs)
 
-        merge_target = tw_get.tiddler("Merge Target", **kwargs)
+        merge_target = tw_get.fields("Merge Target", **kwargs)
         assert merge_target["created"] == "2026-01-23T16:42:27.976Z"
         assert merge_target["field1"] == "merge1"
         assert merge_target["override"] == "2"
         assert merge_target["neuro.id"] == "6de49971-faf9-424f-b7c2-22cf51d95105"
 
-        assert tw_get.tiddler("Primary", **kwargs)["neuro.primary"] == "Merge Target"
-        assert tw_get.tiddler("Text", **kwargs)["text"] == "[[Merge Target]]"
-        assert "|Merge Target]]" in tw_get.tiddler("Complex Text", **kwargs)["text"]
+        assert tw_get.fields("Primary", **kwargs)["neuro.primary"] == "Merge Target"
+        assert tw_get.fields("Text", **kwargs)["text"] == "[[Merge Target]]"
+        assert "|Merge Target]]" in tw_get.fields("Complex Text", **kwargs)["text"]
 
     def test_rename(self, wf):
         from neuro.tools.tw5api import tw_actions, tw_get
@@ -52,15 +52,15 @@ class TestTwActions:
         assert not tw_get.is_tiddler("Old Name", **kwargs)
         assert tw_get.is_tiddler("New Name", **kwargs)
 
-        assert tw_get.tiddler("Primary", **kwargs)["neuro.primary"] == "New Name"
-        assert tw_get.tiddler("Tag", **kwargs)["tags"] == ["New Name"]
-        assert "New Name" in tw_get.tiddler("MultiTag", **kwargs)["tags"]
-        assert tw_get.tiddler("Text 1", **kwargs)["text"] == "[[New Name]]"
-        assert tw_get.tiddler("Text 2", **kwargs)["text"] == "[[old name|New Name]]"
-        complex_text_3 = tw_get.tiddler("Complex Text 3", **kwargs)["text"]
+        assert tw_get.fields("Primary", **kwargs)["neuro.primary"] == "New Name"
+        assert tw_get.fields("Tag", **kwargs)["tags"] == ["New Name"]
+        assert "New Name" in tw_get.fields("MultiTag", **kwargs)["tags"]
+        assert tw_get.fields("Text 1", **kwargs)["text"] == "[[New Name]]"
+        assert tw_get.fields("Text 2", **kwargs)["text"] == "[[old name|New Name]]"
+        complex_text_3 = tw_get.fields("Complex Text 3", **kwargs)["text"]
         assert complex_text_3.count("|New Name]]") == 3
-        assert "New Name" in tw_get.tiddler("List", **kwargs)["list"]
-        assert tw_get.tiddler("Field", **kwargs)["random"] == "Old Name"
+        assert "New Name" in tw_get.fields("List", **kwargs)["list"]
+        assert tw_get.fields("Field", **kwargs)["random"] == "Old Name"
 
     def test_replace(self, wf):
         from neuro.tools.tw5api import tw_actions, tw_get
@@ -69,13 +69,13 @@ class TestTwActions:
         new = "9L5nBGqv"
         r = tw_actions.replace_text(old, new, **kwargs)
         assert r.reason == "6 tiddlers affected"
-        assert tw_get.tiddler("Primary", **kwargs)["neuro.primary"] == new
-        assert tw_get.tiddler("Tag", **kwargs)["tags"] == [old]
-        assert new in tw_get.tiddler("Text", **kwargs)["text"]
-        assert old in tw_get.tiddler("List", **kwargs)["list"]
-        assert new in tw_get.tiddler("Complex Text", **kwargs)["text"]
-        assert tw_get.tiddler("Field Value", **kwargs)["field"] == new
-        assert new in tw_get.tiddler("Inside Field Value", **kwargs)["test"]
+        assert tw_get.fields("Primary", **kwargs)["neuro.primary"] == new
+        assert tw_get.fields("Tag", **kwargs)["tags"] == [old]
+        assert new in tw_get.fields("Text", **kwargs)["text"]
+        assert old in tw_get.fields("List", **kwargs)["list"]
+        assert new in tw_get.fields("Complex Text", **kwargs)["text"]
+        assert tw_get.fields("Field Value", **kwargs)["field"] == new
+        assert new in tw_get.fields("Inside Field Value", **kwargs)["test"]
         assert not tw_get.is_tiddler(new, **kwargs)
 
 
@@ -117,7 +117,7 @@ class TestTwGet:
 
     def test_get_tiddler(self, wf_universal):
         from neuro.tools.tw5api import tw_get
-        tiddler = tw_get.tiddler("test", **kwargs)
+        tiddler = tw_get.fields("test", **kwargs)
         assert tiddler["title"] == "test"
         assert "created" in tiddler
         assert tiddler["created"] == "2019-01-30T20:02:31.703Z"
@@ -148,7 +148,7 @@ class TestTwPut:
         from neuro.tools.tw5api import tw_get, tw_put
         text = f"text{time.time()}"
         tw_put.fields({"title": "put_test", "text": text}, **kwargs)
-        tiddler = tw_get.tiddler("put_test", **kwargs)
+        tiddler = tw_get.fields("put_test", **kwargs)
         assert tiddler["text"] == text
 
     def test_put_tiddler(self, wf):
@@ -157,7 +157,7 @@ class TestTwPut:
         text = f"text{time.time()}"
         tiddler = Tiddler("test_put_neuro_tid", fields={"text": text})
         tw_put.tiddler(tiddler, **kwargs)
-        tiddler = tw_get.tiddler("test_put_neuro_tid", **kwargs)
+        tiddler = tw_get.fields("test_put_neuro_tid", **kwargs)
         assert tiddler["text"] == text
 
     def test_replace_neuro_tid(self, wf_universal):

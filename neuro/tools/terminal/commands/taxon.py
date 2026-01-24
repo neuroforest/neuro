@@ -61,7 +61,7 @@ def filter_neuro_tids(neuro_tids, port):
             filtered_neuro_tids.append(neuro_tid)
         else:
             if tw_get.is_tiddler(tid_title, port=port):
-                tiddler = tw_get.tiddler(tid_title, port=port)
+                tiddler = tw_get.fields(tid_title, port=port)
                 neuro_tid.add_fields(tiddler, overwrite=False)
                 filtered_neuro_tids.append(neuro_tid)
     return filtered_neuro_tids

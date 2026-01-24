@@ -24,7 +24,7 @@ def cli(ctx, title):
             return
     response = tw_actions.open_tiddler(title)
     if response.status_code == 204:
-        tiddler = tw_get.tiddler(title)
+        tiddler = tw_get.fields(title)
         if "local" in tiddler:
             subprocess.run(["xdg-open", tiddler["local"]])
             time.sleep(0.1)

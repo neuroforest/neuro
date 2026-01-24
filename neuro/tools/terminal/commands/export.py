@@ -68,7 +68,7 @@ def parse_table(tid_text):
 @click.argument("path", type=click.Path(exists=False, resolve_path=True, writable=True))
 @pass_environment
 def cli(ctx, title, mode, path):
-    tid_text = tw_get.tiddler(title)["text"]
+    tid_text = tw_get.fields(title)["text"]
     if mode == "table":
         lol = parse_table(tid_text)
         TextCsv(path=path, mode="w+").write(lol)
