@@ -19,7 +19,7 @@ def geocode_url(short_url):
         pattern = re.compile(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+))")
         try:
             lat, lon = pattern.findall(long_url)[0]
-            lat, lon = float(lat), float(lon)
+            return float(lat), float(lon)
         except IndexError:
             return None, None
     elif "https://maps.app.goo.gl/" in short_url:
@@ -41,8 +41,6 @@ def geocode_url(short_url):
     else:
         return None, None
 
-    return lat, lon
-
 
 def extract_url_data(mode="default"):
     if mode == "default":
@@ -62,9 +60,9 @@ def extract_url_data(mode="default"):
         if not lat or not lon:
             failed.append(tid_title)
         else:
-            neuro_tid = tw_get.tiddler(tid_title)
-            neuro_tid.fields["g.lat"], neuro_tid.fields["g.lon"] = lat, lon
-            tw_put.tiddler(neuro_tid)
+            tiddler = tw_get.tiddler(tid_title)
+            tiddler.fields["g.lat"], tiddler.fields["g.lon"] = lat, lon
+            tw_put.tiddler(tiddler)
 
     print(f"Geocoding failed for: {failed}")
 

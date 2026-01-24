@@ -33,11 +33,11 @@ def resolve_neuro_ids(port, verbose=False):
     unidentified = tw_get.tiddler_list("[!is[system]!has[neuro.id]]", port=port)
     if unidentified:
         print("Adding neuro.id fields:")
-        width = max([len(neuro_tid.title) for neuro_tid in unidentified])
+        width = max([len(tiddler.title) for tiddler in unidentified])
         with tqdm.tqdm(total=len(unidentified)) as pbar:
-            for neuro_tid in unidentified:
-                pbar.set_description(neuro_tid.title.ljust(width))
-                tw_put.tiddler(neuro_tid, port=port)
+            for tiddler in unidentified:
+                pbar.set_description(tiddler.title.ljust(width))
+                tw_put.tiddler(tiddler, port=port)
                 pbar.update(1)
             pbar.set_description("")
 
@@ -76,9 +76,9 @@ def resolve_neuro_ids(port, verbose=False):
 def set_roles(port):
     role_pairs = dict()
     for tid_tag, role in json.loads(os.getenv("ROLE_DICT")).items():
-        neuro_tids = tw_get.tiddler_list(f"[tag[{tid_tag}]!has[neuro.role]]", port=port)
-        for neuro_tid in neuro_tids:
-            role_pairs[neuro_tid.title] = role
+        tiddler_list = tw_get.tiddler_list(f"[tag[{tid_tag}]!has[neuro.role]]", port=port)
+        for tiddler in tiddler_list:
+            role_pairs[tiddler.title] = role
 
     if role_pairs:
         print(f"\nSetting roles for {len(role_pairs)} tiddlers")
@@ -86,9 +86,9 @@ def set_roles(port):
         with tqdm.tqdm(total=len(role_pairs)) as pbar:
             for tid_title, role in role_pairs.items():
                 pbar.set_description(tid_title.ljust(width))
-                neuro_tid = tw_get.tiddler(tid_title, port=port)
-                neuro_tid.add_fields({"neuro.role": role})
-                tw_put.tiddler(neuro_tid, port=port)
+                tiddler = tw_get.tiddler(tid_title, port=port)
+                tiddler.add_fields({"neuro.role": role})
+                tw_put.tiddler(tiddler, port=port)
                 pbar.update(1)
             pbar.set_description("")
 
@@ -100,18 +100,18 @@ def set_object_sets(port):
     for object_set in json.loads(os.getenv("OBJECT_SETS")):
         regexp_pattern = r"^\S+\s\S+$"
         tiddler_list = tw_get.tiddler_list(f"[prefix[.]suffix[ {object_set}]!has[neuro.role]"
-                                         f"regexp[{regexp_pattern}]]", port=port)
+                                           f"regexp[{regexp_pattern}]]", port=port)
         update_list.extend(tiddler_list)
 
     if update_list:
         print(f"\nObject sets: {len(update_list)}")
-        width = max([len(neuro_tid.title) for neuro_tid in update_list])
+        width = max([len(tiddler.title) for tiddler in update_list])
         with tqdm.tqdm(total=len(update_list)) as pbar:
-            for neuro_tid in update_list:
-                pbar.set_description(neuro_tid.title.ljust(width))
+            for tiddler in update_list:
+                pbar.set_description(tiddler.title.ljust(width))
                 pbar.update(1)
-                neuro_tid.add_fields({"neuro.role": "model"})
-                tw_put.tiddler(neuro_tid, port=port)
+                tiddler.add_fields({"neuro.role": "model"})
+                tw_put.tiddler(tiddler, port=port)
             pbar.set_description("")
     print(f"{terminal_style.SUCCESS} Objects sets")
 
@@ -287,7 +287,7 @@ class Primary:
                 self.lineage_integrity = False
             elif lineage_item[0] != lineage_root:
                 if lineage_item[0].startswith("$:/"):
-                    # These are system rooted tiddlers
+                    # These are tiddlers rooted in system
                     pass
                 else:
                     self.lineage_integrity = False
@@ -314,8 +314,8 @@ class Primary:
         with tqdm.tqdm(total=len(simple_tfs)) as pbar:
             for tf in simple_tfs:
                 title = tf["title"]
-                neuro_tid = tw_get.tiddler(title, port=self.port)
-                neuro_tid.fields["neuro.primary"] = tf["tags"][0]
+                tiddler = tw_get.tiddler(title, port=self.port)
+                tiddler.fields["neuro.primary"] = tf["tags"][0]
                 if self.verbose:
                     if "primary" in tf:
                         print(f"Resolved simple error: {title}")
@@ -324,7 +324,7 @@ class Primary:
                 else:
                     pbar.set_description(title.ljust(width)[:width])
                     pbar.update(1)
-                tw_put.tiddler(neuro_tid, port=self.port)
+                tw_put.tiddler(tiddler, port=self.port)
             pbar.set_description("")
 
     def resolve_complex(self):
@@ -343,12 +343,12 @@ class Primary:
             else:
                 print()
             pyperclip.copy(tid_title)
-            tiddler_chosen = terminal_components.selector(tid_tags)
+            chose_title = terminal_components.selector(tid_tags)
 
-            if tiddler_chosen:
-                neuro_tid = tw_get.tiddler(tid_title, port=self.port)
-                neuro_tid.fields["neuro.primary"] = tiddler_chosen
-                tw_put.tiddler(neuro_tid, port=self.port)
+            if chose_title:
+                tiddler = tw_get.tiddler(tid_title, port=self.port)
+                tiddler.fields["neuro.primary"] = chose_title
+                tw_put.tiddler(tiddler, port=self.port)
             else:
                 self.validated = False
 

@@ -71,9 +71,9 @@ def collect_fields(data, field_list, transform=False):
         return value_list
 
 
-def get_taxon_tid(taxon_id):
+def get_taxon_tiddler(taxon_id):
     """
-    Get an instance of Tiddler that hold the parsed data.
+    Get an instance of Tiddler that holds the parsed data.
     :param taxon_id: GBIF taxon id
     :return:
     """
@@ -96,17 +96,17 @@ def get_taxon_tid(taxon_id):
                 break
     tid_title = f"{neuro_code} {taxon_name}"
 
-    neuro_tid = tid.Tiddler(tid_title)
+    tiddler = tid.Tiddler(tid_title)
     fields = collect_fields(taxon_data, ["canonicalName", "vernacularName"], transform=True)
-    neuro_tid.add_fields({
+    tiddler.add_fields({
         **fields,
         "neuro.role": f"taxon.{taxon_rank}",
         "gbif.taxon.id": taxon_id
     })
-    return neuro_tid
+    return tiddler
 
 
-def get_taxon_tids(taxon_id):
+def get_taxon_tiddler_list(taxon_id):
     taxon_data = get_taxon(taxon_id)
 
     # Extract ancestor gbif taxon ids
@@ -122,12 +122,12 @@ def get_taxon_tids(taxon_id):
 
     p = multiprocessing.Pool(processes=len(ancestor_taxon_ids))
     with p:
-        neuro_tid_list = p.map(get_taxon_tid, ancestor_taxon_ids)
+        tiddler_list = p.map(get_taxon_tiddler, ancestor_taxon_ids)
 
-    neuro_tids = tid.TiddlerList()
-    for neuro_tid in neuro_tid_list:
-        if not neuro_tid:
+    taxon_tiddler_list = tid.TiddlerList()
+    for tiddler in tiddler_list:
+        if not tiddler:
             continue
-        neuro_tids.append(neuro_tid)
+        taxon_tiddler_list.append(tiddler)
 
-    return neuro_tids
+    return taxon_tiddler_list

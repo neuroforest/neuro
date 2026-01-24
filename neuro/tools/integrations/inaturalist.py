@@ -46,19 +46,20 @@ def get_taxon(taxon_id, **kwargs):
     data = request_get(endpoint, kwargs.get("params", {}))
     if len(data) == 0:
         logging.error(f"No data found for taxon {taxon_id}")
+        return dict()
     else:
         return data[0]
 
 
-def get_taxon_tid(taxon_id):
+def get_taxon_tiddler(taxon_id):
     """
-    Get basic taxon tid, without the fields `neuro.primary` or `tags`.
+    Get a basic taxon tiddler without the fields `neuro.primary` or `tags`.
     :param taxon_id: iNaturalist taxon id
     :return: Tiddler object
     """
     taxon_data = get_taxon(taxon_id)
 
-    # Select title.
+    # Select title
     taxon_name = taxon_data["name"]
     taxon_rank_level = taxon_data["rank_level"]
     taxon_rank = taxon_data["rank"]
@@ -76,17 +77,17 @@ def get_taxon_tid(taxon_id):
             return Tiddler()
     tid_title = f"{neuro_code} {taxon_name}"
 
-    neuro_tid = Tiddler(tid_title)
-    neuro_tid.add_fields({
+    tiddler = Tiddler(tid_title)
+    tiddler.add_fields({
         "neuro.role": f"taxon.{taxon_rank}",
         "inat.taxon.id": taxon_id
     })
-    return neuro_tid
+    return tiddler
 
 
-def get_taxon_tids(taxon_id):
+def get_taxon_tiddler_list(taxon_id):
     """
-    Return a TiddlerList object, that contains tiddler for every element in the taxon chain.
+    Return a tiddler list with every element in the taxon chain.
     :param taxon_id:
     :return:
     """
@@ -94,17 +95,17 @@ def get_taxon_tids(taxon_id):
     if not taxon_data:
         return TiddlerList()
     ancestor_taxon_ids = taxon_data["ancestor_ids"]
-    neuro_tids = TiddlerList()
+    taxon_tiddler_list = TiddlerList()
 
     # Recruit a pool of workers, every worker making a request for ancestor taxon
     p = multiprocessing.Pool(processes=len(ancestor_taxon_ids))
     with p:
-        neuro_tid_list = p.map(get_taxon_tid, ancestor_taxon_ids)
-    neuro_tid_list.append(get_taxon_tid(taxon_id))
+        tiddler_list = p.map(get_taxon_tiddler, ancestor_taxon_ids)
+    tiddler_list.append(get_taxon_tiddler(taxon_id))
 
-    for neuro_tid in neuro_tid_list:
-        if not neuro_tid:
+    for tiddler in tiddler_list:
+        if not tiddler:
             continue
-        neuro_tids.append(neuro_tid)
+        taxon_tiddler_list.append(tiddler)
 
-    return neuro_tids
+    return taxon_tiddler_list

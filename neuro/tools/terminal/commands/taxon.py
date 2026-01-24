@@ -49,48 +49,48 @@ def process_ncbi_lineage(ncbi_lineage, port=None):
     return lineage_data
 
 
-def filter_neuro_tids(neuro_tids, port):
+def filter_tiddler_list(tiddler_list: TiddlerList, port):
     """
-    Filter and repair neuro_tids.
+    Filter and repair tiddler list.
     :return: True | False
     """
-    filtered_neuro_tids = TiddlerList()
-    for neuro_tid in neuro_tids:
-        tid_title = neuro_tid.title
-        if neuro_tid.fields["neuro.role"] in OBLIGATORY_TAXA:
-            filtered_neuro_tids.append(neuro_tid)
+    filtered = TiddlerList()
+    for tiddler in tiddler_list:
+        tid_title = tiddler.title
+        if tiddler.fields["neuro.role"] in OBLIGATORY_TAXA:
+            filtered.append(tiddler)
         else:
             if tw_get.is_tiddler(tid_title, port=port):
-                tiddler = tw_get.fields(tid_title, port=port)
-                neuro_tid.add_fields(tiddler, overwrite=False)
-                filtered_neuro_tids.append(neuro_tid)
-    return filtered_neuro_tids
+                fields = tw_get.fields(tid_title, port=port)
+                tiddler.add_fields(fields, overwrite=False)
+                filtered.append(tiddler)
+    return filtered
 
 
-def add_translations(neuro_tid):
-    ncbi_taxon_id = neuro_tid.fields["ncbi.txid"]
+def add_translations(tiddler):
+    ncbi_taxon_id = tiddler.fields["ncbi.txid"]
     query_file_path = os.path.join(internal_utils.get_path("wd_queries"), "taxon.rq")
     wd_res = wikidata.fetch(query_file_path, {"ncbi-taxon-id": ncbi_taxon_id})
     if len(wd_res) > 1:
         print("Warning: multiple results for WikiData query")
-        return neuro_tid
+        return tiddler
     elif not wd_res:
-        print(f"Warning: No WikiData available for {neuro_tid.fields['name']}")
-        return neuro_tid
+        print(f"Warning: No WikiData available for {tiddler.fields['name']}")
+        return tiddler
     else:
         wd_res = wd_res[0]
 
     if "labelSL" in wd_res:
         label_sl = wd_res["labelSL"]["value"]
-        if label_sl != neuro_tid.fields["name"]:
-            neuro_tid.fields["trans.slv"] = label_sl.lower()
+        if label_sl != tiddler.fields["name"]:
+            tiddler.fields["trans.slv"] = label_sl.lower()
 
     if "labelEN" in wd_res:
         label_en = wd_res["labelEN"]["value"]
-        if label_en != neuro_tid.fields["name"]:
-            neuro_tid.fields["trans.eng"] = label_en
+        if label_en != tiddler.fields["name"]:
+            tiddler.fields["trans.eng"] = label_en
 
-    return neuro_tid
+    return tiddler
 
 
 @click.command("taxon", short_help="import taxon")
@@ -146,30 +146,30 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
             print(f"{terminal_style.SUCCESS} {lineage_data[-1]['name']}: NCBI Taxonomy data")
 
     # Create lineage TiddlerList
-    neuro_tids = TiddlerList()
+    tiddler_list = TiddlerList()
     for taxon_data in lineage_data:
         try:
-            neuro_tid = tw_get.tiddler(taxon_data["title"], port=port)
+            tiddler = tw_get.tiddler(taxon_data["title"], port=port)
         except exceptions.TiddlerDoesNotExist:
-            neuro_tid = Tiddler(taxon_data["title"])
-        neuro_tid.add_fields(taxon_data)
-        neuro_tids.append(neuro_tid)
-    neuro_tids = filter_neuro_tids(neuro_tids, port)
-    neuro_tids.chain()
+            tiddler = Tiddler(taxon_data["title"])
+        tiddler.add_fields(taxon_data)
+        tiddler_list.append(tiddler)
+    tiddler_list = filter_tiddler_list(tiddler_list, port)
+    tiddler_list.chain()
 
     # Add missing taxa to NeuroWiki
     changes = False
-    for neuro_tid in neuro_tids:
+    for tiddler in tiddler_list:
         if overwrite and yes:
-            tw_put.tiddler(neuro_tid, port=port)
+            tw_put.tiddler(tiddler, port=port)
             changes = True
-        elif yes and not tw_get.is_tiddler(neuro_tid.title, port=port):
-            tw_put.tiddler(neuro_tid, port=port)
+        elif yes and not tw_get.is_tiddler(tiddler.title, port=port):
+            tw_put.tiddler(tiddler, port=port)
             changes = True
-        elif overwrite or not tw_get.is_tiddler(neuro_tid.title, port=port):
-            neuro_tid = add_translations(neuro_tid)
-            if terminal_components.bool_prompt(f"Put tiddler \"{neuro_tid.title}\"?"):
-                tw_put.tiddler(neuro_tid, port=port)
+        elif overwrite or not tw_get.is_tiddler(tiddler.title, port=port):
+            tiddler = add_translations(tiddler)
+            if terminal_components.bool_prompt(f"Put tiddler \"{tiddler.title}\"?"):
+                tw_put.tiddler(tiddler, port=port)
                 changes = True
 
     # Establish local filesystem architecture
@@ -177,13 +177,13 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
         return
     current_path = local
     added = False
-    for neuro_tid in neuro_tids:
-        if neuro_tid.fields["neuro.role"] in OBLIGATORY_TAXA:
-            name = neuro_tid.title.split(" ", 1)[1].replace(" ", "_")
+    for tiddler in tiddler_list:
+        if tiddler.fields["neuro.role"] in OBLIGATORY_TAXA:
+            name = tiddler.title.split(" ", 1)[1].replace(" ", "_")
             current_path = f"{current_path}/{name}"
             subpath = current_path.replace(f"{local}/", "")
-            if "local" in neuro_tid.fields:
-                local_path = neuro_tid.fields["local"].replace("file://", "")
+            if "local" in tiddler.fields:
+                local_path = tiddler.fields["local"].replace("file://", "")
                 if os.path.isdir(local_path):
                     current_path = local_path
                 continue
@@ -191,14 +191,14 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
             if not os.path.isdir(current_path):
                 if terminal_components.bool_prompt(f"Establish subpath \"{subpath}\"?"):
                     os.mkdir(current_path)
-                    neuro_tid.fields["local"] = f"file://{current_path}"
-                    tw_put.tiddler(neuro_tid, port=port)
+                    tiddler.fields["local"] = f"file://{current_path}"
+                    tw_put.tiddler(tiddler, port=port)
                 else:
                     break
             else:
-                if "local" not in neuro_tid.fields:
-                    neuro_tid.fields["local"] = f"file://{current_path}"
-                    tw_put.tiddler(neuro_tid, port=port)
+                if "local" not in tiddler.fields:
+                    tiddler.fields["local"] = f"file://{current_path}"
+                    tw_put.tiddler(tiddler, port=port)
                     added = True
 
     if not changes:
