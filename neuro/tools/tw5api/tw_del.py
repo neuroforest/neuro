@@ -27,5 +27,5 @@ def by_filter(tw_filter, confirm=True, **kwargs):
 def all_tiddlers(**kwargs):
     if "port" not in kwargs or kwargs["port"] is os.getenv("PORT"):
         raise exceptions.InternalError("Data loss event was blocked.")
-    response = by_filter("[all[]]", confirm=False, **kwargs)
+    response = by_filter("[!is[system]]", confirm=False, **kwargs)
     return response
