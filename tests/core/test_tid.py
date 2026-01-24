@@ -166,7 +166,7 @@ class TestWikiFolder:
     def test_create(self):
         import os
         from neuro.core.tid import WikiFolder
-        wf_path = get_test_file("output/wf-test_create", exists=False)
+        wf_path = get_test_file("output/wf-test-create", exists=False)
         assert not os.path.exists(wf_path)
         wf = WikiFolder(wf_path, tiddlywiki_info=self.tiddlywiki_info)
         assert wf.validate()
@@ -174,7 +174,7 @@ class TestWikiFolder:
     def test_start(self):
         from neuro.core.tid import WikiFolder
         from neuro.utils import network_utils
-        wf_path = get_test_file("output/wf-test_start", exists=False)
+        wf_path = get_test_file("output/wf-test-start", exists=False)
         wf = WikiFolder(wf_path, tiddlywiki_info=self.tiddlywiki_info)
         wf.start()
         assert network_utils.is_port_in_use(wf.port, host=wf.host)
@@ -182,7 +182,7 @@ class TestWikiFolder:
     def test_api_exposed(self):
         from neuro.core.tid import WikiFolder
         import requests
-        wf_path = get_test_file("output/wf-test_api_exposed", exists=False)
+        wf_path = get_test_file("output/wf-test-api-exposed", exists=False)
         wf = WikiFolder(wf_path, tiddlywiki_info=self.tiddlywiki_info)
         wf.start()
         response = requests.get(f"http://{wf.host}:{wf.port}/neuro/info", timeout=5)
