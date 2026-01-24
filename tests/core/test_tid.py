@@ -153,9 +153,9 @@ class TestNeuroTW:
         tw_html_path = get_test_file("input/wikis/tw5.html")
 
         neuro_tw = TiddlywikiHtml.from_html(tw_html_path)
-        assert len(neuro_tw.neuro_tids) == 9
+        assert len(neuro_tw.tiddler_list) == 9
         assert neuro_tw.__contains__("$:/isEncrypted")
-        assert neuro_tw.neuro_tids.object_index["$:/isEncrypted"].fields["text"] == "no"
+        assert neuro_tw.tiddler_list.object_index["$:/isEncrypted"].fields["text"] == "no"
 
 
 class TestWikiFolder:

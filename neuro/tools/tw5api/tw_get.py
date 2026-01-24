@@ -115,7 +115,7 @@ def tiddler(tid_title, **kwargs):
         return Tiddler(tid_title)
 
 
-def neuro_tids(tw_filter, **kwargs):
+def tiddler_list(tw_filter, **kwargs):
     titles = tw_fields(["title"], tw_filter=tw_filter, **kwargs)
     nts = TiddlerList()
     for t in titles:

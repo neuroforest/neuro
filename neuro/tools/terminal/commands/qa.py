@@ -30,7 +30,7 @@ def resolve_neuro_ids(port, verbose=False):
     resolved = True
 
     # Add neuro.id
-    unidentified = tw_get.neuro_tids("[!is[system]!has[neuro.id]]", port=port)
+    unidentified = tw_get.tiddler_list("[!is[system]!has[neuro.id]]", port=port)
     if unidentified:
         print("Adding neuro.id fields:")
         width = max([len(neuro_tid.title) for neuro_tid in unidentified])
@@ -76,7 +76,7 @@ def resolve_neuro_ids(port, verbose=False):
 def set_roles(port):
     role_pairs = dict()
     for tid_tag, role in json.loads(os.getenv("ROLE_DICT")).items():
-        neuro_tids = tw_get.neuro_tids(f"[tag[{tid_tag}]!has[neuro.role]]", port=port)
+        neuro_tids = tw_get.tiddler_list(f"[tag[{tid_tag}]!has[neuro.role]]", port=port)
         for neuro_tid in neuro_tids:
             role_pairs[neuro_tid.title] = role
 
@@ -99,7 +99,7 @@ def set_object_sets(port):
     update_list = TiddlerList()
     for object_set in json.loads(os.getenv("OBJECT_SETS")):
         regexp_pattern = r"^\S+\s\S+$"
-        tiddler_list = tw_get.neuro_tids(f"[prefix[.]suffix[ {object_set}]!has[neuro.role]"
+        tiddler_list = tw_get.tiddler_list(f"[prefix[.]suffix[ {object_set}]!has[neuro.role]"
                                          f"regexp[{regexp_pattern}]]", port=port)
         update_list.extend(tiddler_list)
 
