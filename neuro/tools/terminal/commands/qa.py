@@ -86,7 +86,7 @@ def set_roles(port):
         with tqdm.tqdm(total=len(role_pairs)) as pbar:
             for tid_title, role in role_pairs.items():
                 pbar.set_description(tid_title.ljust(width))
-                neuro_tid = tw_get.neuro_tid(tid_title, port=port)
+                neuro_tid = tw_get.tiddler(tid_title, port=port)
                 neuro_tid.add_fields({"neuro.role": role})
                 tw_put.tiddler(neuro_tid, port=port)
                 pbar.update(1)
@@ -314,7 +314,7 @@ class Primary:
         with tqdm.tqdm(total=len(simple_tfs)) as pbar:
             for tf in simple_tfs:
                 title = tf["title"]
-                neuro_tid = tw_get.neuro_tid(title, port=self.port)
+                neuro_tid = tw_get.tiddler(title, port=self.port)
                 neuro_tid.fields["neuro.primary"] = tf["tags"][0]
                 if self.verbose:
                     if "primary" in tf:
@@ -346,7 +346,7 @@ class Primary:
             tiddler_chosen = terminal_components.selector(tid_tags)
 
             if tiddler_chosen:
-                neuro_tid = tw_get.neuro_tid(tid_title, port=self.port)
+                neuro_tid = tw_get.tiddler(tid_title, port=self.port)
                 neuro_tid.fields["neuro.primary"] = tiddler_chosen
                 tw_put.tiddler(neuro_tid, port=self.port)
             else:

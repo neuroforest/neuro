@@ -112,7 +112,7 @@ class TestTwGet:
 
     def test_get_neuro_tid(self, wf_universal):
         from neuro.tools.tw5api import tw_get
-        neuro_tid = tw_get.neuro_tid("test", **kwargs)
+        neuro_tid = tw_get.tiddler("test", **kwargs)
         assert "created" in neuro_tid.fields
 
     def test_get_tiddler(self, wf_universal):
@@ -162,7 +162,7 @@ class TestTwPut:
 
     def test_replace_neuro_tid(self, wf_universal):
         from neuro.tools.tw5api import tw_get, tw_put
-        nt1 = tw_get.neuro_tid("test", **kwargs)
+        nt1 = tw_get.tiddler("test", **kwargs)
         tw_put.tiddler(nt1, **kwargs)
-        nt2 = tw_get.neuro_tid("test", **kwargs)
+        nt2 = tw_get.tiddler("test", **kwargs)
         assert nt1 == nt2

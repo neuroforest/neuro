@@ -149,7 +149,7 @@ def cli(ctx, taxon_name, overwrite, local, yes, port):
     neuro_tids = TiddlerList()
     for taxon_data in lineage_data:
         try:
-            neuro_tid = tw_get.neuro_tid(taxon_data["title"], port=port)
+            neuro_tid = tw_get.tiddler(taxon_data["title"], port=port)
         except exceptions.TiddlerDoesNotExist:
             neuro_tid = Tiddler(taxon_data["title"])
         neuro_tid.add_fields(taxon_data)
