@@ -52,16 +52,16 @@ class TestNeuroTid:
         with open(tiddler_json) as f:
             tiddler = json.load(f)
 
-        neuro_tid = Tiddler.from_tiddler(tiddler)
+        neuro_tid = Tiddler.from_fields(tiddler)
         assert neuro_tid.title == "$:/plugins/neuroforest/front/images/Wikipedia"
 
         del tiddler["text"]
-        neuro_tid = Tiddler.from_tiddler(tiddler)
+        neuro_tid = Tiddler.from_fields(tiddler)
         assert neuro_tid
 
         del tiddler["title"]
         with pytest.raises(exceptions.MissingTitle):
-            Tiddler.from_tiddler(tiddler)
+            Tiddler.from_fields(tiddler)
 
     def test_get_tid_file_name(self):
         from neuro.core.tid import Tiddler
@@ -89,11 +89,10 @@ class TestNeuroTid:
 
     def test_to_text(self):
         neuro_tid = self.get_test_neuro_tid()
-        text = neuro_tid.to_text(neuro_tid.fields)
+        text = neuro_tid.to_text()
         result_text_path = get_test_file("results/files/tiddler_text.txt")
         with open(result_text_path) as f:
             result_text = f.read()
-
         assert result_text == text
 
 
@@ -116,7 +115,7 @@ class TestNeuroTids:
         neuro_tids.remove("test2")
         assert "test2" not in neuro_tids
         assert len(neuro_tids) == 2
-        assert len(neuro_tids) == len(neuro_tids.object_index)
+        assert len(neuro_tids) == len(neuro_tids.tiddler_index)
 
     def test_chain(self):
         from neuro.core.tid import Tiddler, TiddlerList
@@ -144,7 +143,7 @@ class TestNeuroTids:
             Tiddler("test3")
         ])
         neuro_tids[1].fields["text"] = "Positive."
-        assert neuro_tids.object_index["test2"].fields["text"] == "Positive."
+        assert neuro_tids.tiddler_index["test2"].fields["text"] == "Positive."
 
 
 class TestNeuroTW:
@@ -155,7 +154,7 @@ class TestNeuroTW:
         neuro_tw = TiddlywikiHtml.from_html(tw_html_path)
         assert len(neuro_tw.tiddler_list) == 9
         assert neuro_tw.__contains__("$:/isEncrypted")
-        assert neuro_tw.tiddler_list.object_index["$:/isEncrypted"].fields["text"] == "no"
+        assert neuro_tw.tiddler_list.tiddler_index["$:/isEncrypted"].fields["text"] == "no"
 
 
 class TestWikiFolder:

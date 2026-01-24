@@ -109,7 +109,7 @@ def lineage(root="$:/plugins/neuroforest/front/tags/Contents", tw_filter="[!is[s
 def tiddler(tid_title, **kwargs):
     t = fields(tid_title, **kwargs)
     if t:
-        nt = Tiddler.from_tiddler(t)
+        nt = Tiddler.from_fields(t)
         return nt
     else:
         return Tiddler(tid_title)
