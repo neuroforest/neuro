@@ -2,9 +2,9 @@ from neuro.core import Node
 from neuro.base.api import NeuroBase
 
 
-def all_tiddlers(**kwargs):
+def all_fields(**kwargs):
     """
-    Run a Cypher query and return the tiddlers as a list of dicts.
+    Return a list of all tiddler fields in the NeuroBase.
     """
     nb = NeuroBase(**kwargs)
     try:
@@ -18,14 +18,14 @@ def all_tiddlers(**kwargs):
         } as properties;
         """
         result = nb.get_data(query)
-        tiddlers = [next(iter(record.values())) for record in result]
+        fields_list = [next(iter(record.values())) for record in result]
     except Exception as e:
         print(f"Error connecting to Neo4j: {e}")
         return None
     finally:
         nb.close()
 
-    return tiddlers
+    return fields_list
 
 
 def node_by_uuid(neuro_id):
