@@ -357,10 +357,10 @@ class TextJson(Text):
 class TextTid(Text):
     def __init__(self, path):
         super().__init__(path)
-        self.fields = self.to_tiddler()
+        self.fields = self.to_fields()
 
-    def to_tiddler(self):
-        tiddler = dict()
+    def to_fields(self):
+        fields = dict()
         rows = self.get_rows()
         pattern = re.compile(r"^[a-z0-9\-._]+:\s.*", re.M)
         for i in range(len(rows)):
@@ -368,10 +368,10 @@ class TextTid(Text):
             matches = re.match(pattern, row)
             if matches:
                 name, value = row.split(": ", 1)
-                tiddler[name] = value
+                fields[name] = value
             else:
                 text = "\n".join(rows[i:]).strip()
-                tiddler["text"] = text
+                fields["text"] = text
                 break
 
-        return tiddler
+        return fields

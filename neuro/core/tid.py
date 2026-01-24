@@ -5,16 +5,16 @@ import json
 import logging
 import os
 import re
+from pathlib import Path
 import shutil
 import subprocess
 
-import tqdm
 from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
 
 from neuro.core import Node, Moment
 from neuro.core.file.text import TextHtml
-from neuro.utils import oop_utils, exceptions, internal_utils, network_utils
+from neuro.utils import exceptions, internal_utils, network_utils
 
 
 class Tiddler(Node):
@@ -90,9 +90,7 @@ class Tiddler(Node):
 
     def add_fields(self, fields, overwrite=False):
         """
-        Add fields to neuro_tid.
-
-        :param fields: dict
+        :param fields:
         :param overwrite: overrides existing fields
         :return:
         """
@@ -107,7 +105,7 @@ class Tiddler(Node):
     def add_tag(self, tags):
         if "tags" in self.fields:
             if not isinstance(self.fields["tags"], list):
-                logging.error("Incorrect data type of field `tags`, should be list.")
+                logging.error("Incorrect data type of field 'tags', should be list.")
                 return
         else:
             self.fields["tags"] = list()
@@ -128,47 +126,44 @@ class Tiddler(Node):
         else:
             raise TypeError(f"HTML type not supported: {type(html)}")
 
-        tid_fields = div_element.attrs
-        tid_fields["text"] = div_element.text
+        fields = div_element.attrs
+        fields["text"] = div_element.text
         try:
-            tid_title = tid_fields["title"]
-            neuro_tid = cls(tid_title, tid_fields)
-            return neuro_tid
+            tid_title = fields["title"]
+            return cls(tid_title, fields)
         except KeyError:
             logging.error(f"No title in HTML: {html}")
             return cls()
 
     @classmethod
-    def from_tiddler(cls, tiddler):
+    def from_fields(cls, fields):
         """
-        Populate Tiddler properties from a tiddler.
-
-        :param tiddler: dict
+        :param fields:
         :return:
         """
         try:
-            tid_title = tiddler["title"]
+            tid_title = fields["title"]
         except KeyError:
             raise exceptions.MissingTitle()
 
-        # Handle created
-        if "created" in tiddler:
-            created = tiddler["created"]
+        if "created" in fields:
+            created = fields["created"]
             pattern_utc = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z"
             pattern_tw5 = r"\d{17}"
             if re.match(pattern_utc, created):
-                tiddler["created"] = Moment(created, form="utc").to_tid_val()
+                fields["created"] = Moment(created, form="utc").to_tid_val()
             elif re.match(pattern_tw5, created):
-                tiddler["created"] = Moment(created, form="tw5").to_tid_val()
+                fields["created"] = Moment(created, form="tw5").to_tid_val()
             else:
                 logging.error(f"The format of field 'created' is not recognized: {created}")
 
-        return cls(tid_title, tiddler)
+        return cls(tid_title=tid_title, fields=fields)
 
     @staticmethod
     def get_tid_file_name(tid_title):
         """
-        Replace special characters in file, for example: :,/,\
+        Replace special characters in the file name, for example: ':', '/' ,'\', ...
+        NOTE: For testing purposes this is a static method.
         """
         tid_file_name = tid_title
         tid_file_name = re.sub(r"\/|\\", "_", tid_file_name)
@@ -177,95 +172,70 @@ class Tiddler(Node):
         tid_file_name = re.sub(r"[\x00-\x1f\x80-\x9f]", "_", tid_file_name)
         tid_file_name = re.sub(r"<|>|~|\:|\"|\||\?|\*|\^", "_", tid_file_name)
 
-        # Truncate
         if len(tid_file_name) > 200:
             tid_file_name = tid_file_name[:200]
 
         return tid_file_name
 
-    @staticmethod
-    def get_local_name(tid_title):
-        """
-        Name used in the local file system.
-        :return:
-        """
-        name = " ".join(e for e in tid_title.split() if not e.startswith("."))
-        name = re.sub(r"[.,|{}\[\]]", " ", name)
-        name = name.replace(" ", "")
-        return name
-
-    @staticmethod
-    def to_text(fields):
+    def to_text(self):
         """
         Determine tid file text.
         """
-        if "text" in fields:
-            tid_text = fields["text"]
+        if "text" in self.fields:
+            tid_text = self.fields["text"]
         else:
             tid_text = None
 
         text = str()
-        for field in sorted(fields):
-            if field in fields and field != "text":
-                text += f"{field}: {fields[field]}\n"
+        for field in sorted(self.fields):
+            if field in self.fields and field != "text":
+                text += f"{field}: {self.fields[field]}\n"
 
         if tid_text:
             text += f"\n{tid_text}"
         else:
-            # Remove redundant \n
-            text = text[:-1]
+            text = text.strip()
 
         return text
 
-    def to_tiddler(self, only_true=True):
-        # Extracting data.
-        tiddler_keys = oop_utils.get_attr_keys(self, modes={"simple", "no_func"})
-        tiddler = dict()
-        for key in tiddler_keys:
-            val = self[key]
+    def write(self, directory="", path=""):
+        """Serialize Tiddler to a tid file."""
+        text = self.to_text()
 
-            if isinstance(val, set):
-                val = list(val)
-
-            tiddler[key] = val
-
-        # Removing false values.
-        if only_true:
-            tiddler = {key: val for key, val in tiddler.items() if val}
-
-        return tiddler
-
-    def write(self, fields=None, directory="", path=""):
-        """Write to tid text file."""
-        if not fields:
-            fields = self.fields
+        if path:
+            pass
+        elif directory and Path(directory).is_dir():
+            path = os.path.join(directory, self.get_tid_file_name(self.fields["title"]))
         else:
-            fields = {**self.fields, **fields}
+            logging.error("Path could not be determined.")
+            return
 
-        text = self.to_text(fields)
+        if "type" in self.fields and self.fields["type"] != "text/vnd.tiddlywiki":
+            text_parts = text.split("\n\n", 1)
+            if len(text_parts) == 2:
+                real_text = text_parts[1]
+            else:
+                real_text = ""
 
-        # Determine path
-        if directory:
-            path = os.path.join(directory, self.get_tid_file_name(fields["title"]))
+            with open(f"{path}.meta", mode="w+") as f:
+                f.write(text_parts[0])
+            with open(f"{path}", mode="w+") as f:
+                f.write(real_text)
         else:
-            if not path:
-                logging.error(f"No directory given for writing: {fields['title']}")
-                return
-
-        with open(path, "w+", encoding="utf-8") as f:
-            f.write(text)
+            with open(f"{path}.tid", mode="w+") as f:
+                f.write(text)
 
 
-class TiddlerList(list):
+class TiddlerList(list[Tiddler]):
     """
-    A collection of Tiddler instances. This class exhibits functionality of
+    A collection of Tiddler instances. This class exhibits the functionality of
     list and dict data types.
     """
-    def __init__(self, neuro_tids=None, *args):
+    def __init__(self, tiddler_list=None, *args):
         super().__init__(*args)
-        self.object_index = dict()
-        if neuro_tids:
-            self.extend(neuro_tids)
+        self.tiddler_index = dict()
+        if tiddler_list:
+            self.extend(tiddler_list)
 
     def __str__(self):
         nt_strs = list()
@@ -281,40 +251,40 @@ class TiddlerList(list):
         return representation_string
 
     def __contains__(self, tid_title):
-        return tid_title in self.object_index
+        return tid_title in self.tiddler_index
 
     @classmethod
     def from_json(cls, json_path):
         """
-        Create TiddlerList from JSON object.
+        Create TiddlerList from a JSON object containing a list of tiddler fields.
         :param json_path:
         :return:
         """
         tiddler_list = cls()
         with open(json_path) as f:
             json_object = json.load(f)
-        for tiddler in json_object:
-            tiddler = Tiddler.from_tiddler(tiddler)
+        for fields in json_object:
+            tiddler = Tiddler.from_fields(fields)
             tiddler_list.append(tiddler)
         return tiddler_list
 
-    def append(self, neuro_tid: Tiddler):
-        if not isinstance(neuro_tid, Tiddler):
-            logging.error(f"Cannot append object of type {type(neuro_tid)}")
+    def append(self, tiddler: Tiddler):
+        if not isinstance(tiddler, Tiddler):
+            logging.error(f"Cannot append object of type {type(tiddler)}")
             return
 
-        # Checking for conflicts.
+        # Checking for conflicts
         conflict_message = "TiddlerList object already contains Tiddler with {}: {}"
-        if neuro_tid.title in [nt.title for nt in self]:
-            logging.warning(conflict_message.format("title", neuro_tid.title))
+        if tiddler.title in [t.title for t in self]:
+            logging.warning(conflict_message.format("title", tiddler.title))
             return
-        if neuro_tid["uuid"] in [nt["uuid"] for nt in self]:
-            logging.warning(conflict_message.format("uuid", neuro_tid["uuid"]))
+        if tiddler.uuid in [t.uuid for t in self]:
+            logging.warning(conflict_message.format("uuid", tiddler["uuid"]))
             return
 
-        # Writing.
-        super().append(neuro_tid)
-        self.object_index[neuro_tid.title] = neuro_tid
+        # Writing
+        self.tiddler_index[tiddler.title] = tiddler
+        super().append(tiddler)
 
     def chain(self, initial_tag=""):
         """
@@ -322,50 +292,35 @@ class TiddlerList(list):
         :return:
         """
         current_tag = initial_tag
-        for neuro_tid in self:
-            neuro_tid.add_tag(current_tag)
-            neuro_tid.fields["neuro.primary"] = current_tag
-            current_tag = neuro_tid.title
+        for tiddler in self:
+            tiddler.add_tag(current_tag)
+            tiddler.fields["neuro.primary"] = current_tag
+            current_tag = tiddler.title
 
     def display(self):
         print(self.__repr__())
 
-    def extend(self, neuro_tid_list):
-        for neuro_tid in neuro_tid_list:
-            self.append(neuro_tid)
+    def extend(self, tiddler_list: list[Tiddler]):
+        for tiddler in tiddler_list:
+            self.append(tiddler)
 
     def remove(self, tid_title):
         if tid_title not in self:
             raise ValueError(f"Tiddler {tid_title} not found.")
 
-        neuro_tid = self.object_index[tid_title]
-        super().remove(neuro_tid)
-        del self.object_index[tid_title]
+        tiddler = self.tiddler_index[tid_title]
+        del self.tiddler_index[tid_title]
+        super().remove(tiddler)
 
-    def write_tiddlers(self, dir_path):
+    def write(self, dir_path):
         """
         Write TiddlerList to tid text files.
         :param dir_path: absolute pathname to directory
         :return:
         """
         os.makedirs(dir_path, exist_ok=True)
-        for neuro_tid in self:
-            tid_file_title = neuro_tid.get_tid_file_name(neuro_tid.title)
-            tid_text = neuro_tid.to_text(neuro_tid.fields)
-            if "type" in neuro_tid.fields:
-                text_parts = tid_text.split("\n\n", 1)
-                if len(text_parts) == 2:
-                    real_text = text_parts[1]
-                else:
-                    real_text = ""
-
-                with open(f"{dir_path}/{tid_file_title}.meta", mode="w+") as f:
-                    f.write(text_parts[0])
-                with open(f"{dir_path}/{tid_file_title}", mode="w+") as f:
-                    f.write(real_text)
-            else:
-                with open(f"{dir_path}/{tid_file_title}.tid", mode="w+") as f:
-                    f.write(tid_text)
+        for tiddler in self:
+            tiddler.write()
 
 
 class TiddlywikiHtml(TextHtml):
@@ -402,8 +357,8 @@ class TiddlywikiHtml(TextHtml):
         store_area_div = tw_soup.find(id="storeArea")
         tiddler_divs = store_area_div.find_all("div", recursive=False)
         for tiddler_div in tiddler_divs:
-            neuro_tid = Tiddler.from_html(tiddler_div)
-            tw.tiddler_list.append(neuro_tid)
+            tiddler = Tiddler.from_html(tiddler_div)
+            tw.tiddler_list.append(tiddler)
 
         return tw
 
@@ -420,12 +375,9 @@ class TiddlywikiHtml(TextHtml):
         tw = cls(html)
 
         store_area_json = tw_soup.find('script', class_='tiddlywiki-tiddler-store').text
-        json_object = json.loads(store_area_json)
-        neuro_tids = TiddlerList()
-        for tiddler in tqdm.tqdm(json_object):
-            neuro_tid = Tiddler.from_tiddler(tiddler)
-            neuro_tids.append(neuro_tid)
-        tw.tiddler_list.extend(neuro_tids)
+        for fields in json.loads(store_area_json):
+            tiddler = Tiddler.from_fields(fields)
+            tw.tiddler_list.append(tiddler)
 
         return tw
 
@@ -446,9 +398,6 @@ class TiddlywikiHtml(TextHtml):
         p.wait()
         p.kill()
 
-    def write_tiddlers(self, wf_path):
-        self.tiddler_list.write_tiddlers(wf_path)
-
 
 class WikiFolder:
     """
@@ -463,7 +412,7 @@ class WikiFolder:
         :param silent: supress stdout
         :param port:
         :param host:
-        :param tw_info: template used for creating WF
+        :param tw_info: the path to the tiddlywiki.info file
         :param tiddlers_folder: folder with tiddlers to copy into WF
         """
         self.process: subprocess.Popen
@@ -491,8 +440,7 @@ class WikiFolder:
             tw_info = kwargs.get("tw_info")
         else:
             tw_info = internal_utils.get_path("templates") + "/tiddlywiki.info"
-        tw_info_path = self.wf_path + "/tiddlywiki.info"
-        shutil.copy(tw_info, tw_info_path)
+        shutil.copy(tw_info, f"{self.wf_path}/tiddlywiki.info")
 
         if tiddlers_folder:
             shutil.copytree(tiddlers_folder, f"{self.wf_path}/tiddlers")
@@ -527,16 +475,16 @@ class WikiFolder:
         """
         Validate WikiFolder structure.
         """
-        tiddlywiki_info = f"{self.wf_path}/tiddlywiki.info"
-        tiddlers = f"{self.wf_path}/tiddlers"
+        tw_info = f"{self.wf_path}/tiddlywiki.info"
+        tiddlers_folder = f"{self.wf_path}/tiddlers"
         if not os.path.isdir(self.wf_path):
             raise exceptions.FileNotWiki(f"Not a directory: {self.wf_path}")
-        if not os.path.isdir(tiddlers):
-            raise exceptions.FileNotWiki(f"No directory found: {tiddlers}")
+        if not os.path.isdir(tiddlers_folder):
+            raise exceptions.FileNotWiki(f"No directory found: {tiddlers_folder}")
 
-        if not os.path.isfile(tiddlywiki_info):
+        if not os.path.isfile(tw_info):
             raise exceptions.FileNotWiki("No tiddlywiki.info file found.")
-        with open(tiddlywiki_info) as f:
+        with open(tw_info) as f:
             try:
                 json.load(f)
             except ValueError:

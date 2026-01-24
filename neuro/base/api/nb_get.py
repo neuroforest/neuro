@@ -4,7 +4,7 @@ from neuro.base.api import NeuroBase
 
 def all_fields(**kwargs):
     """
-    Return a list of all tiddler fields in the NeuroBase.
+    Return a list of all tiddler fields from the NeuroBase.
     """
     nb = NeuroBase(**kwargs)
     try:
