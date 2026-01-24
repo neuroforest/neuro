@@ -42,3 +42,9 @@ def wf(wf_process):
 def wf_universal(wf):
     populate_wf(wf, "universal")
     yield wf
+
+
+@pytest.fixture(scope="function")
+def wf_qa(wf):
+    populate_wf(wf, "qa")
+    yield wf
