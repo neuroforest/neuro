@@ -18,8 +18,6 @@ class TestDictUtils:
         from neuro.core.data.dict import DictUtils
         self.get_test_dict("input/files/text.json")
         display_string = DictUtils.represent(self.test_dict, display=False)
-
-        print(display_string)
         result_path = get_test_file("results/files/display-string.txt")
         with open(result_path) as f:
             result_text = f.read()

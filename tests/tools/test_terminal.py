@@ -1,10 +1,6 @@
 import json
 import os
 
-import pytest
-
-from ..helper import create_and_run_wiki_folder
-
 
 kwargs = {
     "port": os.getenv("TEST_PORT"),
