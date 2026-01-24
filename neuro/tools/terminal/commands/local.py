@@ -20,7 +20,7 @@ def integrate_local(tid_title):
     lineage = tw_get.lineage(tw_filter=tw_filter)[tid_title]
     print(f"{terminal_style.BOLD}Lineage{terminal_style.RESET}: {" ➜  ".join(lineage[1:])}\n")
     neuro_tids_filter = " ".join(f"[[{element}]]" for element in lineage)
-    neuro_tids = tw_get.neuro_tids(tw_filter=neuro_tids_filter)
+    neuro_tids = tw_get.tiddler_list(tw_filter=neuro_tids_filter)
     current_path = str()
 
     unrooted_neuro_tids = TiddlerList()
@@ -64,7 +64,7 @@ def integrate_local(tid_title):
 
 def integrate_system_files(port):
     update_tids = False
-    root_file_neuro_tids = tw_get.neuro_tids("[prefix[/]] [prefix[~]]", port=port)
+    root_file_neuro_tids = tw_get.tiddler_list("[prefix[/]] [prefix[~]]", port=port)
     neuro_tids_to_update = TiddlerList()
     for neuro_tid in root_file_neuro_tids:
         if neuro_tid.title.startswith("~"):
@@ -110,7 +110,7 @@ def check_local_integration(port, verbose=True):
     """
     validated = True
 
-    locally_integrated_neuro_tids = tw_get.neuro_tids("[has[local]]", port=port)
+    locally_integrated_neuro_tids = tw_get.tiddler_list("[has[local]]", port=port)
 
     for neuro_tid in locally_integrated_neuro_tids:
         local_path = neuro_tid.fields["local"]
@@ -135,7 +135,7 @@ def check_images(port, verbose=True):
     :return:
     """
     validated = True
-    img_neuro_tids = tw_get.neuro_tids("[has[img]]", port=port)
+    img_neuro_tids = tw_get.tiddler_list("[has[img]]", port=port)
 
     for neuro_tid in tqdm.tqdm(img_neuro_tids):
         img_path = neuro_tid.fields["img"]
