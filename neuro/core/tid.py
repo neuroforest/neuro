@@ -374,10 +374,10 @@ class TiddlywikiHtml(TextHtml):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.neuro_tids = TiddlerList()
+        self.tiddler_list = TiddlerList()
 
     def __contains__(self, tid_title):
-        return self.neuro_tids.__contains__(tid_title)
+        return self.tiddler_list.__contains__(tid_title)
 
     @classmethod
     def from_html_legacy(cls, html):
@@ -396,16 +396,16 @@ class TiddlywikiHtml(TextHtml):
         else:
             raise TypeError(f"HTML type not supported: {type(html)}")
 
-        neuro_tw = cls(html)
+        tw = cls(html)
 
         # Collect tiddlers
         store_area_div = tw_soup.find(id="storeArea")
         tiddler_divs = store_area_div.find_all("div", recursive=False)
         for tiddler_div in tiddler_divs:
             neuro_tid = Tiddler.from_html(tiddler_div)
-            neuro_tw.neuro_tids.append(neuro_tid)
+            tw.tiddler_list.append(neuro_tid)
 
-        return neuro_tw
+        return tw
 
     @classmethod
     def from_html(cls, html):
@@ -417,7 +417,7 @@ class TiddlywikiHtml(TextHtml):
         with open(html) as f:
             tw_soup = Soup(f, "html.parser")
 
-        neuro_tw = cls(html)
+        tw = cls(html)
 
         store_area_json = tw_soup.find('script', class_='tiddlywiki-tiddler-store').text
         json_object = json.loads(store_area_json)
@@ -425,9 +425,9 @@ class TiddlywikiHtml(TextHtml):
         for tiddler in tqdm.tqdm(json_object):
             neuro_tid = Tiddler.from_tiddler(tiddler)
             neuro_tids.append(neuro_tid)
-        neuro_tw.neuro_tids.extend(neuro_tids)
+        tw.tiddler_list.extend(neuro_tids)
 
-        return neuro_tw
+        return tw
 
     def write_to_wf(self, wf_path, **kwargs):
         """
@@ -435,10 +435,10 @@ class TiddlywikiHtml(TextHtml):
         :return:
         """
         # Create WikiFolder
-        neuro_wf = WikiFolder(wf_path, **kwargs)
+        wf = WikiFolder(wf_path, **kwargs)
         p = subprocess.Popen([
             "node",
-            neuro_wf.tw5,
+            wf.tw5,
             wf_path,
             "--load",
             self.path
@@ -447,7 +447,7 @@ class TiddlywikiHtml(TextHtml):
         p.kill()
 
     def write_tiddlers(self, wf_path):
-        self.neuro_tids.write_tiddlers(wf_path)
+        self.tiddler_list.write_tiddlers(wf_path)
 
 
 class WikiFolder:
@@ -459,7 +459,7 @@ class WikiFolder:
         Initialize and verify WikiFolder
         :param wf_path: WikiFolder path
         :param exists: should the WikiFolder already exist
-        :param tw5: path to the tiddlywiki.js file
+        :param tw5: the path to the tiddlywiki.js file
         :param silent: supress stdout
         :param port:
         :param host:

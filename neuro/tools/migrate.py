@@ -81,22 +81,21 @@ def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
     :param wf_path:
     :param port: WF port
     """
-    objects = nb_get.all_tiddlers(**kwargs)
+    fields_list = nb_get.all_fields(**kwargs)
 
-    # Run a WikiFolder
     tw_path = internal_utils.get_path("tiddlywiki.js")
     shutil.rmtree(wf_path, ignore_errors=True)
     wf = WikiFolder(wf_path, tw5=tw_path, port=port, **kwargs)
     with wf:
-        for o in objects:
-            o = prepare_object(o)
-            tw_put.fields(o, port=port, params={"preserve": "yes"})
+        for fields in fields_list:
+            fields = prepare_object(fields)
+            tw_put.fields(fields, port=port, params={"preserve": "yes"})
 
 
 def migrate_neo4j_to_json(json_path):
-    objects = nb_get.all_tiddlers()
+    fields_list = nb_get.all_fields()
     with open(json_path, "w+") as f:
-        json.dump(objects, f)
+        json.dump(fields_list, f)
 
 
 def migrate_wf_to_json(wf_path, json_path, port=8222, **kwargs):
