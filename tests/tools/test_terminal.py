@@ -1,6 +1,8 @@
 import json
 import os
 
+import pytest
+
 from ..helper import create_and_run_wiki_folder
 
 
@@ -117,21 +119,23 @@ class TestQa:
         from neuro.tools.terminal.commands import qa
         from click.testing import CliRunner
         # noinspection PyTypeChecker
-        res = CliRunner().invoke(qa.cli, ["--port", wf_qa.port])
+        res = CliRunner().invoke(qa.cli, ["--port", wf_qa.port], standalone_mode=False)
         assert res.exit_code == 0
+        assert res.return_value is False
 
 
 class TestTaxon:
-    def test_taxon(self):
+    def test_taxon(self, wf):
         from neuro.tools.terminal.commands import taxon
         from neuro.tools.tw5api import tw_get
-        port = 8069
+        from click.testing import CliRunner
         runner = CliRunner()
-        process = create_and_run_wiki_folder("taxon", port=port)
-        result = runner.invoke(taxon.cli, [f"--port={port}", "-y", "Amata phegea"],
-                               env={"ENVIRONMENT": "TESTING"})
+        # noinspection PyTypeChecker
+        result = runner.invoke(taxon.cli, [f"--port={wf.port}", "-y", "Amata phegea"])
         assert result.exit_code == 0
-        tiddler = tw_get.tiddler("Amata phegea", port=port)
-        assert tiddler
-        process.kill()
-
+        species_fields = tw_get.tiddler("Amata phegea", port=wf.port)
+        order_fields = tw_get.tiddler("Lepidoptera", port=wf.port)
+        tid_titles = tw_get.tid_titles("[!is[system]]", port=wf.port)
+        assert species_fields["neuro.role"] == "taxon.species"
+        assert order_fields["ncbi.txid"] == "7088"
+        assert len(tid_titles) == 8
