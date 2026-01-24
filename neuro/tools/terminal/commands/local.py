@@ -19,44 +19,44 @@ def integrate_local(tid_title):
     tw_filter = f"[title[{tid_title}]]"
     lineage = tw_get.lineage(tw_filter=tw_filter)[tid_title]
     print(f"{terminal_style.BOLD}Lineage{terminal_style.RESET}: {" ➜  ".join(lineage[1:])}\n")
-    neuro_tids_filter = " ".join(f"[[{element}]]" for element in lineage)
-    neuro_tids = tw_get.tiddler_list(tw_filter=neuro_tids_filter)
+    tiddler_list_filter = " ".join(f"[[{element}]]" for element in lineage)
+    tiddler_list = tw_get.tiddler_list(tw_filter=tiddler_list_filter)
     current_path = str()
 
-    unrooted_neuro_tids = TiddlerList()
-    for neuro_tid in reversed(neuro_tids):
-        if "local" not in neuro_tid.fields:
-            unrooted_neuro_tids.insert(0, neuro_tid)
+    unrooted_tiddler_list = TiddlerList()
+    for tiddler in reversed(tiddler_list):
+        if "local" not in tiddler.fields:
+            unrooted_tiddler_list.insert(0, tiddler)
         else:
-            current_path = neuro_tid.fields["local"].replace("file://", "")
+            current_path = tiddler.fields["local"].replace("file://", "")
             break
 
-    for neuro_tid in unrooted_neuro_tids:
-        tid_title = neuro_tid.title
-        if neuro_tid["title"].startswith("$"):
+    for tiddler in unrooted_tiddler_list:
+        tid_title = tiddler.title
+        if tiddler["title"].startswith("$"):
             continue
 
-        if "local" in neuro_tid.fields:
-            current_path = neuro_tid.fields["local"].replace("file://", "")
+        if "local" in tiddler.fields:
+            current_path = tiddler.fields["local"].replace("file://", "")
         else:
-            if "name" in neuro_tid.fields:
-                candidate_path = f"{current_path}/{neuro_tid.fields['name']}"
+            if "name" in tiddler.fields:
+                candidate_path = f"{current_path}/{tiddler.fields['name']}"
             else:
-                name = neuro_tid.get_tid_file_name(neuro_tid.title)
+                name = tiddler.get_tid_file_name(tiddler.title)
                 candidate_path = f"{current_path}/{name}"
 
             if os.path.isdir(candidate_path):
                 if terminal_components.bool_prompt(f"Connect {candidate_path} to {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}?"):
-                    neuro_tid.fields["local"] = f"file://{candidate_path}"
-                    tw_put.tiddler(neuro_tid)
+                    tiddler.fields["local"] = f"file://{candidate_path}"
+                    tw_put.tiddler(tiddler)
                     current_path = candidate_path
                 else:
                     break
             else:
                 if terminal_components.bool_prompt(f"Establish {candidate_path} for {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}?"):
                     os.mkdir(candidate_path)
-                    neuro_tid.fields["local"] = f"file://{candidate_path}"
-                    tw_put.tiddler(neuro_tid)
+                    tiddler.fields["local"] = f"file://{candidate_path}"
+                    tw_put.tiddler(tiddler)
                     current_path = candidate_path
                 else:
                     break
@@ -64,39 +64,39 @@ def integrate_local(tid_title):
 
 def integrate_system_files(port):
     update_tids = False
-    root_file_neuro_tids = tw_get.tiddler_list("[prefix[/]] [prefix[~]]", port=port)
-    neuro_tids_to_update = TiddlerList()
-    for neuro_tid in root_file_neuro_tids:
-        if neuro_tid.title.startswith("~"):
-            path = os.path.expanduser(neuro_tid.title)
+    root_file_tiddler_list = tw_get.tiddler_list("[prefix[/]] [prefix[~]]", port=port)
+    tiddler_list_to_update = TiddlerList()
+    for tiddler in root_file_tiddler_list:
+        if tiddler.title.startswith("~"):
+            path = os.path.expanduser(tiddler.title)
         else:
-            path = neuro_tid.title
+            path = tiddler.title
         if os.path.isfile(path):
-            if "file" not in neuro_tid.fields:
-                neuro_tid.fields["file"] = f"file://{path}"
-                neuro_tids_to_update.append(neuro_tid)
+            if "file" not in tiddler.fields:
+                tiddler.fields["file"] = f"file://{path}"
+                tiddler_list_to_update.append(tiddler)
                 update_tids = True
             else:
-                if neuro_tid.fields["file"] != f"file://{path}":
+                if tiddler.fields["file"] != f"file://{path}":
                     print(f"Incorrect file path for {terminal_style.BOLD}{path}{terminal_style.RESET}")
         elif os.path.isdir(path):
-            if "local" not in neuro_tid.fields:
-                neuro_tid.fields["local"] = f"file://{path}"
-                neuro_tids_to_update.append(neuro_tid)
+            if "local" not in tiddler.fields:
+                tiddler.fields["local"] = f"file://{path}"
+                tiddler_list_to_update.append(tiddler)
                 update_tids = True
             else:
-                if neuro_tid.fields["local"] != f"file://{path}":
+                if tiddler.fields["local"] != f"file://{path}":
                     print(f"Incorrect local path for {terminal_style.BOLD}{path}{terminal_style.RESET}")
         else:
             pass
             print(f"Missing file: {path}")
 
     if update_tids:
-        width = min([max([len(neuro_tid.title) for neuro_tid in neuro_tids_to_update]), 24])
-        with tqdm.tqdm(total=len(neuro_tids_to_update)) as pbar:
-            for neuro_tid in neuro_tids_to_update:
-                pbar.set_description(neuro_tid.title.ljust(width)[:width])
-                tw_put.tiddler(neuro_tid, port=port)
+        width = min([max([len(tiddler.title) for tiddler in tiddler_list_to_update]), 24])
+        with tqdm.tqdm(total=len(tiddler_list_to_update)) as pbar:
+            for tiddler in tiddler_list_to_update:
+                pbar.set_description(tiddler.title.ljust(width)[:width])
+                tw_put.tiddler(tiddler, port=port)
                 pbar.update(1)
             pbar.set_description("")
 
@@ -110,12 +110,12 @@ def check_local_integration(port, verbose=True):
     """
     validated = True
 
-    locally_integrated_neuro_tids = tw_get.tiddler_list("[has[local]]", port=port)
+    locally_integrated_tiddler_list = tw_get.tiddler_list("[has[local]]", port=port)
 
-    for neuro_tid in locally_integrated_neuro_tids:
-        local_path = neuro_tid.fields["local"]
+    for tiddler in locally_integrated_tiddler_list:
+        local_path = tiddler.fields["local"]
         if not os.path.isdir(local_path.replace("file://", "")):
-            print(f"Local integration for {terminal_style.BOLD}{neuro_tid.title}{terminal_style.RESET} is broken.")
+            print(f"Local integration for {terminal_style.BOLD}{tiddler.title}{terminal_style.RESET} is broken.")
             validated = False
 
     if verbose:
@@ -135,13 +135,13 @@ def check_images(port, verbose=True):
     :return:
     """
     validated = True
-    img_neuro_tids = tw_get.tiddler_list("[has[img]]", port=port)
+    img_tiddler_list = tw_get.tiddler_list("[has[img]]", port=port)
 
-    for neuro_tid in tqdm.tqdm(img_neuro_tids):
-        img_path = neuro_tid.fields["img"]
+    for tiddler in tqdm.tqdm(img_tiddler_list):
+        img_path = tiddler.fields["img"]
         if img_path.startswith("file://"):
             if not os.path.isfile(img_path.replace("file://", "")):
-                print(f"Image integration for {terminal_style.BOLD}{neuro_tid.title}{terminal_style.RESET} is broken.")
+                print(f"Image integration for {terminal_style.BOLD}{tiddler.title}{terminal_style.RESET} is broken.")
                 validated = False
         elif img_path.startswith("http://") or img_path.startswith("https://"):
             headers = {
@@ -151,7 +151,7 @@ def check_images(port, verbose=True):
                 response = requests.head(img_path, headers=headers, allow_redirects=True)
                 if response.status_code != 200:
                     print(f"Status code: {response.status_code}")
-                    print(f"Tiddler: {neuro_tid.title}")
+                    print(f"Tiddler: {tiddler.title}")
                     print(f"URL: {img_path}")
 
             except requests.RequestException as e:

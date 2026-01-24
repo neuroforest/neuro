@@ -3,17 +3,15 @@ GET wrapper.
 """
 
 import logging
-import os
-import webbrowser
 
 from neuro.core.tid import Tiddler, TiddlerList
 from neuro.tools.tw5api import tw_api
 from neuro.utils import exceptions
 
 
-def all_tiddlers(**kwargs):
+def all_fields(**kwargs):
     """
-    Return a list of tiddlers.
+    Return a list of tiddler fields, except 'text'.
     :return: list of dictionaries
     """
     with tw_api.API(**kwargs) as api:
@@ -117,26 +115,13 @@ def tiddler(tid_title, **kwargs):
 
 def tiddler_list(tw_filter, **kwargs):
     titles = tw_fields(["title"], tw_filter=tw_filter, **kwargs)
-    nts = TiddlerList()
+    tid_list = TiddlerList()
     for t in titles:
         tid_title = t["title"]
-        nt = tiddler(tid_title, **kwargs)
-        nts.append(nt)
+        tid = tiddler(tid_title, **kwargs)
+        tid_list.append(tid)
 
-    return nts
-
-
-def rendered_tiddler(tid_title, **kwargs):
-    with tw_api.API(**kwargs) as api:
-        parsed_response = api.get("/{}".format(tid_title), content_type="text/html")
-        path = os.path.abspath("temp.html")
-        url = "file://" + path
-
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(parsed_response)
-
-        # Opening the rendered tiddler in the web browser.
-        webbrowser.open(url)
+    return tid_list
 
 
 def server_status(**kwargs):
@@ -155,9 +140,7 @@ def tid_titles(tw_filter, **kwargs):
 
 def fields(tid_title, **kwargs):
     """
-    Returns tiddler data.
     :param tid_title:
-    :return: tid
     """
     with tw_api.API(**kwargs) as api:
         response = api.get(f"/neuro/tiddlers/{tid_title}")
@@ -170,17 +153,17 @@ def fields(tid_title, **kwargs):
             raise exceptions.UnhandledStatusCode(response["status_code"])
 
 
-def tw_fields(tiddler_fields: list, tw_filter: str, **kwargs):
+def tw_fields(field_selection: list, tw_filter: str, **kwargs):
     """
     Filter tiddlers by `tw_filter` and extract `fields`.
-    :param tiddler_fields:
+    :param field_selection:
     :param tw_filter:
     :return: lod
     """
     with tw_api.API(**kwargs) as api:
         params = dict()
-        if tiddler_fields:
-            params["fields"] = tiddler_fields
+        if field_selection:
+            params["fields"] = field_selection
         if tw_filter:
             params["filter"] = tw_filter
         parsed_response = api.get("/neuro/fields.json", params=params, **kwargs)["parsed"]

@@ -13,7 +13,7 @@ def fetch(query_file_path, params: dict = None, wikidata_sparql_url=WIKIDATA_SPA
     :param query_file_path:
     :param params: dict
     :param wikidata_sparql_url: wikidata SPARQL endpoint to use
-    :return: json response
+    :return: JSON response
     :rtype: dict
     """
     with open(query_file_path) as f:

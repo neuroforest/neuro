@@ -8,22 +8,16 @@ from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.tw5api import tw_get
 
 
-def get_tiddler(tid_title, **kwargs):
+def get_tiddler(tid_title):
     """
-    Obtains and returns tiddler if it can be done.
+    Returns tiddler fields if found.
     :param tid_title:
-    :param kwargs:
-    :return: tiddler
     """
-    tid_tags = kwargs.get("tags", False)
-    tiddler = tw_get.fields(tid_title, **kwargs)
+    fields = tw_get.fields(tid_title)
 
-    if tiddler:
-        tiddler["title"] = tid_title
-        if tid_tags:
-            tiddler["tags"] = tid_tags
-
-        return tiddler
+    if fields:
+        fields["title"] = tid_title
+        return fields
     else:
         return False
 
@@ -32,5 +26,5 @@ def get_tiddler(tid_title, **kwargs):
 @click.argument("resource", required=True)
 @pass_environment
 def cli(ctx, resource):
-    tiddler = get_tiddler(resource)
-    ctx.log(tiddler)
+    fields = get_tiddler(resource)
+    ctx.log(fields)

@@ -12,8 +12,8 @@ def close_all(**kwargs):
         return response
 
 
-def load(title):
-    with tw_api.API() as api:
+def load(title, **kwargs):
+    with tw_api.API(**kwargs) as api:
         response = api.put("/neuro/action/load", params={"title": title})
         if response.status_code == 204:
             print(terminal_style.SUCCESS, response.reason)
@@ -58,9 +58,9 @@ def rename_tiddler(old_title, new_title, **kwargs):
         return response
 
 
-def render(tiddler):
-    with tw_api.API() as api:
-        response = api.put("/neuro/action/render", params=tiddler)
+def render(title, **kwargs):
+    with tw_api.API(**kwargs) as api:
+        response = api.put("/neuro/action/render", params=title)
         if response.status_code == 204:
             print(terminal_style.SUCCESS, response.reason)
         else:

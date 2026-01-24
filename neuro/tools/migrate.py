@@ -15,7 +15,7 @@ from neuro.utils import config  # noqa: F401
 from neuro.utils import internal_utils
 
 
-def prepare_tiddler(tiddler):
+def prepare_fields(fields):
     def convert_time(t, field):
         if field in t:
             moment = Moment.from_tid_val(t[field])
@@ -24,11 +24,11 @@ def prepare_tiddler(tiddler):
         else:
             return t
 
-    tiddler = convert_time(tiddler, "created")
-    tiddler = convert_time(tiddler, "modified")
+    fields = convert_time(fields, "created")
+    fields = convert_time(fields, "modified")
 
-    del tiddler["revision"]
-    return tiddler
+    del fields["revision"]
+    return fields
 
 
 def prepare_object(o):
@@ -69,9 +69,9 @@ def migrate_wf_to_neo4j(wf_path, port=8222, **kwargs):
             port=port, **kwargs
         )
         for tid_title in tqdm.tqdm(tid_titles):
-            tiddler = tw_get.fields(tid_title, port=port, **kwargs)
-            del tiddler["revision"]
-            nb.save_object(tiddler)
+            fields = tw_get.fields(tid_title, port=port, **kwargs)
+            del fields["revision"]
+            nb.save_object(fields)
         print(f"Finished importing {len(tid_titles)} tiddlers")
 
 
@@ -101,9 +101,9 @@ def migrate_neo4j_to_json(json_path):
 def migrate_wf_to_json(wf_path, json_path, port=8222, **kwargs):
     wf = WikiFolder(wf_path, port=port, silent=True, **kwargs)
     process = wf.start()
-    tiddlers = tw_get.all_tiddlers(port=port, params={"exclude": ","})
+    fields_list = tw_get.all_fields(port=port, params={"exclude": ","})
     with open(json_path, "w+") as f:
-        json.dump(tiddlers, f)
+        json.dump(fields_list, f)
     process.kill()
 
 
