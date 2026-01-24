@@ -73,22 +73,6 @@ def resolve_neuro_ids(port, verbose=False):
     return resolved
 
 
-def set_journal(port):
-    update_tids = tw_get.neuro_tids("[tag[JOURNAL]!has[neuro.role]]", port=port)
-    if update_tids:
-        print(f"\nJournal roles: {len(update_tids)}")
-        width = max([len(neuro_tid.title) for neuro_tid in update_tids])
-        with tqdm.tqdm(total=len(update_tids)) as pbar:
-            for neuro_tid in update_tids:
-                pbar.set_description(neuro_tid.title.ljust(width))
-                neuro_tid.add_fields({"neuro.role": "journal"})
-                tw_put.tiddler(neuro_tid, port=port)
-                pbar.update(1)
-            pbar.set_description("")
-
-    print(f"{terminal_style.SUCCESS} Journal")
-
-
 def set_roles(port):
     role_pairs = dict()
     for tid_tag, role in json.loads(os.getenv("ROLE_DICT")).items():
@@ -108,28 +92,28 @@ def set_roles(port):
                 pbar.update(1)
             pbar.set_description("")
 
-    print(f"{terminal_style.SUCCESS} Roles set")
+    print(f"{terminal_style.SUCCESS} Roles")
 
 
-def set_model_roles(port):
-    update_tids = TiddlerList()
-    for model_role in json.loads(os.getenv("MODEL_ROLES")):
+def set_object_sets(port):
+    update_list = TiddlerList()
+    for object_set in json.loads(os.getenv("OBJECT_SETS")):
         regexp_pattern = r"^\S+\s\S+$"
-        model_tids = tw_get.neuro_tids(f"[prefix[.]suffix[ {model_role}]!has[neuro.role]"
-                                       f"regexp[{regexp_pattern}]]", port=port)
-        update_tids.extend(model_tids)
+        tiddler_list = tw_get.neuro_tids(f"[prefix[.]suffix[ {object_set}]!has[neuro.role]"
+                                         f"regexp[{regexp_pattern}]]", port=port)
+        update_list.extend(tiddler_list)
 
-    if update_tids:
-        print(f"\nModel roles: {len(update_tids)}")
-        width = max([len(neuro_tid.title) for neuro_tid in update_tids])
-        with tqdm.tqdm(total=len(update_tids)) as pbar:
-            for neuro_tid in update_tids:
+    if update_list:
+        print(f"\nObject sets: {len(update_list)}")
+        width = max([len(neuro_tid.title) for neuro_tid in update_list])
+        with tqdm.tqdm(total=len(update_list)) as pbar:
+            for neuro_tid in update_list:
                 pbar.set_description(neuro_tid.title.ljust(width))
                 pbar.update(1)
                 neuro_tid.add_fields({"neuro.role": "model"})
                 tw_put.tiddler(neuro_tid, port=port)
             pbar.set_description("")
-    print(f"{terminal_style.SUCCESS} Model roles")
+    print(f"{terminal_style.SUCCESS} Objects sets")
 
 
 def validate_tags(port, interactive=False, verbose=True):
@@ -194,7 +178,7 @@ def validate_tags(port, interactive=False, verbose=True):
 
     if verbose:
         if validated:
-            print(f"{terminal_style.SUCCESS} Tags resolved")
+            print(f"{terminal_style.SUCCESS} Tags")
         else:
             print(f"{terminal_style.FAIL} Invalid tags")
 
@@ -408,9 +392,8 @@ def cli(ctx, interactive, port, verbose):
     """
 
     remove_ghost_tiddlers(port)
-    set_model_roles(port)
+    set_object_sets(port)
     set_roles(port)
-    set_journal(port)
 
     if interactive:
         with Console().status("Validating tags...", spinner="dots"):

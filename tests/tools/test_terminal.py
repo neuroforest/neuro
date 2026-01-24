@@ -1,6 +1,13 @@
-from click.testing import CliRunner
+import json
+import os
 
 from ..helper import create_and_run_wiki_folder
+
+
+kwargs = {
+    "port": os.getenv("TEST_PORT"),
+    "host": os.getenv("HOST"),
+}
 
 
 class TestGeo:
@@ -15,66 +22,103 @@ class TestGeo:
 
 
 class TestQa:
-    def test_qa(self):
+    def test_remove_ghost_tiddler(self, wf_qa):
+        from neuro.tools.tw5api import tw_get
         from neuro.tools.terminal.commands import qa
-        from neuro.tools.tw5api import tw_get, tw_put, tw_del
-        port = 8069
-        process = create_and_run_wiki_folder("qa", port=port)
-        runner = CliRunner()
-        result = runner.invoke(qa.cli, [f"--port={port}"], env={"ENVIRONMENT": "Testing"})
-        assert result.exit_code == 0
-
-        example = tw_get.tiddler("example", port=port)
-        assert example["size"] == "2000"
-
-        # Removed ghost tiddlers
-        tid_titles = tw_get.tid_titles("[search:title[Draft of ']!has[draft.of]]", port=port)
+        qa.remove_ghost_tiddlers(wf_qa.port)
+        tid_titles = tw_get.tid_titles("[search:title[Draft of ']!has[draft.of]]", **kwargs)
         assert len(tid_titles) == 0
 
-        # Set model roles
-        model = tw_get.tiddler(". Fundamentals", port=port)
+    def test_resolve_neuro_id_missing(self, wf_qa):
+        from neuro.core.data.str import Uuid
+        from neuro.tools.tw5api import tw_get
+        from neuro.tools.terminal.commands import qa
+        qa.resolve_neuro_ids(port=wf_qa.port)
+        example = tw_get.tiddler("Example", **kwargs)
+        assert "neuro.id" in example
+        assert Uuid.is_valid_uuid_v4(example["neuro.id"])
+
+    def test_resolve_neuro_id_duplicate(self, wf_qa, capsys):
+        from neuro.tools.terminal.commands import qa
+        qa_pass = qa.resolve_neuro_ids(port=wf_qa.port, verbose=True)
+        assert not qa_pass
+        stdout = capsys.readouterr().out
+        assert len(stdout.splitlines()) == 5
+        assert stdout.count("Duplicate neuro.id") == 2
+        assert "20b4f8d3-6e6f-49fb-9be7-97f553c347bd" in stdout
+
+    def test_set_roles(self, wf_qa):
+        from neuro.tools.tw5api import tw_get
+        from neuro.tools.terminal.commands import qa
+        os.environ["ROLE_DICT"] = json.dumps({
+            "Taxons": "taxon"
+        })
+        qa.set_roles(port=wf_qa.port)
+        fields = tw_get.tiddler("Lysobacter enzymogenes", **kwargs)
+        assert fields["neuro.role"] == "taxon"
+
+    def test_set_object_sets(self, wf_qa):
+        from neuro.tools.tw5api import tw_get
+        from neuro.tools.terminal.commands import qa
+        os.environ["OBJECT_SETS"] = json.dumps(["Fundamentals"])
+        qa.set_object_sets(port=wf_qa.port)
+        model = tw_get.tiddler(". Fundamentals", **kwargs)
         assert model["neuro.role"] == "model"
 
-        # Set journal
-        journal_entry = tw_get.tiddler("2025-04-09", port=port)
-        assert journal_entry["neuro.role"] == "journal"
+    def test_validate_tags(self, wf_qa):
+        from neuro.tools.terminal.commands import qa
+        assert qa.validate_tags(wf_qa.port)
 
-        # Validate tags
-        assert qa.validate_tags(port)
-        tw_put.fields({"title": "untagged-tiddler"}, port=port)
-        assert not qa.validate_tags(port)
-        tw_del.tiddler("untagged-tiddler", port=port)
-        assert qa.validate_tags(port)
-        tw_put.fields({"title": "untagged-tiddler", "tags": "inexistent-tag"}, port=port)
-        assert not qa.validate_tags(port)
-        tw_del.tiddler("untagged-tiddler", port=port)
-        assert qa.validate_tags(port)
+    def test_validate_tags_untagged(self, wf_qa, capsys):
+        from neuro.tools.tw5api import tw_put
+        from neuro.tools.terminal.commands import qa
+        tw_put.fields({"title": "Untagged"}, **kwargs)
+        assert not qa.validate_tags(wf_qa.port)
+        stdout = capsys.readouterr().out
+        assert "Untagged" in stdout
+        assert "has no tags" in stdout
+        assert len(stdout.splitlines()) == 2
 
-        # Recognize missing tiddlers
-        assert not qa.resolve_missing_tiddlers(port)
-        tw_put.fields({"title": "missing-tiddler"}, port=port)
-        assert qa.resolve_missing_tiddlers(port)
-        tw_del.tiddler("missing-tiddler", port=port)
-        assert not qa.resolve_missing_tiddlers(port)
+    def test_validate_tags_inexistent(self, wf_qa, capsys):
+        from neuro.tools.tw5api import tw_put
+        from neuro.tools.terminal.commands import qa
+        tw_put.fields({"title": "Inexistent Tag", "tags": "Inexistent"}, **kwargs)
+        assert not qa.validate_tags(wf_qa.port)
+        stdout = capsys.readouterr().out
+        assert "Inexistent Tag" in stdout
+        assert "has invalid tags" in stdout
+        assert len(stdout.splitlines()) == 2
 
-        # Resolve neuro.primary
-        journal_entry = tw_get.tiddler("2025-04-09", port=port)
+    def test_resolve_missing_tiddlers(self, wf_qa, capsys):
+        from neuro.tools.terminal.commands import qa
+        assert not qa.resolve_missing_tiddlers(wf_qa.port)
+        stdout = capsys.readouterr().out
+        assert "Broken Link" in stdout
+        assert "broken link" in stdout
+        assert len(stdout.splitlines()) == 2
+
+    def test_resolve_primary_simple(self, wf_qa):
+        from neuro.tools.tw5api import tw_get
+        from neuro.tools.terminal.commands import qa
+        qa.Primary(interactive=False, port=wf_qa.port, verbose=False).run()
+        journal_entry = tw_get.tiddler("2025-04-09", **kwargs)
         assert journal_entry["neuro.primary"] == "JOURNAL"
-        tw_put.fields({"title": "multitag-tiddler", "tags": ["example", "JOURNAL"]}, port=port)
-        qa_primary_result = qa.Primary(False, port, False).run()
-        multitag_tiddler = tw_get.tiddler("multitag-tiddler", port=port)
-        assert "neuro.primary" not in multitag_tiddler
+
+    def test_resolve_primary_complex(self, wf_qa):
+        from neuro.tools.tw5api import tw_get, tw_put
+        from neuro.tools.terminal.commands import qa
+        tw_put.fields({"title": "MultiTag", "tags": ["Example", "JOURNAL"]}, **kwargs)
+        qa_primary_result = qa.Primary(interactive=False, port=wf_qa.port, verbose=False).run()
         assert not qa_primary_result
-        tw_del.tiddler("multitag-tiddler", port=port)
-        qa_primary_result = qa.Primary(False, port, False).run()
-        assert qa_primary_result
+        fields = tw_get.tiddler("MultiTag", **kwargs)
+        assert "neuro.primary" not in fields
 
-        # Resolve neuro.id
-        example = tw_get.tiddler("example", port=port)
-        assert "neuro.id" in example
-        assert example["neuro.id"][14] == "4"
-
-        process.kill()
+    def test_command_integrity(self, wf_qa):
+        from neuro.tools.terminal.commands import qa
+        from click.testing import CliRunner
+        # noinspection PyTypeChecker
+        res = CliRunner().invoke(qa.cli, ["--port", wf_qa.port])
+        assert res.exit_code == 0
 
 
 class TestTaxon:
