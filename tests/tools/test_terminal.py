@@ -32,7 +32,7 @@ class TestQa:
         from neuro.tools.tw5api import tw_get
         from neuro.tools.terminal.commands import qa
         qa.resolve_neuro_ids(port=wf_qa.port)
-        example = tw_get.tiddler("Example", **kwargs)
+        example = tw_get.fields("Example", **kwargs)
         assert "neuro.id" in example
         assert Uuid.is_valid_uuid_v4(example["neuro.id"])
 
@@ -52,7 +52,7 @@ class TestQa:
             "Taxons": "taxon"
         })
         qa.set_roles(port=wf_qa.port)
-        fields = tw_get.tiddler("Lysobacter enzymogenes", **kwargs)
+        fields = tw_get.fields("Lysobacter enzymogenes", **kwargs)
         assert fields["neuro.role"] == "taxon"
 
     def test_set_object_sets(self, wf_qa):
@@ -60,7 +60,7 @@ class TestQa:
         from neuro.tools.terminal.commands import qa
         os.environ["OBJECT_SETS"] = json.dumps(["Fundamentals"])
         qa.set_object_sets(port=wf_qa.port)
-        model = tw_get.tiddler(". Fundamentals", **kwargs)
+        model = tw_get.fields(". Fundamentals", **kwargs)
         assert model["neuro.role"] == "model"
 
     def test_validate_tags(self, wf_qa):
@@ -99,7 +99,7 @@ class TestQa:
         from neuro.tools.tw5api import tw_get
         from neuro.tools.terminal.commands import qa
         qa.Primary(interactive=False, port=wf_qa.port, verbose=False).run()
-        journal_entry = tw_get.tiddler("2025-04-09", **kwargs)
+        journal_entry = tw_get.fields("2025-04-09", **kwargs)
         assert journal_entry["neuro.primary"] == "JOURNAL"
 
     def test_resolve_primary_complex(self, wf_qa):
@@ -108,7 +108,7 @@ class TestQa:
         tw_put.fields({"title": "MultiTag", "tags": ["Example", "JOURNAL"]}, **kwargs)
         qa_primary_result = qa.Primary(interactive=False, port=wf_qa.port, verbose=False).run()
         assert not qa_primary_result
-        fields = tw_get.tiddler("MultiTag", **kwargs)
+        fields = tw_get.fields("MultiTag", **kwargs)
         assert "neuro.primary" not in fields
 
     def test_command_integrity(self, wf_qa):
@@ -129,8 +129,8 @@ class TestTaxon:
         # noinspection PyTypeChecker
         result = runner.invoke(taxon.cli, [f"--port={wf.port}", "-y", "Amata phegea"])
         assert result.exit_code == 0
-        species_fields = tw_get.tiddler("Amata phegea", port=wf.port)
-        order_fields = tw_get.tiddler("Lepidoptera", port=wf.port)
+        species_fields = tw_get.fields("Amata phegea", port=wf.port)
+        order_fields = tw_get.fields("Lepidoptera", port=wf.port)
         tid_titles = tw_get.tid_titles("[!is[system]]", port=wf.port)
         assert species_fields["neuro.role"] == "taxon.species"
         assert order_fields["ncbi.txid"] == "7088"

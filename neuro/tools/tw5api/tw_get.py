@@ -46,7 +46,7 @@ def is_tiddler(tid_title, **kwargs):
     :return: bool
     """
     try:
-        tiddler(tid_title, **kwargs)
+        fields(tid_title, **kwargs)
         return True
     except exceptions.TiddlerDoesNotExist:
         return False
@@ -107,7 +107,7 @@ def lineage(root="$:/plugins/neuroforest/front/tags/Contents", tw_filter="[!is[s
 
 
 def neuro_tid(tid_title, **kwargs):
-    t = tiddler(tid_title, **kwargs)
+    t = fields(tid_title, **kwargs)
     if t:
         nt = Tiddler.from_tiddler(t)
         return nt
@@ -153,7 +153,7 @@ def tid_titles(tw_filter, **kwargs):
     return title_list
 
 
-def tiddler(tid_title, **kwargs):
+def fields(tid_title, **kwargs):
     """
     Returns tiddler data.
     :param tid_title:
@@ -170,17 +170,17 @@ def tiddler(tid_title, **kwargs):
             raise exceptions.UnhandledStatusCode(response["status_code"])
 
 
-def tw_fields(fields: list, tw_filter: str, **kwargs):
+def tw_fields(tiddler_fields: list, tw_filter: str, **kwargs):
     """
     Filter tiddlers by `tw_filter` and extract `fields`.
-    :param fields:
+    :param tiddler_fields:
     :param tw_filter:
     :return: lod
     """
     with tw_api.API(**kwargs) as api:
         params = dict()
-        if fields:
-            params["fields"] = fields
+        if tiddler_fields:
+            params["fields"] = tiddler_fields
         if tw_filter:
             params["filter"] = tw_filter
         parsed_response = api.get("/neuro/fields.json", params=params, **kwargs)["parsed"]

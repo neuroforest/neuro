@@ -69,7 +69,7 @@ def migrate_wf_to_neo4j(wf_path, port=8222, **kwargs):
             port=port, **kwargs
         )
         for tid_title in tqdm.tqdm(tid_titles):
-            tiddler = tw_get.tiddler(tid_title, port=port, **kwargs)
+            tiddler = tw_get.fields(tid_title, port=port, **kwargs)
             del tiddler["revision"]
             nb.save_object(tiddler)
         print(f"Finished importing {len(tid_titles)} tiddlers")
