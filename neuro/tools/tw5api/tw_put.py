@@ -5,6 +5,7 @@ PUT wrapper.
 import json
 import logging
 
+from neuro.core import Tiddler, TiddlerList
 from neuro.tools.tw5api import tw_api
 
 
@@ -32,9 +33,14 @@ def fields(tw_fields, **kwargs):
         return response
 
 
-def tiddler(nt, **kwargs):
-    tid = nt.fields
-    tid["title"] = nt.title
-    if "neuro.id" not in tid:
-        tid["neuro.id"] = nt.uuid
-    fields(tid, **kwargs)
+def tiddler(tid: Tiddler, **kwargs):
+    tid_fields = tid.fields
+    tid_fields["title"] = tid.title
+    if "neuro.id" not in tid_fields:
+        tid_fields["neuro.id"] = tid.uuid
+    fields(tid_fields, **kwargs)
+
+
+def tiddler_list(tid_list: TiddlerList, **kwargs):
+    for tid in tid_list:
+        tiddler(tid, **kwargs)
