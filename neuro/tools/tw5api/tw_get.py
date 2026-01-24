@@ -106,7 +106,7 @@ def lineage(root="$:/plugins/neuroforest/front/tags/Contents", tw_filter="[!is[s
     return lineage_dict
 
 
-def neuro_tid(tid_title, **kwargs):
+def tiddler(tid_title, **kwargs):
     t = fields(tid_title, **kwargs)
     if t:
         nt = Tiddler.from_tiddler(t)
@@ -120,7 +120,7 @@ def neuro_tids(tw_filter, **kwargs):
     nts = TiddlerList()
     for t in titles:
         tid_title = t["title"]
-        nt = neuro_tid(tid_title, **kwargs)
+        nt = tiddler(tid_title, **kwargs)
         nts.append(nt)
 
     return nts

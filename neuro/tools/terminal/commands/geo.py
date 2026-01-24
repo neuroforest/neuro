@@ -62,7 +62,7 @@ def extract_url_data(mode="default"):
         if not lat or not lon:
             failed.append(tid_title)
         else:
-            neuro_tid = tw_get.neuro_tid(tid_title)
+            neuro_tid = tw_get.tiddler(tid_title)
             neuro_tid.fields["g.lat"], neuro_tid.fields["g.lon"] = lat, lon
             tw_put.tiddler(neuro_tid)
 
