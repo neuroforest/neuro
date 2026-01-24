@@ -14,8 +14,8 @@ import sys
 def populate_wf(wf, test_case):
     from neuro.core import TiddlerList
     from neuro.tools.tw5api import tw_put
-    tiddler_json = get_test_file(f"input/tiddlers/{test_case}.json")
-    tiddler_list = TiddlerList.from_json(tiddler_json)
+    fields_json = get_test_file(f"input/tiddlers/{test_case}.json")
+    tiddler_list = TiddlerList.from_json(fields_json)
     tw_put.tiddler_list(tiddler_list, port=wf.port)
 
 

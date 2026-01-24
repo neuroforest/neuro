@@ -96,14 +96,3 @@ def get_process_dict():
             continue
         process_dict[pid] = process
     return process_dict
-
-
-def get_tiddler_path(tid_title):
-    """
-    Return the path to the tid file p
-    :param tid_title:
-    :return:
-    """
-    tiddlers_path = get_path("tiddlers")
-    tiddler_path = f"{tiddlers_path}/{tid_title}.tid"
-    return tiddler_path

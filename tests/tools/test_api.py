@@ -110,17 +110,17 @@ class TestTwGet:
         assert "lineage-6-1" not in lineage
         assert "lineage-branch-3-1" not in lineage
 
-    def test_get_neuro_tid(self, wf_universal):
-        from neuro.tools.tw5api import tw_get
-        neuro_tid = tw_get.tiddler("test", **kwargs)
-        assert "created" in neuro_tid.fields
-
     def test_get_tiddler(self, wf_universal):
         from neuro.tools.tw5api import tw_get
-        tiddler = tw_get.fields("test", **kwargs)
-        assert tiddler["title"] == "test"
-        assert "created" in tiddler
-        assert tiddler["created"] == "2019-01-30T20:02:31.703Z"
+        tiddler = tw_get.tiddler("test", **kwargs)
+        assert "created" in tiddler.fields
+
+    def test_get_fields(self, wf_universal):
+        from neuro.tools.tw5api import tw_get
+        fields = tw_get.fields("test", **kwargs)
+        assert fields["title"] == "test"
+        assert "created" in fields
+        assert fields["created"] == "2019-01-30T20:02:31.703Z"
 
     def test_get_tw_fields_general(self, wf_universal):
         from neuro.tools.tw5api import tw_get
@@ -147,20 +147,20 @@ class TestTwPut:
     def test_put_fields(self, wf):
         from neuro.tools.tw5api import tw_get, tw_put
         text = f"text{time.time()}"
-        tw_put.fields({"title": "put_test", "text": text}, **kwargs)
-        tiddler = tw_get.fields("put_test", **kwargs)
-        assert tiddler["text"] == text
+        tw_put.fields({"title": "Put Test", "text": text}, **kwargs)
+        fields = tw_get.fields("Put Test", **kwargs)
+        assert fields["text"] == text
 
     def test_put_tiddler(self, wf):
         from neuro.tools.tw5api import tw_get, tw_put
         from neuro.core import Tiddler
         text = f"text{time.time()}"
-        tiddler = Tiddler("test_put_neuro_tid", fields={"text": text})
+        tiddler = Tiddler("Test Put Tiddler", fields={"text": text})
         tw_put.tiddler(tiddler, **kwargs)
-        tiddler = tw_get.fields("test_put_neuro_tid", **kwargs)
+        tiddler = tw_get.fields("Test Put Tiddler", **kwargs)
         assert tiddler["text"] == text
 
-    def test_replace_neuro_tid(self, wf_universal):
+    def test_replace_tiddler(self, wf_universal):
         from neuro.tools.tw5api import tw_get, tw_put
         nt1 = tw_get.tiddler("test", **kwargs)
         tw_put.tiddler(nt1, **kwargs)
