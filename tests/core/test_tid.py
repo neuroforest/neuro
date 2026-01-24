@@ -11,57 +11,57 @@ from neuro.utils import exceptions
 from ..helper import get_test_file
 
 
-class TestNeuroTid:
+class TestTiddler:
     @staticmethod
-    def get_test_neuro_tid():
+    def get_test_tiddler():
         from neuro.core.tid import Tiddler
         tiddler_html_path = get_test_file("input/files/tiddler_html.txt")
         with open(tiddler_html_path) as f:
             tiddler_html = f.read()
-        neuro_tid = Tiddler.from_html(tiddler_html)
-        return neuro_tid
+        tiddler = Tiddler.from_html(tiddler_html)
+        return tiddler
 
     def test_add_tag(self):
         from neuro.core.tid import Tiddler
-        neuro_tid = Tiddler("test")
+        tiddler = Tiddler("test")
 
-        # There should not be `tags` field by default
+        # There should not be 'tags' field by default
         with pytest.raises(KeyError):
-            neuro_tid.fields["tags"]
+            tiddler.fields["tags"]
 
         # Test adding a tag
-        neuro_tid.add_tag("test_tag")
-        assert neuro_tid.fields["tags"][0] == "test_tag"
+        tiddler.add_tag("test_tag")
+        assert tiddler.fields["tags"][0] == "test_tag"
 
         # Test adding tag list
-        neuro_tid.add_tag(["test_tag1", "test_tag2"])
-        assert len(neuro_tid.fields["tags"]) == 3
+        tiddler.add_tag(["test_tag1", "test_tag2"])
+        assert len(tiddler.fields["tags"]) == 3
 
     def test_from_html(self):
         from neuro.core.tid import Tiddler
-        neuro_tid = self.get_test_neuro_tid()
+        tiddler = self.get_test_tiddler()
 
-        assert neuro_tid.fields["text"].endswith("%#@&^&(_(+€€\n")
+        assert tiddler.fields["text"].endswith("%#@&^&(_(+€€\n")
 
         with pytest.raises(exceptions.InternalError):
             Tiddler.from_html("test")
 
-    def test_from_tiddler(self):
+    def test_from_fields(self):
         from neuro.core.tid import Tiddler
         tiddler_json = get_test_file("input/files/tiddler.json")
         with open(tiddler_json) as f:
-            tiddler = json.load(f)
+            fields = json.load(f)
 
-        neuro_tid = Tiddler.from_fields(tiddler)
-        assert neuro_tid.title == "$:/plugins/neuroforest/front/images/Wikipedia"
+        tiddler = Tiddler.from_fields(fields)
+        assert tiddler.title == "$:/plugins/neuroforest/front/images/Wikipedia"
 
-        del tiddler["text"]
-        neuro_tid = Tiddler.from_fields(tiddler)
-        assert neuro_tid
+        del fields["text"]
+        tiddler = Tiddler.from_fields(fields)
+        assert tiddler
 
-        del tiddler["title"]
+        del fields["title"]
         with pytest.raises(exceptions.MissingTitle):
-            Tiddler.from_fields(tiddler)
+            Tiddler.from_fields(fields)
 
     def test_get_tid_file_name(self):
         from neuro.core.tid import Tiddler
@@ -79,56 +79,56 @@ class TestNeuroTid:
         and __setitem__.
         """
         from neuro.core.tid import Tiddler
-        neuro_tid = Tiddler("test")
-        assert "test" not in neuro_tid
-        assert "title" in neuro_tid
-        neuro_tid["test"] = "Lorem"
-        assert "test" in neuro_tid
-        del neuro_tid["test"]
-        assert neuro_tid.fields == {}
+        tiddler = Tiddler("test")
+        assert "test" not in tiddler
+        assert "title" in tiddler
+        tiddler["test"] = "Lorem"
+        assert "test" in tiddler
+        del tiddler["test"]
+        assert tiddler.fields == {}
 
     def test_to_text(self):
-        neuro_tid = self.get_test_neuro_tid()
-        text = neuro_tid.to_text()
+        tiddler = self.get_test_tiddler()
+        text = tiddler.to_text()
         result_text_path = get_test_file("results/files/tiddler_text.txt")
         with open(result_text_path) as f:
             result_text = f.read()
         assert result_text == text
 
 
-class TestNeuroTids:
+class TestTiddlerList:
     def test_list(self):
         from neuro.core.tid import Tiddler, TiddlerList
 
         # Test function TiddlerList.extend and TiddlerList.append
-        neuro_tid_3 = Tiddler("test3")
-        neuro_tids = TiddlerList([
+        tiddler_3 = Tiddler("test3")
+        tiddler_list = TiddlerList([
             Tiddler("test1"),
             Tiddler("test2"),
-            neuro_tid_3
+            tiddler_3
         ])
-        assert len(neuro_tids) == 3
-        assert "test2" in neuro_tids
-        assert neuro_tids.index(neuro_tid_3) == 2
+        assert len(tiddler_list) == 3
+        assert "test2" in tiddler_list
+        assert tiddler_list.index(tiddler_3) == 2
 
         # Test function TiddlerList.remove
-        neuro_tids.remove("test2")
-        assert "test2" not in neuro_tids
-        assert len(neuro_tids) == 2
-        assert len(neuro_tids) == len(neuro_tids.tiddler_index)
+        tiddler_list.remove("test2")
+        assert "test2" not in tiddler_list
+        assert len(tiddler_list) == 2
+        assert len(tiddler_list) == len(tiddler_list.tiddler_index)
 
     def test_chain(self):
         from neuro.core.tid import Tiddler, TiddlerList
-        neuro_tids = TiddlerList()
-        neuro_tids.extend([
+        tiddler_list = TiddlerList()
+        tiddler_list.extend([
             Tiddler("test1"),
             Tiddler("test2"),
             Tiddler("test3")
         ])
-        neuro_tids.chain()
-        neuro_tid_2 = neuro_tids[1]
-        assert neuro_tid_2.fields["neuro.primary"] == "test1"
-        assert "test1" in neuro_tid_2.fields["tags"]
+        tiddler_list.chain()
+        tiddler_2 = tiddler_list[1]
+        assert tiddler_2.fields["neuro.primary"] == "test1"
+        assert "test1" in tiddler_2.fields["tags"]
 
     def test_itegrity(self):
         """
@@ -136,14 +136,14 @@ class TestNeuroTids:
         :return:
         """
         from neuro.core.tid import Tiddler, TiddlerList
-        neuro_tids = TiddlerList()
-        neuro_tids.extend([
+        tiddler_list = TiddlerList()
+        tiddler_list.extend([
             Tiddler("test1"),
             Tiddler("test2"),
             Tiddler("test3")
         ])
-        neuro_tids[1].fields["text"] = "Positive."
-        assert neuro_tids.tiddler_index["test2"].fields["text"] == "Positive."
+        tiddler_list[1].fields["text"] = "Positive."
+        assert tiddler_list.tiddler_index["test2"].fields["text"] == "Positive."
 
 
 class TestNeuroTW:
