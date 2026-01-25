@@ -11,7 +11,7 @@
 ### Requirements
 
 - git
-- Python 3.13
+- Python 3.14
 - node.js
 - NW.js
 - TiddlyWiki5

@@ -22,9 +22,3 @@ To run all tests use command
 ::
 
 	venv/bin/pytest tests
-
-To run only integration tests, use command
-
-::
-
-	venv/bin/pytest tests -m "integration"
