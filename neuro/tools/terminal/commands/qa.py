@@ -113,7 +113,7 @@ def set_object_sets(port):
                 tiddler.add_fields({"neuro.role": "model"})
                 tw_put.tiddler(tiddler, port=port)
             pbar.set_description("")
-    print(f"{terminal_style.SUCCESS} Objects sets")
+    print(f"{terminal_style.SUCCESS} Object sets")
 
 
 def validate_tags(port, interactive=False, verbose=True):
