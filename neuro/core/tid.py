@@ -33,6 +33,7 @@ class Tiddler(Node):
             self.fields = fields
         else:
             self.fields = dict()
+        self.properties = self.fields
 
     def __bool__(self):
         return bool(self.title)
@@ -234,7 +235,7 @@ class TiddlerList(list[Tiddler]):
     def __init__(self, tiddler_list=None, *args):
         super().__init__(*args)
         self.tiddler_index = dict()
-        if tiddler_list:
+        if tiddler_list is not None:
             self.extend(tiddler_list)
 
     def __str__(self):
