@@ -10,7 +10,6 @@ import time
 import docker
 
 from neuro.core import Dir
-from neuro.utils import config  # noqa: F401
 from neuro.utils import internal_utils, time_utils, terminal_style
 
 

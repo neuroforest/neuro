@@ -11,7 +11,6 @@ from neuro.core import Moment
 from neuro.core.tid import WikiFolder, TiddlywikiHtml
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.base.api import NeuroBase, nb_get
-from neuro.utils import config  # noqa: F401
 from neuro.utils import internal_utils
 
 
