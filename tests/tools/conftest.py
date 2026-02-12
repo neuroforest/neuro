@@ -8,13 +8,11 @@ import pytest
 from neuro.core.tid import WikiFolder
 from neuro.tools.tw5api import tw_del
 
-from ..helper import get_test_file, get_path, populate_wf
-
 
 @pytest.fixture(scope="package")
-def wf_process():
+def wf_process(test_file):
     """CardsDB object connected to a temporary database"""
-    tiddlywiki_info = get_test_file("input/tiddlywiki.info")
+    tiddlywiki_info = test_file.get("input/tiddlywiki.info")
     test_port = os.getenv("TEST_PORT")
     with TemporaryDirectory() as temp_wiki_folder:
         shutil.copy(tiddlywiki_info, temp_wiki_folder)
@@ -23,12 +21,19 @@ def wf_process():
             temp_wiki_folder,
             port=test_port,
             host="127.0.0.1",
-            tw5=get_path("tw5/tiddlywiki.js"),
+            tw5=Path(os.getenv("TW5")) / "tiddlywiki.js",
             tiddlywiki_info=tiddlywiki_info
         )
         wiki_folder.start()
         yield wiki_folder
         wiki_folder.process.terminate()
+
+
+def populate_wf(wf, fields_json):
+    from neuro.core import TiddlerList
+    from neuro.tools.tw5api import tw_put
+    tiddler_list = TiddlerList.from_json(fields_json)
+    tw_put.tiddler_list(tiddler_list, port=wf.port)
 
 
 @pytest.fixture(scope="function")
@@ -39,12 +44,43 @@ def wf(wf_process):
 
 
 @pytest.fixture(scope="function")
-def wf_universal(wf):
-    populate_wf(wf, "universal")
+def wf_universal(test_file, wf):
+    fields_json = test_file.get(f"input/tiddlers/universal.json")
+    print(fields_json)
+    populate_wf(wf, fields_json)
     yield wf
 
 
 @pytest.fixture(scope="function")
-def wf_qa(wf):
-    populate_wf(wf, "qa")
+def wf_qa(test_file, wf):
+    fields_json = test_file.get(f"input/tiddlers/qa.json")
+    populate_wf(wf, fields_json)
+    yield wf
+
+
+@pytest.fixture(scope="function")
+def wf_merge(test_file, wf):
+    fields_json = test_file.get(f"input/tiddlers/merge.json")
+    populate_wf(wf, fields_json)
+    yield wf
+
+
+@pytest.fixture(scope="function")
+def wf_rename(test_file, wf):
+    fields_json = test_file.get(f"input/tiddlers/rename.json")
+    populate_wf(wf, fields_json)
+    yield wf
+
+
+@pytest.fixture(scope="function")
+def wf_replace(test_file, wf):
+    fields_json = test_file.get(f"input/tiddlers/replace.json")
+    populate_wf(wf, fields_json)
+    yield wf
+
+
+@pytest.fixture(scope="function")
+def wf_lineage(test_file, wf):
+    fields_json = test_file.get(f"input/tiddlers/lineage.json")
+    populate_wf(wf, fields_json)
     yield wf
