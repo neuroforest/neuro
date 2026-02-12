@@ -4,8 +4,6 @@ Dictionary methods.
 
 import copy
 
-from fontTools.varLib.builder import buildVarRegionList
-
 
 class DictUtils:
     @staticmethod
