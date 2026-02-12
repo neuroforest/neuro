@@ -8,20 +8,19 @@ import pytest
 
 from neuro.utils import exceptions
 
-from ..helper import get_test_file
+
+@pytest.fixture()
+def tiddler_object(test_file):
+    from neuro.core.tid import Tiddler
+    tiddler_html_path = test_file.get("input/files/tiddler_html.txt")
+    with open(tiddler_html_path) as f:
+        tiddler_html = f.read()
+    tiddler = Tiddler.from_html(tiddler_html)
+    return tiddler
 
 
 class TestTiddler:
-    @staticmethod
-    def get_test_tiddler():
-        from neuro.core.tid import Tiddler
-        tiddler_html_path = get_test_file("input/files/tiddler_html.txt")
-        with open(tiddler_html_path) as f:
-            tiddler_html = f.read()
-        tiddler = Tiddler.from_html(tiddler_html)
-        return tiddler
-
-    def test_add_tag(self):
+    def test_add_tag(self, tiddler_object):
         from neuro.core.tid import Tiddler
         tiddler = Tiddler("test")
 
@@ -37,18 +36,17 @@ class TestTiddler:
         tiddler.add_tag(["test_tag1", "test_tag2"])
         assert len(tiddler.fields["tags"]) == 3
 
-    def test_from_html(self):
+    def test_from_html(self, tiddler_object):
         from neuro.core.tid import Tiddler
-        tiddler = self.get_test_tiddler()
 
-        assert tiddler.fields["text"].endswith("%#@&^&(_(+€€\n")
+        assert tiddler_object.fields["text"].endswith("%#@&^&(_(+€€\n")
 
         with pytest.raises(exceptions.InternalError):
             Tiddler.from_html("test")
 
-    def test_from_fields(self):
+    def test_from_fields(self, test_file):
         from neuro.core.tid import Tiddler
-        tiddler_json = get_test_file("input/files/tiddler.json")
+        tiddler_json = test_file.get("input/files/tiddler.json")
         with open(tiddler_json) as f:
             fields = json.load(f)
 
@@ -87,10 +85,9 @@ class TestTiddler:
         del tiddler["test"]
         assert tiddler.fields == {}
 
-    def test_to_text(self):
-        tiddler = self.get_test_tiddler()
-        text = tiddler.to_text()
-        result_text_path = get_test_file("results/files/tiddler_text.txt")
+    def test_to_text(self, test_file, tiddler_object):
+        text = tiddler_object.to_text()
+        result_text_path = test_file.get("results/files/tiddler_text.txt")
         with open(result_text_path) as f:
             result_text = f.read()
         assert result_text == text
@@ -147,9 +144,9 @@ class TestTiddlerList:
 
 
 class TestNeuroTW:
-    def test_from_html(self):
+    def test_from_html(self, test_file):
         from neuro.core.tid import TiddlywikiHtml
-        tw_html_path = get_test_file("input/wikis/tw5.html")
+        tw_html_path = test_file.get("input/wikis/tw5.html")
 
         neuro_tw = TiddlywikiHtml.from_html(tw_html_path)
         assert len(neuro_tw.tiddler_list) == 9
@@ -158,31 +155,27 @@ class TestNeuroTW:
 
 
 class TestWikiFolder:
-    @pytest.fixture(scope="function", autouse=True)
-    def setup(self):
-        self.tiddlywiki_info = get_test_file("input/tiddlywiki.info")
-
-    def test_create(self):
+    def test_create(self, test_file):
         import os
         from neuro.core.tid import WikiFolder
-        wf_path = get_test_file("output/wf-test-create", exists=False)
+        wf_path = test_file.path("output/wf-test-create")
         assert not os.path.exists(wf_path)
-        wf = WikiFolder(wf_path, tiddlywiki_info=self.tiddlywiki_info)
+        wf = WikiFolder(wf_path, tiddlywiki_info=test_file.get("input/tiddlywiki.info"))
         assert wf.validate()
 
-    def test_start(self):
+    def test_start(self, test_file):
         from neuro.core.tid import WikiFolder
         from neuro.utils import network_utils
-        wf_path = get_test_file("output/wf-test-start", exists=False)
-        wf = WikiFolder(wf_path, tiddlywiki_info=self.tiddlywiki_info)
+        wf_path = test_file.path("output/wf-test-start")
+        wf = WikiFolder(wf_path, tiddlywiki_info=test_file.get("input/tiddlywiki.info"))
         wf.start()
         assert network_utils.is_port_in_use(wf.port, host=wf.host)
 
-    def test_api_exposed(self):
+    def test_api_exposed(self, test_file):
         from neuro.core.tid import WikiFolder
         import requests
-        wf_path = get_test_file("output/wf-test-api-exposed", exists=False)
-        wf = WikiFolder(wf_path, tiddlywiki_info=self.tiddlywiki_info)
+        wf_path = test_file.path("output/wf-test-api-exposed")
+        wf = WikiFolder(wf_path, tiddlywiki_info=test_file.get("input/tiddlywiki.info"))
         wf.start()
         response = requests.get(f"http://{wf.host}:{wf.port}/neuro/info", timeout=5)
         assert response.status_code == 200

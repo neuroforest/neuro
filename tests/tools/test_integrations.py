@@ -1,23 +1,6 @@
 """
-Unit tests for the package .
+Tests for the package neuro.tools.integrations
 """
-
-import json
-
-from ..helper import get_test_file, get_path
-
-
-def get_inaturalist_mocks():
-    from neuro.tools.integrations import inaturalist
-    observation_data = inaturalist.get_observation(67294836)
-    observation_data_path = get_test_file("mocks/inaturalist-observation.json", exists=False)
-    with open(observation_data_path, "w+") as f:
-        json.dump(observation_data, f)
-
-    taxon_data = inaturalist.get_taxon(109281)
-    taxon_data_path = get_test_file("mocks/inaturalist-taxon.json", exists=False)
-    with open(taxon_data_path, "w+") as f:
-        json.dump(taxon_data, f)
 
 
 class TestGbif:
@@ -67,12 +50,12 @@ class TestNCBI:
 
 
 class TestWikiData:
-    def test_fetch(self):
+    def test_fetch(self, test_file):
         from neuro.tools.integrations import wikidata
         params = {
             "entity-id": "Q1285940"
         }
-        query_file_path = get_path("resources/queries/test.rq")
+        query_file_path = test_file.get_resource("queries/test.rq")
         data = wikidata.fetch(query_file_path, params)
         assert data
         assert data[0]["organismLabel"]["value"] == "Scatophagus"

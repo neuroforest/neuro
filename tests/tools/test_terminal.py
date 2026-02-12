@@ -31,7 +31,7 @@ class TestQa:
         from neuro.core.data.str import Uuid
         from neuro.tools.tw5api import tw_get
         from neuro.tools.terminal.commands import qa
-        qa.resolve_neuro_ids(port=wf_qa.port)
+        qa.resolve_neuro_ids(wf_qa.port)
         example = tw_get.fields("Example", **kwargs)
         assert "neuro.id" in example
         assert Uuid.is_valid_uuid_v4(example["neuro.id"])

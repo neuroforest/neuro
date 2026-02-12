@@ -2,17 +2,15 @@
 Unit tests for the module neuro.tools.migrate
 """
 
-from ..helper import get_test_file
 
-
-def test_migrate_html_to_wf():
+def test_migrate_html_to_wf(test_file):
     from neuro.tools import migrate
-    input_legacy_html = get_test_file("input/wikis/tw5-legacy.html")
-    input_html = get_test_file("input/wikis/tw5.html")
-    output_wf_legacy = get_test_file("output/wf-migrate-legacy", exists=False)
-    output_wf = get_test_file("output/wf-migrate", exists=False)
+    input_legacy_html = test_file.get("input/wikis/tw5-legacy.html")
+    input_html = test_file.get("input/wikis/tw5.html")
+    output_wf_legacy = test_file.path("output/wf-migrate-legacy")
+    output_wf = test_file.path("output/wf-migrate")
     migrate.migrate_html_to_wf(input_legacy_html, output_wf_legacy, port=8099)
     migrate.migrate_html_to_wf(input_html, output_wf, port=8099)
-    assert get_test_file("output/wf-migrate-legacy/tiddlers/Test.tid", exists=True)
-    assert get_test_file("output/wf-migrate/tiddlers/Test-1.tid", exists=True)
+    assert test_file.get("output/wf-migrate-legacy/tiddlers/Test.tid")
+    assert test_file.get("output/wf-migrate/tiddlers/Test-1.tid")
 
