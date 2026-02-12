@@ -323,7 +323,7 @@ class Dir(File):
             logging.warning(f"Dircetory {dst_path} already exists, use 'force' to overwrite")
 
 
-class Symlink(Object):
+class Symlink:
     def __init__(self, symlink_path):
         self.path = symlink_path
         self.target = os.path.realpath(symlink_path)

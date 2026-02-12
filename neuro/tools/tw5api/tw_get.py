@@ -28,7 +28,7 @@ def filter_output(tw_filter, **kwargs):
 
 
 def info(**kwargs):
-    with tw_api.API() as api:
+    with tw_api.API(**kwargs) as api:
         response = api.get("/neuro/info")
         if response["status_code"] == 200:
             return response["parsed"]
