@@ -4,6 +4,8 @@ Dictionary methods.
 
 import copy
 
+from fontTools.varLib.builder import buildVarRegionList
+
 
 class DictUtils:
     @staticmethod
@@ -46,7 +48,8 @@ class DictUtils:
         :param ignore_list:
         """
         representation_string = str()
-        # Determine the size f key values.
+        sep = " " * 4
+
         max_len = 0
         for key in d:
             key_len = len(key)
@@ -59,24 +62,37 @@ class DictUtils:
             dictionary = d
         for key in dictionary:
             val = dictionary[key]
-
             pretty_key = str("{:<" + str(max_len + 3) + "}").format(str(key) + " :")
             if type(val) is dict:
-                representation_string += f"{level * '    '}{pretty_key}\n"
+                representation_string += f"{level * sep}{pretty_key}\n"
                 representation_string += DictUtils.represent(val, level=level + 1, display=False)
             elif type(val) is list:
                 if ignore_list:
-                    representation_string += f"{level * '    '}{pretty_key}{val}\n"
+                    representation_string += f"{level * sep}{pretty_key}{val}\n"
                 else:
-                    representation_string += f"{level * '    '}{pretty_key}[\n"
+                    representation_string += f"{level * sep}{pretty_key}[\n"
                     for i in val:
-                        representation_string += f"{(level + 1) * '    '}{i}\n"
-                    representation_string += f"{level * '    '}]\n"
+                        representation_string += f"{(level + 1) * sep}{i}\n"
+                    representation_string += f"{level * sep}]\n"
+            elif type(val) is str:
+                suffix = ""
+                if "\n" in val:
+                    line_count = val.count("\n")
+                    val = val.split("\n")[0]
+                    suffix = f" ... [{line_count} lines]"
+                if len(val) < 80 - level * 4:
+                    pass
+                else:
+                    if not suffix:
+                        suffix = " ..."
+                    val = val[:80-level*4] + suffix
+                representation_string += f"{level * sep}{pretty_key}{val + suffix}\n"
             else:
-                representation_string += f"{level * '    '}{pretty_key}{val}\n"
+                representation_string += f"{level * sep}{pretty_key}{val}\n"
 
         if display:
             print(representation_string)
+            return None
         else:
             return representation_string
 

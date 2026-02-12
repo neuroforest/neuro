@@ -7,7 +7,7 @@ from neuro.utils import oop_utils
 
 class Node(Object):
     """
-    Node represents the specific position of a node inside primary tree
+    Node represents the specific position of a node inside the primary tree
     and the NeuroForest platform.
     """
     def __init__(self, labels: list, **kwargs):
@@ -32,10 +32,12 @@ class Node(Object):
         Display the node data in the terminal.
         :return:
         """
-        attrs_keys = oop_utils.get_attr_keys(self, modes={"no_func", "simple"})
-
-        attrs = {k: self[k] for k in attrs_keys if k not in ignore}
-        return DictUtils.represent(attrs, display=False)
+        repr_str = (
+            f"Node: {self.uuid}\n"
+            f"Type: {self.labels}\n"
+            f"Properties:\n{DictUtils.represent(self.properties, display=False, level=1)}\n"
+        )
+        return repr_str
 
     def __setitem__(self, key, value):
         setattr(self, key, value)
