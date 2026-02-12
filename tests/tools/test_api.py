@@ -4,8 +4,6 @@ Unit tests for the package neuro.tools.api.
 import os
 import time
 
-from ..helper import populate_wf
-
 
 kwargs = {
     "port": os.getenv("TEST_PORT"),
@@ -23,9 +21,8 @@ class TestFixtures:
 
 
 class TestTwActions:
-    def test_merge(self, wf):
+    def test_merge(self, wf_merge):
         from neuro.tools.tw5api import tw_actions, tw_get
-        populate_wf(wf, "merge")
 
         r = tw_actions.merge_tiddlers(["Merge 1", "Merge 2", "Merge Target"], **kwargs)
         assert r.status_code == 204
@@ -42,9 +39,8 @@ class TestTwActions:
         assert tw_get.fields("Text", **kwargs)["text"] == "[[Merge Target]]"
         assert "|Merge Target]]" in tw_get.fields("Complex Text", **kwargs)["text"]
 
-    def test_rename(self, wf):
+    def test_rename(self, wf_rename):
         from neuro.tools.tw5api import tw_actions, tw_get
-        populate_wf(wf, "rename")
         r = tw_actions.rename_tiddler("Old Name", "New Name", **kwargs)
 
         assert r.reason == "8 tiddlers affected"
@@ -62,9 +58,8 @@ class TestTwActions:
         assert "New Name" in tw_get.fields("List", **kwargs)["list"]
         assert tw_get.fields("Field", **kwargs)["random"] == "Old Name"
 
-    def test_replace(self, wf):
+    def test_replace(self, wf_replace):
         from neuro.tools.tw5api import tw_actions, tw_get
-        populate_wf(wf, "replace")
         old = "LKtdNnjU"
         new = "9L5nBGqv"
         r = tw_actions.replace_text(old, new, **kwargs)
@@ -100,9 +95,8 @@ class TestTwGet:
         assert type(filter_output) is list
         assert len(filter_output) == 2
 
-    def test_get_lineage(self, wf):
+    def test_get_lineage(self, wf_lineage):
         from neuro.tools.tw5api import tw_get
-        populate_wf(wf, "lineage")
         lineage = tw_get.lineage("lineage-root", "[!is[system]]", limit=20, **kwargs)
         assert len(lineage["lineage-branch-4"]) == 20
         assert len(lineage["lineage-branch-1-1"]) == 3

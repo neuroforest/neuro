@@ -3,18 +3,17 @@ Unit tests for the package neuro.tools.local.
 """
 import shutil
 
-from ..helper import get_test_file, are_dirs_identical
-
 
 class TestRefactor:
     """
     Unit tests for the module neuro.tools.local.refactor.
     """
-    def test_update_tiddlers(self):
+    def test_update_tiddlers(self, test_file):
         from neuro.tools.local import refactor
-        input_tiddlers = get_test_file("input/tiddlers/refactor")
-        output_tiddlers = get_test_file("output/tiddlers-refactor", exists=False)
-        result_tiddlers = get_test_file("results/tiddlers-refactor")
+        from neuro.utils.test_utils import are_dirs_identical
+        input_tiddlers = test_file.get("input/tiddlers/refactor")
+        output_tiddlers = test_file.path("output/tiddlers-refactor")
+        result_tiddlers = test_file.get("results/tiddlers-refactor")
         shutil.copytree(input_tiddlers, output_tiddlers)
         old = "isru[bgbaprugbh;43o;ronf;84\n\n$OY("
         new = "new text"
