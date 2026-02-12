@@ -19,16 +19,18 @@ def get_importing_module():
 
 def load_env_files():
     """Loads environment variables from .env files."""
-    current_dir = os.getcwd()
-    os.chdir(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    dotenv.load_dotenv(os.path.abspath(".env.defaults"))
+    default_env_path = os.path.abspath(".env.defaults")
+    dotenv.load_dotenv(default_env_path)
+    logging.debug(f"Setting env {default_env_path}")
     if os.getenv("ENVIRONMENT") == "TESTING":
-        if os.path.exists(".env.testing"):
-            dotenv.load_dotenv(os.path.abspath(".env.testing"), override=True)
+        testing_env_path = os.path.abspath(".env.testing")
+        if os.path.exists(testing_env_path):
+            dotenv.load_dotenv(testing_env_path, override=True)
+            logging.debug(f"Setting env {testing_env_path}")
     else:
-        # print(f"Overriding .env.defaults with .env (called by {get_importing_module()})")
-        dotenv.load_dotenv(os.path.abspath(".env"), override=True)
-    os.chdir(current_dir)
+        env_path = os.path.abspath(".env")
+        dotenv.load_dotenv(env_path, override=True)
+        logging.debug(f"Setting env {env_path}")
 
 
 def config_logging():
