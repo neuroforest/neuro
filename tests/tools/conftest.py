@@ -45,7 +45,7 @@ def wf(wf_process):
 
 @pytest.fixture(scope="function")
 def wf_universal(test_file, wf):
-    fields_json = test_file.get(f"input/tiddlers/universal.json")
+    fields_json = test_file.get("input/tiddlers/universal.json")
     print(fields_json)
     populate_wf(wf, fields_json)
     yield wf
@@ -53,34 +53,34 @@ def wf_universal(test_file, wf):
 
 @pytest.fixture(scope="function")
 def wf_qa(test_file, wf):
-    fields_json = test_file.get(f"input/tiddlers/qa.json")
+    fields_json = test_file.get("input/tiddlers/qa.json")
     populate_wf(wf, fields_json)
     yield wf
 
 
 @pytest.fixture(scope="function")
 def wf_merge(test_file, wf):
-    fields_json = test_file.get(f"input/tiddlers/merge.json")
+    fields_json = test_file.get("input/tiddlers/merge.json")
     populate_wf(wf, fields_json)
     yield wf
 
 
 @pytest.fixture(scope="function")
 def wf_rename(test_file, wf):
-    fields_json = test_file.get(f"input/tiddlers/rename.json")
+    fields_json = test_file.get("input/tiddlers/rename.json")
     populate_wf(wf, fields_json)
     yield wf
 
 
 @pytest.fixture(scope="function")
 def wf_replace(test_file, wf):
-    fields_json = test_file.get(f"input/tiddlers/replace.json")
+    fields_json = test_file.get("input/tiddlers/replace.json")
     populate_wf(wf, fields_json)
     yield wf
 
 
 @pytest.fixture(scope="function")
 def wf_lineage(test_file, wf):
-    fields_json = test_file.get(f"input/tiddlers/lineage.json")
+    fields_json = test_file.get("input/tiddlers/lineage.json")
     populate_wf(wf, fields_json)
     yield wf
