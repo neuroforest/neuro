@@ -19,6 +19,8 @@ def get_importing_module():
 
 def load_env_files():
     """Loads environment variables from .env files."""
+    if os.getenv("NF_DIR"):
+        os.chdir(os.getenv("NF_DIR"))
     default_env_path = os.path.abspath(".env.defaults")
     dotenv.load_dotenv(default_env_path)
     logging.debug(f"Setting env {default_env_path}")
