@@ -19,9 +19,10 @@ def get_importing_module():
     return None
 
 
-def load_env_files():
+def load_env_files(env_path):
     """Loads environment variables from .env files."""
-    env_path = os.getenv("NF_DIR", os.getcwd())
+    if not env_path:
+        env_path = os.getenv("NF_DIR", os.getcwd())
     with internal_utils.chdir(env_path):
         default_env_path = os.path.abspath(".env.defaults")
         dotenv.load_dotenv(default_env_path)
@@ -47,14 +48,11 @@ def config_logging():
     logger.info(f"CLI Logging initialized with level {logger.getEffectiveLevel()}")
 
 
-def main():
+def main(env_path=None):
     global CONFIG_INITIALIZED
     if CONFIG_INITIALIZED:
         return
     else:
-        load_env_files()
+        load_env_files(env_path)
         config_logging()
         CONFIG_INITIALIZED = True
-
-
-main()
