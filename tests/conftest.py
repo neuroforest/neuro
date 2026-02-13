@@ -55,7 +55,7 @@ def test_file():
         def multi(subpath):
             test_path = test_data_dir / subpath
             test_paths = glob.glob(str(test_path) + "*")
-            print(test_path)
+            test_paths.sort()
             if len(test_paths) == 0:
                 raise FileNotFoundError(f"Test data file not found: {test_path}")
             else:
