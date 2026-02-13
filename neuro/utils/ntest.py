@@ -5,8 +5,6 @@ import sys
 import click
 import pytest
 
-from neuro.utils import internal_utils
-
 
 @click.command("ntest", short_help="test Python package neuro",
                context_settings=dict(ignore_unknown_options=True))
@@ -44,13 +42,8 @@ def cli(mode, command_args):
             "check",
             *command_args
         ])
-    else:  # mode in ["l", "local"]
-        internal_utils.copy_plugins_and_themes()
-        tw5_src = internal_utils.get_path("tw5")
-        subprocess.run(["rsync", "-a", "--exclude=tw5/.git", tw5_src, neuro_path, "--delete"])
-        if not command_args:
-            command_args = (internal_utils.get_path("tests"),)
-        pytest.main([*command_args])
+    else:
+        print(f"Mode {mode} not supported.")
 
 
 if __name__ == "__main__":
