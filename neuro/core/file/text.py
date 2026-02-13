@@ -337,7 +337,7 @@ class TextJson(Text):
                 json_dict_list.append(json_dict)
         merged_data = DictUtils.merge_dicts(json_dict_list)
 
-        with open(merged_path, "w+", encoding="utf-8") as f:
+        with open(merged_path, "w", encoding="utf-8") as f:
             json.dump(merged_data, f)
 
     def count_subchildren(self):

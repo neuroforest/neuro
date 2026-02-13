@@ -97,7 +97,7 @@ class DictUtils:
     @staticmethod
     def merge_dicts(decrescendo_dicts: list):
         """
-        Merges the dicts hierarchically according to dictionary order.
+        Merges the dicts hierarchically, according to dictionary order.
 
         :param decrescendo_dicts: list of dictionaries to be merged, ordered
             according to dominance

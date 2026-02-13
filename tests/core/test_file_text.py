@@ -44,7 +44,7 @@ class TestTextCsv:
     def test_merge_files(self, test_file):
         from neuro.core.file import text
         file_paths = test_file.multi("input/files/text_json_merge")
-        merged_path = test_file.path("output/files/text_json_merged.json")
+        merged_path = test_file.create("output/files/text_json_merged.json")
         result_path = test_file.get("results/files/text_json_merged.json")
         text.TextJson.merge_files(file_paths, merged_path)
         assert deepdiff.DeepDiff(json.load(open(merged_path)), json.load(open(result_path)), ignore_order=True) == {}
