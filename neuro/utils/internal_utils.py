@@ -1,6 +1,8 @@
 """
 Internal utility functions.
 """
+
+import contextlib
 import json
 import logging
 import os
@@ -10,6 +12,15 @@ import psutil
 
 from neuro.utils import exceptions
 
+
+@contextlib.contextmanager
+def chdir(path):
+    old_dir = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(old_dir)
 
 def copy_plugins_and_themes():
     tw5_path = get_path("tw5")

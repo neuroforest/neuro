@@ -3,6 +3,8 @@ import dotenv
 import logging
 import inspect
 
+from neuro.utils import internal_utils
+
 
 CONFIG_INITIALIZED = False
 
@@ -19,20 +21,20 @@ def get_importing_module():
 
 def load_env_files():
     """Loads environment variables from .env files."""
-    if os.getenv("NF_DIR"):
-        os.chdir(os.getenv("NF_DIR"))
-    default_env_path = os.path.abspath(".env.defaults")
-    dotenv.load_dotenv(default_env_path)
-    logging.debug(f"Setting env {default_env_path}")
-    if os.getenv("ENVIRONMENT") == "TESTING":
-        testing_env_path = os.path.abspath(".env.testing")
-        if os.path.exists(testing_env_path):
-            dotenv.load_dotenv(testing_env_path, override=True)
-            logging.debug(f"Setting env {testing_env_path}")
-    else:
-        env_path = os.path.abspath(".env")
-        dotenv.load_dotenv(env_path, override=True)
-        logging.debug(f"Setting env {env_path}")
+    env_path = os.getenv("NF_DIR", os.getcwd())
+    with internal_utils.chdir(env_path):
+        default_env_path = os.path.abspath(".env.defaults")
+        dotenv.load_dotenv(default_env_path)
+        logging.debug(f"Setting env {default_env_path}")
+        if os.getenv("ENVIRONMENT") == "TESTING":
+            testing_env_path = os.path.abspath(".env.testing")
+            if os.path.exists(testing_env_path):
+                dotenv.load_dotenv(testing_env_path, override=True)
+                logging.debug(f"Setting env {testing_env_path}")
+        else:
+            env_path = os.path.abspath(".env")
+            dotenv.load_dotenv(env_path, override=True)
+            logging.debug(f"Setting env {env_path}")
 
 
 def config_logging():
