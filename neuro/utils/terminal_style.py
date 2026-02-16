@@ -5,6 +5,9 @@ Terminal styling.
 import logging
 import sys
 import time
+from contextlib import contextmanager
+
+from rich.console import Console
 
 
 # COLOR SCHEME
@@ -23,6 +26,14 @@ RESET = "\033[0m"
 
 SUCCESS = GREEN + "✔" + RESET
 FAIL = RED + "✘" + RESET
+
+
+@contextmanager
+def step(message):
+    """Spinner during execution, ✔ on completion."""
+    with Console().status(f"[bold] {message}...", spinner="dots"):
+        yield
+    print(f"{SUCCESS} {message}")
 
 
 PROG_ICON = [
