@@ -30,10 +30,10 @@ class TestTwActions:
         assert not tw_get.is_tiddler("Merge 2", **kwargs)
 
         merge_target = tw_get.fields("Merge Target", **kwargs)
-        assert merge_target["created"] == "2026-01-23T16:42:27.976Z"
+        assert merge_target["created"] == "2025-01-23T16:42:27.976Z"
         assert merge_target["field1"] == "merge1"
         assert merge_target["override"] == "2"
-        assert merge_target["neuro.id"] == "6de49971-faf9-424f-b7c2-22cf51d95105"
+        assert merge_target["neuro.id"] == "9bd40ef6-2ec5-4952-abc2-57dd34df847b"
 
         assert tw_get.fields("Primary", **kwargs)["neuro.primary"] == "Merge Target"
         assert tw_get.fields("Text", **kwargs)["text"] == "[[Merge Target]]"
