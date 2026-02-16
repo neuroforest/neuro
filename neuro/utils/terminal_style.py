@@ -32,8 +32,11 @@ FAIL = RED + "✘" + RESET
 def step(message):
     """Spinner during execution, ✔ on completion."""
     with Console().status(f"[bold] {message}...", spinner="dots"):
-        yield
-    print(f"{SUCCESS} {message}")
+        try:
+            yield
+            print(f"{SUCCESS} {message}")
+        except BaseException as e:
+            print(f"{FAIL} {message} {e}")
 
 
 PROG_ICON = [

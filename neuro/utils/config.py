@@ -3,7 +3,7 @@ import dotenv
 import logging
 import inspect
 
-from neuro.utils import internal_utils
+from neuro.utils import build_utils
 
 
 CONFIG_INITIALIZED = False
@@ -23,7 +23,7 @@ def load_env_files(env_path):
     """Loads environment variables from .env files."""
     if not env_path:
         env_path = os.getenv("NF_DIR", os.getcwd())
-    with internal_utils.chdir(env_path):
+    with build_utils.chdir(env_path):
         default_env_path = os.path.abspath(".env.defaults")
         dotenv.load_dotenv(default_env_path)
         logging.debug(f"Setting env {default_env_path}")
