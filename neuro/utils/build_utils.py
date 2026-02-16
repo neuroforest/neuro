@@ -2,16 +2,16 @@ import contextlib
 import os
 import subprocess
 
-from neuro.utils import internal_utils, terminal_style
+from neuro.utils import terminal_style
 
 
 def rsync_local(source, dest, name=None):
     """Rsync submodule into app/ with gitignore filter."""
     rsync_command = [
         "rsync", "-va",
+        "--filter=P .git",
         "--filter=:- .gitignore",
-        "--exclude=.git",
-        "--delete",
+        "--delete", "--delete-excluded",
         source, dest,
     ]
     if not name:
