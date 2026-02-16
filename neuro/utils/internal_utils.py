@@ -2,7 +2,6 @@
 Internal utility functions.
 """
 
-import contextlib
 import json
 import logging
 import os
@@ -12,15 +11,6 @@ import psutil
 
 from neuro.utils import exceptions
 
-
-@contextlib.contextmanager
-def chdir(path):
-    old_dir = os.getcwd()
-    os.chdir(path)
-    try:
-        yield
-    finally:
-        os.chdir(old_dir)
 
 def copy_plugins_and_themes():
     tw5_path = get_path("tw5")
@@ -50,6 +40,7 @@ def get_path(keyword):
         "design": os.getenv("DESIGN"),
         "desktop": os.getenv("DESKTOP"),
         "neuro": os.getenv("NEURO"),
+        "nf": os.getenv("NF_DIR"),
         "plugins": f"{os.getenv('TW5')}/plugins",
         "resources": f"{os.getenv('RESOURCES')}",
         "templates": f"{os.getenv('RESOURCES')}/templates",

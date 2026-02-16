@@ -245,3 +245,20 @@ def rename_volume(old_volume, new_volume):
         },
         remove=True
     )
+
+
+def container_exists(container_name):
+    result = subprocess.run(
+        ["docker", "container", "inspect", container_name],
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
+def container_running(container_name):
+    result = subprocess.run(
+        ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and result.stdout.strip() == "true"
