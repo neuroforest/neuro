@@ -28,6 +28,18 @@ SUCCESS = GREEN + "✔" + RESET
 FAIL = RED + "✘" + RESET
 
 
+def header(title):
+    """Print a prominent section header."""
+    width = max(len(title) + 4, 40)
+    border = "═" * width
+    padding = " " * ((width - len(title)) // 2)
+    print()
+    print(f"{BASE}{border}{RESET}")
+    print(f"{BASE}║{RESET}{BOLD}{padding}{title}{padding}{RESET}{BASE}║{RESET}")
+    print(f"{BASE}{border}{RESET}")
+    print()
+
+
 @contextmanager
 def step(message):
     """Spinner during execution, ✔ on completion."""
