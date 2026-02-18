@@ -4,11 +4,16 @@ Unit tests for the package neuro.tools.api.
 import os
 import time
 
+import pytest
+
 
 kwargs = {
     "port": os.getenv("TEST_PORT"),
     "host": os.getenv("HOST")
 }
+
+
+pytestmark = pytest.mark.integration
 
 
 class TestFixtures:

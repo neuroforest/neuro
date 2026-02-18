@@ -1,11 +1,16 @@
 import json
 import os
 
+import pytest
+
 
 kwargs = {
     "port": os.getenv("TEST_PORT"),
     "host": os.getenv("HOST"),
 }
+
+
+pytestmark = pytest.mark.integration
 
 
 class TestGeo:
@@ -23,6 +28,8 @@ class TestQa:
     def test_remove_ghost_tiddler(self, wf_qa):
         from neuro.tools.tw5api import tw_get
         from neuro.tools.terminal.commands import qa
+        tid_titles = tw_get.tid_titles("[search:title[Draft of ']!has[draft.of]]", **kwargs)
+        assert len(tid_titles) > 0
         qa.remove_ghost_tiddlers(wf_qa.port)
         tid_titles = tw_get.tid_titles("[search:title[Draft of ']!has[draft.of]]", **kwargs)
         assert len(tid_titles) == 0

@@ -154,6 +154,7 @@ class TestNeuroTW:
         assert neuro_tw.tiddler_list.tiddler_index["$:/isEncrypted"].fields["text"] == "no"
 
 
+@pytest.mark.integration
 class TestWikiFolder:
     def test_create(self, test_file):
         import os

@@ -2,6 +2,11 @@
 Tests for the package neuro.tools.integrations
 """
 
+import pytest
+
+
+pytestmark = pytest.mark.e2e
+
 
 class TestGbif:
     def test_request_get(self):
