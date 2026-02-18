@@ -4,8 +4,6 @@ Unit tests of the module neuro.core.deep
 
 import os
 
-import pytest
-
 
 class TestDir:
     def test_get_children(self, test_file):
@@ -48,12 +46,11 @@ class TestMoment:
         assert int(dt.unix) == 1627257600
 
 
-@pytest.mark.skip(reason="TODO")
 class TestSymlink:
     def test_symlink(self, test_file):
         from neuro.core.file.file import Symlink
-        target_path = test_file.get("input/dirs/dir")
-        link_path = test_file.path("link")
+        target_path = os.path.abspath(test_file.get("input/dirs/dir"))
+        link_path = test_file.path("output/link")
         os.symlink(target_path, link_path)
         assert os.path.islink(link_path)
 

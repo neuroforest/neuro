@@ -60,7 +60,7 @@ class TestWikiData:
         params = {
             "entity-id": "Q1285940"
         }
-        query_file_path = test_file.get_resource("queries/test.rq")
+        query_file_path = test_file.get("input/queries/test.rq")
         data = wikidata.fetch(query_file_path, params)
         assert data
         assert data[0]["organismLabel"]["value"] == "Scatophagus"
