@@ -1,5 +1,0 @@
-[submodule "tw5"]
-	path = tw5
-	url = https://github.com/neuroforest/tw5
-	branch = master
-	ignore = all
