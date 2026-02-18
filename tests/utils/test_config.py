@@ -1,3 +1,9 @@
+import pytest
+
+
+pytestmark = pytest.mark.integration
+
+
 class TestUtils:
     def test_config(self):
         import os

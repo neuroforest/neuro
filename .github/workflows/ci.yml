@@ -34,12 +34,9 @@ jobs:
 
       - name: Install dependencies and test
         run: |
-          git submodule update --init --force
-          git submodule update --remote
           python3 -m venv venv
           venv/bin/pip install .
           source venv/bin/activate
-          venv/bin/pytest tests
+          venv/bin/pytest tests -m "not integration and not e2e"
         env:
           ENVIRONMENT: TESTING
-          NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}

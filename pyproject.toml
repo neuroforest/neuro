@@ -34,10 +34,15 @@ dependencies = [
 
 [project.scripts]
 neuro = "neuro.tools.terminal.cli:cli"
-ntest = "neuro.utils.ntest:cli"
 
 [project.urls]
 repository = "https://github.com/neuroforest/neuro"
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: integration tests (TW5 webserver API and NeuroBase)",
+    "e2e: end-to-end tests",
+]
 
 [tool.setuptools.packages.find]
 include = ["neuro*"]

@@ -2,6 +2,11 @@
 Unit tests for the module neuro.tools.migrate
 """
 
+import pytest
+
+
+pytestmark = pytest.mark.integration
+
 
 def test_migrate_html_to_wf(test_file):
     from neuro.tools import migrate

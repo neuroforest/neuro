@@ -1,4 +1,3 @@
-import dotenv
 import glob
 import json
 import os
@@ -9,16 +8,14 @@ import pytest
 
 
 def pytest_sessionstart(session):
-    output_path = os.path.abspath("resources/test/output")
+    output_path = Path("resources/test/output")
     shutil.rmtree(output_path, ignore_errors=True)
     os.makedirs(output_path)
-    dotenv.load_dotenv(os.path.abspath(".env.defaults"))
-    dotenv.load_dotenv(os.path.abspath(".env.testing"), override=True)
 
 
 @pytest.fixture(scope="session", autouse=True)
 def test_file():
-    test_data_dir = Path(os.getenv("RESOURCES")) / "test"
+    test_data_dir = Path("resources/test")
 
     class TestFileLib:
         @staticmethod
@@ -45,7 +42,7 @@ def test_file():
 
         @staticmethod
         def get_resource(subpath):
-            resource_path = Path(os.getenv("RESOURCES")) / subpath
+            resource_path = Path("resources", subpath)
             if not resource_path.exists():
                 raise FileNotFoundError(f"Test resource file not found: {resource_path}")
             else:
