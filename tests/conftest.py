@@ -8,14 +8,14 @@ import pytest
 
 
 def pytest_sessionstart(session):
-    output_path = Path("resources/test/output")
+    output_path = Path(os.getenv("RESOURCES", "resources")) / "test" / "output"
     shutil.rmtree(output_path, ignore_errors=True)
     os.makedirs(output_path)
 
 
 @pytest.fixture(scope="session", autouse=True)
 def test_file():
-    test_data_dir = Path("resources/test")
+    test_data_dir = Path(os.getenv("RESOURCES", "resources")) / "test"
 
     class TestFileLib:
         @staticmethod
@@ -39,14 +39,6 @@ def test_file():
                 raise FileNotFoundError(f"Test data file not found: {test_path}")
             else:
                 return str(test_path)
-
-        @staticmethod
-        def get_resource(subpath):
-            resource_path = Path("resources", subpath)
-            if not resource_path.exists():
-                raise FileNotFoundError(f"Test resource file not found: {resource_path}")
-            else:
-                return str(resource_path)
 
         @staticmethod
         def multi(subpath):
