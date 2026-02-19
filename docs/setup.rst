@@ -4,7 +4,7 @@ Setup
 Settings
 ^^^^
 
-Create file ``.env`` using ``.env.defaults`` as the template.
+Create file ``.env.local`` using ``.env`` as the template.
 
 - Set the variable ``NF_DIR`` to the absolute path of the parent directory of ``neuro`` repository on the local file sistem. Setting the variable ``NF_DIR`` enables independence of the working directory.
 
