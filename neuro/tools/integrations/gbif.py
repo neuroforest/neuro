@@ -85,7 +85,7 @@ def get_taxon_tiddler(taxon_id):
     except KeyError:
         taxon_name = taxon_data["scientificName"]
     taxon_rank = taxon_data["rank"].lower()
-    taxon_ranks_path = internal_utils.get_path("resources") + "/data/taxon-ranks.csv"
+    taxon_ranks_path = internal_utils.get_path("resources") / "data" / "taxon-ranks.csv"
     with open(taxon_ranks_path) as f:
         csv_reader = csv.reader(f)
         next(csv_reader)  # Skip header, assume name,inat.rank.level,encoding

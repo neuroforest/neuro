@@ -13,7 +13,7 @@ from neuro.utils import internal_utils
 
 
 def run_desktop_script(script_name, *args):
-    script_path = internal_utils.get_path("desktop") + f"/scripts/{script_name}.py"
+    script_path = internal_utils.get_path("desktop") / "scripts" / f"{script_name}.py"
 
     if not os.path.isfile(script_path):
         raise FileNotFoundError(f"NeuroDesktop Script not found: {script_name}")

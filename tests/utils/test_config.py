@@ -12,7 +12,6 @@ class TestUtils:
         assert os.getenv("NCBI_API_KEY")
 
     def test_internal_utils(self):
-        import os
         from neuro.utils import internal_utils
         neuro_path = internal_utils.get_path("neuro")
-        assert os.path.isabs(neuro_path) is True and os.path.exists(neuro_path) is True
+        assert neuro_path.is_absolute() is True and neuro_path.exists() is True
