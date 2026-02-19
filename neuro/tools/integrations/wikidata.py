@@ -5,7 +5,7 @@ from neuro.utils import exceptions
 
 
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
-HEADERS = {"User-Agent": f"NeuroForest/{os.environ['VERSION']} (https://github.com/neuroforest)"}
+HEADERS = {"User-Agent": f"{os.environ['APP_NAME']}/{os.environ['APP_VERSION']} ({os.environ['APP_URL']})"}
 
 
 def fetch(query_file_path, params: dict = None, wikidata_sparql_url=WIKIDATA_SPARQL_URL):
