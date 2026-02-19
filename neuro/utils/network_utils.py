@@ -1,6 +1,7 @@
 import logging
 import socket
 import subprocess
+import time
 
 
 def get_free_port(host="127.0.0.1"):
@@ -23,9 +24,18 @@ def release_port(port):
         subprocess.run(["killport", str(port)], stdout=subprocess.DEVNULL)
 
 
-def wait_for_socket(host, port):
+def wait_for_socket(host, port, timeout=30):
+    deadline = time.monotonic() + timeout
     while True:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result_of_check = s.connect_ex((host, int(port)))
-        if result_of_check == 0:
-            break
+        try:
+            result_of_check = s.connect_ex((host, int(port)))
+            if result_of_check == 0:
+                return
+        finally:
+            s.close()
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                f"Timed out waiting for {host}:{port} after {timeout}s"
+            )
+        time.sleep(0.2)
