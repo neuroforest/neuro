@@ -69,7 +69,7 @@ def filter_tiddler_list(tiddler_list: TiddlerList, port):
 
 def add_translations(tiddler):
     ncbi_taxon_id = tiddler.fields["ncbi.txid"]
-    query_file_path = os.path.join(internal_utils.get_path("wd_queries"), "taxon.rq")
+    query_file_path = internal_utils.get_path("wd_queries") / "taxon.rq"
     wd_res = wikidata.fetch(query_file_path, {"ncbi-taxon-id": ncbi_taxon_id})
     if len(wd_res) > 1:
         print("Warning: multiple results for WikiData query")

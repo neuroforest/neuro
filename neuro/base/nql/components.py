@@ -6,7 +6,7 @@ from neuro.utils import internal_utils
 
 class NqlParser(Lark):
     def __init__(self, maybe_placeholders=True):
-        nql_grammar_path = internal_utils.get_path("resources") + "/nql-grammar.lark"
+        nql_grammar_path = internal_utils.get_path("resources") / "nql-grammar.lark"
         with open(nql_grammar_path, "r") as f:
             nql_grammar = f.read()
         super().__init__(nql_grammar, maybe_placeholders=maybe_placeholders)

@@ -17,7 +17,7 @@ class Container:
     def __init__(self, name=None, archive=None):
         self.name = name
         self.instant = str()
-        self.archive = archive or internal_utils.get_path("archive", create_if_missing=True) + "/base"
+        self.archive = archive or internal_utils.get_path("archive", create_if_missing=True) / "base"
         os.makedirs(self.archive, exist_ok=True)
         self.backup_location = str()
         self.dirty = {

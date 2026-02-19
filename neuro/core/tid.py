@@ -440,7 +440,7 @@ class WikiFolder:
         if "tw_info" in kwargs:
             tw_info = kwargs.get("tw_info")
         else:
-            tw_info = internal_utils.get_path("templates") + "/tiddlywiki.info"
+            tw_info = internal_utils.get_path("templates") / "tiddlywiki.info"
         shutil.copy(tw_info, f"{self.wf_path}/tiddlywiki.info")
 
         if tiddlers_folder:

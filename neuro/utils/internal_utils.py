@@ -11,47 +11,55 @@ import psutil
 from neuro.utils import exceptions
 
 
+BASE_PATHS = {
+    "app": "APP",
+    "archive": "ARCHIVE",
+    "design": "DESIGN",
+    "desktop": "DESKTOP",
+    "logs": "LOGS",
+    "neuro": "NEURO",
+    "nf": "NF_DIR",
+    "resources": "RESOURCES",
+    "storage": "STORAGE",
+    "tw5": "TW5",
+}
+
+DERIVED_PATHS = {
+    "plugins": ("tw5", "plugins"),
+    "templates": ("resources", "templates"),
+    "tests": ("neuro", "tests"),
+    "themes": ("tw5", "themes"),
+    "tiddlers": ("storage", "tiddlers"),
+    "tiddlywiki.js": ("tw5", "tiddlywiki.js"),
+    "wd_queries": ("resources", "queries"),
+}
+
+
 def get_path(keyword, create_if_missing=False):
     """
     Get path for a keyword.
+    :param create_if_missing:
     :param keyword: string
     :return:
     """
 
-    keyword_index = {
-        "app": os.getenv("APP"),
-        "archive": os.getenv("ARCHIVE"),
-        "logs": os.getenv("LOGS"),
-        "design": os.getenv("DESIGN"),
-        "desktop": os.getenv("DESKTOP"),
-        "neuro": os.getenv("NEURO"),
-        "nf": os.getenv("NF_DIR"),
-        "plugins": f"{os.getenv('TW5')}/plugins",
-        "resources": f"{os.getenv('RESOURCES')}",
-        "templates": f"{os.getenv('RESOURCES')}/templates",
-        "tests": f"{os.getenv('NEURO')}/tests",
-        "themes": f"{os.getenv('tw5')}/themes",
-        "tiddlers": f"{os.getenv('STORAGE')}/tiddlers",
-        "tiddlywiki.js": f"{os.getenv("TW5")}/tiddlywiki.js",
-        "tw5": os.getenv("TW5"),
-        "wd_queries": f"{os.getenv('RESOURCES')}/queries"
-    }
-
-    if keyword not in keyword_index:
+    if keyword in BASE_PATHS:
+        path = Path(os.environ[BASE_PATHS[keyword]])
+    elif keyword in DERIVED_PATHS:
+        base, *parts = DERIVED_PATHS[keyword]
+        path = get_path(base) / Path(*parts)
+    else:
         raise exceptions.InternalError(f"Keyword '{keyword}' is not supported.")
 
-    path = keyword_index[keyword]
-
-    if not os.path.exists(path) and not create_if_missing:
-        raise exceptions.InvalidPath(f"Path '{path}' for keyword '{keyword}' does not exist in {os.getcwd()}.")
-    elif not os.path.exists(path) and create_if_missing:
-        path = Path(path)
+    if not path.exists() and not create_if_missing:
+        raise exceptions.InvalidPath(f"Path '{path}' for keyword '{keyword}' does not exist in {Path.cwd()}.")
+    elif not path.exists() and create_if_missing:
         path.mkdir(parents=True, exist_ok=True)
     else:
-        path = os.path.abspath(path)
+        path = path.resolve()
 
     logging.debug(f"Obtained path {path} for keyword {keyword}")
-    return str(path)
+    return path
 
 
 def get_process(name, value):

@@ -47,7 +47,7 @@ def generate_dataset_taxon_ranks():
         "inat.rank.level",
         "encoding"
     ]
-    path = internal_utils.get_path("resources") + "/data/taxon-ranks.csv"
+    path = internal_utils.get_path("resources") / "data" / "taxon-ranks.csv"
     generate_dataset(tw_filter, fields, path)
 
     # Validate

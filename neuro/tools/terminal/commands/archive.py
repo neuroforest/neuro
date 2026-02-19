@@ -24,7 +24,7 @@ def archive():
         moment_prog = time_utils.MOMENT_4
         month_prog = time_utils.MONTH
 
-        archive_path = f"{internal_utils.get_path('archive')}/json/{month_prog}"
+        archive_path = internal_utils.get_path('archive', create_if_missing=True) / "json" / month_prog
         os.makedirs(archive_path, exist_ok=True)
         json_path = f"{archive_path}/{moment_prog}.json"
 
@@ -39,8 +39,8 @@ def archive_ontology():
     RETURN o, r, t;   
     """
     data = NeuroBase().get_data(query)
-    ontology_archive_path = (f"{internal_utils.get_path('archive')}/"
-                             f"ontology/{time_utils.MOMENT_4}.json")
+    ontology_archive_path = (internal_utils.get_path('archive', create_if_missing=True)
+                             / "ontology" / f"{time_utils.MOMENT_4}.json")
     with open(ontology_archive_path, "w+") as f:
         json.dump(data, f)
 
@@ -48,7 +48,7 @@ def archive_ontology():
 
 
 def print_time_from_last_archive():
-    tiddler_archive_path = internal_utils.get_path("archive") + "/json/"
+    tiddler_archive_path = internal_utils.get_path("archive", create_if_missing=True) / "json"
     month_path = max(Dir(tiddler_archive_path).get_children())
     timestamp_path = max(Dir(month_path).get_children())
     last_timestamp = File(timestamp_path).ctime
@@ -62,10 +62,10 @@ def remove_latest():
     """
     Remove the latest archive.
     """
-    archive_path = f"{internal_utils.get_path('archive')}/json/"
+    archive_path = internal_utils.get_path('archive', create_if_missing=True) / "json"
     month_path = max(Dir(archive_path).get_children())
     timestamp_path = max(Dir(month_path).get_children())
-    if terminal_components.bool_prompt(f"Delete archive entry {timestamp_path.replace(archive_path, '')}?"):
+    if terminal_components.bool_prompt(f"Delete archive entry {timestamp_path.replace(str(archive_path) + '/', '')}?"):
         os.remove(timestamp_path)
         print(f"{terminal_style.SUCCESS} Removed")
 
