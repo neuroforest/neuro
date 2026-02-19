@@ -20,11 +20,15 @@ def get_importing_module():
 
 
 def load_env_files(env_path):
-    """Loads environment variables from .env files."""
+    """Loads environment variables from .env files.
+
+    .env        — tracked defaults, committed to the repository.
+    .env.local  — local overrides, gitignored.
+    """
     if not env_path:
         env_path = os.getenv("NF_DIR", os.getcwd())
     with build_utils.chdir(env_path):
-        default_env_path = os.path.abspath(".env.defaults")
+        default_env_path = os.path.abspath(".env")
         dotenv.load_dotenv(default_env_path)
         logging.debug(f"Setting env {default_env_path}")
         if os.getenv("ENVIRONMENT") == "TESTING":
@@ -33,7 +37,7 @@ def load_env_files(env_path):
                 dotenv.load_dotenv(testing_env_path, override=True)
                 logging.debug(f"Setting env {testing_env_path}")
         else:
-            env_path = os.path.abspath(".env")
+            env_path = os.path.abspath(".env.local")
             dotenv.load_dotenv(env_path, override=True)
             logging.debug(f"Setting env {env_path}")
 
