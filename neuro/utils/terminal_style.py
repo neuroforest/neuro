@@ -3,6 +3,7 @@ Terminal styling.
 """
 
 import logging
+import os
 import sys
 import time
 from contextlib import contextmanager
@@ -29,15 +30,15 @@ FAIL = RED + "✘" + RESET
 
 
 def header(title):
-    """Print a prominent section header."""
-    width = max(len(title) + 4, 40)
-    border = "═" * width
-    padding = " " * ((width - len(title)) // 2)
-    print()
-    print(f"{BASE}{border}{RESET}")
-    print(f"{BASE}║{RESET}{BOLD}{padding}{title}{padding}{RESET}{BASE}║{RESET}")
-    print(f"{BASE}{border}{RESET}")
-    print()
+    """Print a single-line header with a centered title."""
+    try:
+        width = os.get_terminal_size().columns
+    except OSError:
+        width = 80
+    side = (width - len(title) - 2) // 2
+    left = "═" * side
+    right = "═" * (width - side - len(title) - 2)
+    print(f"\n{BOLD}{left}{RESET} {BOLD}{title}{RESET} {BOLD}{right}{RESET}")
 
 
 @contextmanager

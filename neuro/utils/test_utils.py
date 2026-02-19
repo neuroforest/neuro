@@ -55,8 +55,9 @@ class Recorder:
 
 
 class SubprocessResult:
-    def __init__(self, returncode=0):
+    def __init__(self, returncode=0, stdout=""):
         self.returncode = returncode
+        self.stdout = stdout
 
 
 class FakeContext:
