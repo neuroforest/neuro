@@ -29,16 +29,11 @@ SUCCESS = GREEN + "✔" + RESET
 FAIL = RED + "✘" + RESET
 
 
-def header(title):
-    """Print a single-line header with a centered title."""
-    try:
-        width = os.get_terminal_size().columns
-    except OSError:
-        width = 80
-    side = (width - len(title) - 2) // 2
-    left = "═" * side
-    right = "═" * (width - side - len(title) - 2)
-    print(f"\n{BOLD}{left}{RESET} {BOLD}{title}{RESET} {BOLD}{right}{RESET}")
+def header(text: str) -> None:
+    w = os.get_terminal_size().columns if os.isatty(1) else 80
+    print(f"\033[38;5;208m╭{'─'*(w-2)}╮")
+    print(f"│\033[1;37m{text.center(w-2)}\033[38;5;208m│")
+    print(f"╰{'─'*(w-2)}╯\033[0m")
 
 
 @contextmanager
