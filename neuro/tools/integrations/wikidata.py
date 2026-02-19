@@ -1,9 +1,11 @@
+import os
 import requests
 
 from neuro.utils import exceptions
 
 
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
+HEADERS = {"User-Agent": f"NeuroForest/{os.environ['VERSION']} (https://github.com/neuroforest)"}
 
 
 def fetch(query_file_path, params: dict = None, wikidata_sparql_url=WIKIDATA_SPARQL_URL):
@@ -23,8 +25,9 @@ def fetch(query_file_path, params: dict = None, wikidata_sparql_url=WIKIDATA_SPA
         for parameter, value in params.items():
             query = query.replace(f"_{parameter}_", value)
 
-    res = requests.get(wikidata_sparql_url, params={"query": query, "format": "json"})
+    res = requests.get(wikidata_sparql_url, params={"query": query, "format": "json"},
+                        headers=HEADERS)
     if res.status_code == 200:
         return res.json()["results"]["bindings"]
     else:
-        raise exceptions.UnhandledStatusCode(f"{res.status_code} {res.reason}")
+        raise exceptions.UnhandledStatusCode(f"{res.status_code} {res.reason} {res.text}")
