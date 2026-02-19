@@ -19,7 +19,8 @@ def get_path(keyword):
 
     keyword_index = {
         "app": os.getenv("APP"),
-        "archive": f"{os.getenv('STORAGE')}/archive",
+        "archive": os.getenv("ARCHIVE"),
+        "logs": os.getenv("LOGS"),
         "design": os.getenv("DESIGN"),
         "desktop": os.getenv("DESKTOP"),
         "neuro": os.getenv("NEURO"),
