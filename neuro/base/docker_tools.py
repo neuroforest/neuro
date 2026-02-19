@@ -247,6 +247,18 @@ def rename_volume(old_volume, new_volume):
     )
 
 
+def get_container_volumes(container_name):
+    """Get named volumes attached to a container."""
+    result = subprocess.run(
+        ["docker", "inspect", container_name, "--format", "{{json .Mounts}}"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return []
+    mounts = json.loads(result.stdout)
+    return [m["Name"] for m in mounts if m.get("Type") == "volume"]
+
+
 def container_exists(container_name):
     result = subprocess.run(
         ["docker", "container", "inspect", container_name],
