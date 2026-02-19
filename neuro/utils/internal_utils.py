@@ -3,6 +3,7 @@ Internal utility functions.
 """
 
 import logging
+from pathlib import Path
 import os
 
 import psutil
@@ -10,7 +11,7 @@ import psutil
 from neuro.utils import exceptions
 
 
-def get_path(keyword):
+def get_path(keyword, create_if_missing=False):
     """
     Get path for a keyword.
     :param keyword: string
@@ -41,13 +42,16 @@ def get_path(keyword):
 
     path = keyword_index[keyword]
 
-    if not os.path.exists(path):
+    if not os.path.exists(path) and not create_if_missing:
         raise exceptions.InvalidPath(f"Path '{path}' for keyword '{keyword}' does not exist in {os.getcwd()}.")
+    elif not os.path.exists(path) and create_if_missing:
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
     else:
         path = os.path.abspath(path)
 
     logging.debug(f"Obtained path {path} for keyword {keyword}")
-    return path
+    return str(path)
 
 
 def get_process(name, value):
