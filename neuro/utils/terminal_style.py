@@ -37,12 +37,13 @@ def header(text: str) -> None:
 
 
 @contextmanager
-def step(message):
+def step(message, display=True):
     """Spinner during execution, ✔ on completion."""
     with Console().status(f"[bold] {message}...", spinner="dots"):
         try:
             yield
-            print(f"{SUCCESS} {message}")
+            if display:
+                print(f"{SUCCESS} {message}")
         except BaseException as e:
             print(f"{FAIL} {message} {e}")
 

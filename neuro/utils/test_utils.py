@@ -66,5 +66,5 @@ class FakeContext:
 
 
 @contextmanager
-def noop_step(message):
+def noop_step(message, **kwargs):
     yield
