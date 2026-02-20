@@ -163,7 +163,7 @@ class Validator:
 
         MATCH (on)-[r]-(p)
         WHERE type(r) = or.label AND op.label IN labels(p)
-        RETURN 
+        RETURN
             on as node_object,
             on.label as node,
             p as property_object,

@@ -3,6 +3,9 @@ import logging
 
 import neo4j
 
+from neuro.base.accessors.nodes import NodeAccessor
+from neuro.base.accessors.tiddlers import TiddlerAccessor
+
 
 class NeuroBase:
     """
@@ -17,6 +20,10 @@ class NeuroBase:
         except neo4j.exceptions.ConfigurationError:
             logging.error(f"Incorrect Neo4j parameters: {uri}")
             return
+
+        # accessors
+        self.nodes = NodeAccessor(self)
+        self.tiddlers = TiddlerAccessor(self)
 
     def run_query(self, query, parameters=None):
         """
@@ -36,24 +43,21 @@ class NeuroBase:
             records = [record.data() for record in result]
             return records
 
-    def save_object(self, o):
+    def count(self, label=None, **properties):
         """
-        Save an object to the database.
-        :param o: dict that includes keys 'title' and 'neuro.id'
-        :return:
+        Count nodes in the database, optionally filtered by label and properties.
         """
-        if "title" not in o:
-            raise ValueError("Object must have a 'title' field")
-        if "neuro.id" not in o:
-            raise ValueError(f"Object must have a 'neuro.id' field {o}")
-
-        query = """
-        MERGE (o:Object {title: $title, `neuro.id`: $neuro_id})
-        SET o += $fields
-        RETURN o
-        """
-        parameters = {"title": o["title"], "neuro_id": o["neuro.id"], "fields": o}
-        self.run_query(query, parameters=parameters)
+        node = f"(n:{label})" if label else "(n)"
+        conditions = []
+        params = {}
+        for key, value in properties.items():
+            param_name = key.replace(".", "_")
+            conditions.append(f"n.`{key}` = ${param_name}")
+            params[param_name] = value
+        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        query = f"MATCH {node}{where} RETURN count(n) AS count"
+        result = self.get_data(query, params)
+        return result[0]["count"]
 
     def clear(self, confirm=False):
         if not confirm:
@@ -64,14 +68,6 @@ class NeuroBase:
         DETACH DELETE o;
         """
         self.run_query(query)
-
-    def count_nodes(self):
-        """
-        Count the total number of nodes in the database.
-        """
-        query = "MATCH (n) RETURN count(n) AS count"
-        result = self.get_data(query)
-        return result[0]["count"]
 
     def close(self):
         """

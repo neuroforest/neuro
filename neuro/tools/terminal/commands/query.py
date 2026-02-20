@@ -4,7 +4,7 @@ Query NeuroBase
 
 import click
 
-from neuro.base.api import NeuroBase
+from neuro.base import NeuroBase
 from neuro.tools.terminal.cli import pass_environment
 
 from neuro.base import nql
