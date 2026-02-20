@@ -10,7 +10,3 @@ __pycache__/
 /resources/test/output
 /temp
 /venv
-
-# Files
-.env
-.env.testing
