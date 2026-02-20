@@ -8,7 +8,7 @@ import neo4j
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 
-from neuro.base.api import NeuroBase
+from neuro.base import NeuroBase
 import neuro.base.nql.handlers as handlers
 from neuro.base.nql.components import NqlParser
 

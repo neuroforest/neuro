@@ -1,6 +1,6 @@
 from neuro.core import Node, Moment
-from neuro.base.api import NeuroBase
-from neuro.base.api.ontology import OntologyNodeInfo
+from neuro.base import NeuroBase
+from neuro.base.ontology import OntologyNodeInfo
 from neuro.base.nql.components import NqlTransformer, NqlGenerator
 
 

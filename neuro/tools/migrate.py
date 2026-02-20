@@ -10,7 +10,7 @@ import tqdm
 from neuro.core import Moment
 from neuro.core.tid import WikiFolder, TiddlywikiHtml
 from neuro.tools.tw5api import tw_get, tw_put
-from neuro.base.api import NeuroBase, nb_get
+from neuro.base import NeuroBase
 from neuro.utils import internal_utils
 
 
@@ -70,7 +70,7 @@ def migrate_wf_to_neo4j(wf_path, port=8222, **kwargs):
         for tid_title in tqdm.tqdm(tid_titles):
             fields = tw_get.fields(tid_title, port=port, **kwargs)
             del fields["revision"]
-            nb.save_object(fields)
+            nb.nodes.put(fields)
         print(f"Finished importing {len(tid_titles)} tiddlers")
 
 
@@ -80,7 +80,9 @@ def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
     :param wf_path:
     :param port: WF port
     """
-    fields_list = nb_get.all_fields(**kwargs)
+    nb = NeuroBase(**kwargs)
+    fields_list = nb.tiddlers.all_fields()
+    nb.close()
 
     tw_path = internal_utils.get_path("tiddlywiki.js")
     shutil.rmtree(wf_path, ignore_errors=True)
@@ -92,7 +94,9 @@ def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
 
 
 def migrate_neo4j_to_json(json_path):
-    fields_list = nb_get.all_fields()
+    nb = NeuroBase()
+    fields_list = nb.tiddlers.all_fields()
+    nb.close()
     with open(json_path, "w+") as f:
         json.dump(fields_list, f)
 

@@ -8,7 +8,7 @@ import sys
 import click
 from rich.console import Console
 
-from neuro.base.api import NeuroBase
+from neuro.base import NeuroBase
 from neuro.core import Dir, File, Moment
 from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.terminal.commands import qa, local

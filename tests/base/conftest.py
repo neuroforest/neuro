@@ -1,6 +1,6 @@
 import pytest
 
-from neuro.base.api import NeuroBase
+from neuro.base import NeuroBase
 
 
 @pytest.fixture
