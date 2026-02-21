@@ -7,7 +7,7 @@ import shutil
 
 import tqdm
 
-from neuro.core import Moment
+from neuro.core import Moment, Node
 from neuro.core.tid import WikiFolder, TiddlywikiHtml
 from neuro.tools.tw5api import tw_get, tw_put
 from neuro.base import NeuroBase
@@ -70,7 +70,8 @@ def migrate_wf_to_neo4j(wf_path, port=8222, **kwargs):
         for tid_title in tqdm.tqdm(tid_titles):
             fields = tw_get.fields(tid_title, port=port, **kwargs)
             del fields["revision"]
-            nb.nodes.put(fields)
+            node = Node(labels=["Tiddler"], uuid=fields["neuro.id"], properties=fields)
+            nb.nodes.put(node)
         print(f"Finished importing {len(tid_titles)} tiddlers")
 
 
