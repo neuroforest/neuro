@@ -17,8 +17,8 @@ from neuro.base import nql
 @pass_environment
 def cli(ctx, cypher, nql_query, query):
     if cypher:
-        nb = NeuroBase()
-        data = nb.get_data(query)
+        with NeuroBase() as nb:
+            data = nb.get_data(query)
         print(data)
     elif nql_query:
         nql.session()

@@ -52,27 +52,27 @@ def migrate_wf_to_neo4j(wf_path, port=8222, **kwargs):
     :param wf_path:
     :param port: WF port
     """
-    nb = NeuroBase(**kwargs)
-    try:
-        nb.driver.verify_connectivity()
-    except Exception as e:
-        print(f"Error connecting to Neo4j: {e}")
-        return
+    with NeuroBase(**kwargs) as nb:
+        try:
+            nb.driver.verify_connectivity()
+        except Exception as e:
+            print(f"Error connecting to Neo4j: {e}")
+            return
 
-    # Run a WikiFolder
-    tw_path = internal_utils.get_path("tiddlywiki.js")
-    wf = WikiFolder(wf_path, tw5=tw_path, silent=True, **kwargs)
-    with wf:
-        tid_titles = tw_get.tid_titles(
-            "[all[tiddlers]!is[system]] [is[system]has[neuro.id]]",
-            port=port, **kwargs
-        )
-        for tid_title in tqdm.tqdm(tid_titles):
-            fields = tw_get.fields(tid_title, port=port, **kwargs)
-            del fields["revision"]
-            node = Node(labels=["Tiddler"], uuid=fields["neuro.id"], properties=fields)
-            nb.nodes.put(node)
-        print(f"Finished importing {len(tid_titles)} tiddlers")
+        # Run a WikiFolder
+        tw_path = internal_utils.get_path("tiddlywiki.js")
+        wf = WikiFolder(wf_path, tw5=tw_path, silent=True, **kwargs)
+        with wf:
+            tid_titles = tw_get.tid_titles(
+                "[all[tiddlers]!is[system]] [is[system]has[neuro.id]]",
+                port=port, **kwargs
+            )
+            for tid_title in tqdm.tqdm(tid_titles):
+                fields = tw_get.fields(tid_title, port=port, **kwargs)
+                del fields["revision"]
+                node = Node(labels=["Tiddler"], uuid=fields["neuro.id"], properties=fields)
+                nb.nodes.put(node)
+            print(f"Finished importing {len(tid_titles)} tiddlers")
 
 
 def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
@@ -81,9 +81,8 @@ def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
     :param wf_path:
     :param port: WF port
     """
-    nb = NeuroBase(**kwargs)
-    fields_list = nb.tiddlers.all_fields()
-    nb.close()
+    with NeuroBase(**kwargs) as nb:
+        fields_list = nb.tiddlers.all_fields()
 
     tw_path = internal_utils.get_path("tiddlywiki.js")
     shutil.rmtree(wf_path, ignore_errors=True)
@@ -95,9 +94,8 @@ def migrate_neo4j_to_wf(wf_path, port=8222, **kwargs):
 
 
 def migrate_neo4j_to_json(json_path):
-    nb = NeuroBase()
-    fields_list = nb.tiddlers.all_fields()
-    nb.close()
+    with NeuroBase() as nb:
+        fields_list = nb.tiddlers.all_fields()
     with open(json_path, "w+") as f:
         json.dump(fields_list, f)
 
