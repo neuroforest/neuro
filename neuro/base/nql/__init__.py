@@ -13,6 +13,24 @@ import neuro.base.nql.handlers as handlers
 from neuro.base.nql.components import NqlParser
 
 
+def dispatch(nb, query, parser):
+    """Parse a query and execute the matching statement handler."""
+    try:
+        tree = parser.parse(query)
+    except Exception as e:
+        print(f"Syntax Error: {e}")
+        return
+
+    statement_type = tree.data
+    try:
+        handler = getattr(handlers, f"{statement_type}_handler")
+    except AttributeError:
+        print(f"No handler available for statement '{statement_type}'")
+        return
+
+    handler.handler(nb, tree)
+
+
 def session():
     """
     NQL CLI session.
@@ -22,32 +40,18 @@ def session():
     - Ctrl+C: clear current input
     - Ctrl+D: exit session
     """
-    nb = NeuroBase()
     nql_history_path = os.getenv("NQL_HISTORY", os.path.expanduser("~/.nql_history"))
-    history_file = FileHistory(nql_history_path)
-    s = PromptSession(history=history_file)
-    while True:
-        try:
-            query = s.prompt("⬤  ")
-            try:
-                tree = NqlParser().parse(query)
-            except Exception as e:
-                print(f"Syntax Error: {e}")
-                continue
+    s = PromptSession(history=FileHistory(nql_history_path))
+    parser = NqlParser()
 
-            statement_type = tree.data
+    with NeuroBase() as nb:
+        while True:
             try:
-                handler = getattr(handlers, f"{statement_type}_handler")
-                handler.handler(nb, tree)
-            except AttributeError:
-                print(f"No handler available for statement '{statement_type}'")
+                query = s.prompt("⬤  ")
+                dispatch(nb, query, parser)
+            except KeyboardInterrupt:
                 continue
-
-        except KeyboardInterrupt:
-            continue
-        except EOFError:
-            nb.close()
-            break
-        except neo4j.exceptions.CypherSyntaxError as e:
-            print(f"Cypher syntax error: {e.message}")
-            continue
+            except EOFError:
+                break
+            except neo4j.exceptions.CypherSyntaxError as e:
+                print(f"Cypher syntax error: {e.message}")

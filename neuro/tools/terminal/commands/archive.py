@@ -38,7 +38,8 @@ def archive_ontology():
     WHERE o:OntologyNode OR o:OntologyProperty OR o:OntologyRelationship
     RETURN o, r, t;   
     """
-    data = NeuroBase().get_data(query)
+    with NeuroBase() as nb:
+        data = nb.get_data(query)
     ontology_archive_path = (internal_utils.get_path('archive', create_if_missing=True)
                              / "ontology" / f"{time_utils.MOMENT_4}.json")
     with open(ontology_archive_path, "w+") as f:

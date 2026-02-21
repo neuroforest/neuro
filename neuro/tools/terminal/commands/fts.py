@@ -16,9 +16,8 @@ from neuro.utils import terminal_style
 @click.argument("query", required=True)
 @pass_environment
 def cli(ctx, query):
-    nb = NeuroBase()
-    fields_list = nb.tiddlers.all_fields()
-    nb.close()
+    with NeuroBase() as nb:
+        fields_list = nb.tiddlers.all_fields()
     matches = dict()
     for fields in fields_list:
         title = fields["title"]
