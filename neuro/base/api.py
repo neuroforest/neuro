@@ -5,6 +5,7 @@ import neo4j
 
 from neuro.base.accessors.nodes import NodeAccessor
 from neuro.base.accessors.tiddlers import TiddlerAccessor
+from neuro.base.metaontology import Metaontology
 
 
 class NeuroBase:
@@ -22,6 +23,7 @@ class NeuroBase:
             return
 
         # accessors
+        self.metaontology = Metaontology(self)
         self.nodes = NodeAccessor(self)
         self.tiddlers = TiddlerAccessor(self)
 

@@ -1,7 +1,6 @@
-import json
-
 from neuro.core import Node
 from neuro.base.accessors import Accessor
+from neuro.base import nfx
 
 
 class NodeAccessor(Accessor):
@@ -43,8 +42,7 @@ class NodeAccessor(Accessor):
         Import nodes and relationships from an NFX file.
         Nodes are merged on neuro.id; relationships are merged between them.
         """
-        with open(path) as f:
-            data = json.load(f)
+        data = nfx.read(path)
 
         for entry in data.get("nodes", []):
             node = Node(
@@ -88,8 +86,6 @@ class NodeAccessor(Accessor):
         RETURN n.`neuro.id` as nid, labels(n) as labels, properties(n) as properties
         """
         nodes = self._nb.get_data(node_query, params)
-        for n in nodes:
-            n["properties"].pop("neuro.id", None)
 
         rel_query = f"""
         MATCH {node}{where}
@@ -101,8 +97,4 @@ class NodeAccessor(Accessor):
         """
         relationships = self._nb.get_data(rel_query, params)
 
-        data = {"nodes": nodes, "relationships": relationships}
-        with open(path, "w") as f:
-            json.dump(data, f, default=str)
-
-        return data
+        return nfx.write(path, nodes, relationships)
