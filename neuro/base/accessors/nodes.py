@@ -38,9 +38,40 @@ class NodeAccessor(Accessor):
         parameters = {"neuro_id": node.uuid, "properties": node.properties}
         self._nb.run_query(query, parameters=parameters)
 
-    def export(self, path, label=None, **properties):
+    def import_nfx(self, path):
         """
-        Export nodes and their relationships to a JSON file.
+        Import nodes and relationships from an NFX file.
+        Nodes are merged on neuro.id; relationships are merged between them.
+        """
+        with open(path) as f:
+            data = json.load(f)
+
+        for entry in data.get("nodes", []):
+            node = Node(
+                uuid=entry["nid"],
+                labels=entry["labels"],
+                properties=entry.get("properties", {}),
+            )
+            self.put(node)
+
+        for rel in data.get("relationships", []):
+            rel_type = rel["type"]
+            query = f"""
+            MATCH (a {{`neuro.id`: $from_id}})
+            MATCH (b {{`neuro.id`: $to_id}})
+            MERGE (a)-[r:{rel_type}]->(b)
+            SET r += $properties
+            """
+            params = {
+                "from_id": rel["from"],
+                "to_id": rel["to"],
+                "properties": rel.get("properties", {}),
+            }
+            self._nb.run_query(query, params)
+
+    def export_nfx(self, path, label=None, **properties):
+        """
+        Export nodes and their relationships to an NFX file.
         Optionally filter by label and/or properties.
         """
         node = f"(n:{label})" if label else "(n)"
@@ -54,9 +85,11 @@ class NodeAccessor(Accessor):
 
         node_query = f"""
         MATCH {node}{where}
-        RETURN n.`neuro.id` as id, labels(n) as labels, properties(n) as properties
+        RETURN n.`neuro.id` as nid, labels(n) as labels, properties(n) as properties
         """
         nodes = self._nb.get_data(node_query, params)
+        for n in nodes:
+            n["properties"].pop("neuro.id", None)
 
         rel_query = f"""
         MATCH {node}{where}
