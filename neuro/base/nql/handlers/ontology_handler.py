@@ -1,6 +1,5 @@
 from neuro.core import Node, Moment
 from neuro.base import NeuroBase
-from neuro.base.ontology import OntologyNodeInfo
 from neuro.base.nql.components import NqlTransformer, NqlGenerator
 
 
@@ -109,8 +108,7 @@ def handle_set_relationship(data):
 def handle_info(label):
     label = label.strip("`")
     try:
-        info = OntologyNodeInfo(NB, label)
-        info.display()
+        NB.ontology.info(label).display()
     except ValueError as e:
         print(e)
 

@@ -7,7 +7,7 @@ from neuro.core import Node
 class Metaontology:
     """Export/import the metaontology (node types, relationship types) as NFX."""
 
-    LABELS = ["OntologyNode", "OntologyProperty", "OntologyRelationship"]
+    LABEL = "Metaontology"
     RESOURCE_PATH = Path(__file__).parent.parent / "resources" / "metaontology.nfx"
 
     def __init__(self, nb):
@@ -17,28 +17,25 @@ class Metaontology:
         """Export metaontology nodes and their relationships to an NFX file."""
         path = path or self.RESOURCE_PATH
 
-        label_list = self.LABELS
-        node_query = """
-        MATCH (n)
-        WHERE any(l IN $labels WHERE l IN labels(n))
-          AND n.`neuro.id` IS NOT NULL
-        RETURN n.`neuro.id` as nid, labels(n) as labels, properties(n) as properties
+        query = """
+        MATCH (n:Metaontology)-[r]-(m)
+        WHERE n.`neuro.id` IS NOT NULL AND m.`neuro.id` IS NOT NULL
+        WITH collect(DISTINCT {nid: n.`neuro.id`, labels: labels(n),
+                 properties: apoc.map.removeKeys(properties(n), ['created', 'modified'])})
+             + collect(DISTINCT {nid: m.`neuro.id`, labels: labels(m),
+                 properties: apoc.map.removeKeys(properties(m), ['created', 'modified'])}) as allNodes,
+             collect({from: startNode(r).`neuro.id`, to: endNode(r).`neuro.id`,
+                 type: type(r), properties: properties(r)}) as relationships
+        UNWIND allNodes as n
+        WITH collect(DISTINCT n) as nodes, relationships
+        RETURN nodes, relationships
         """
-        nodes = self._nb.get_data(node_query, {"labels": label_list})
+        result = self._nb.get_data(query)[0]
 
-        rel_query = """
-        MATCH (n)
-        WHERE any(l IN $labels WHERE l IN labels(n))
-          AND n.`neuro.id` IS NOT NULL
-        WITH collect(n.`neuro.id`) as ids
-        MATCH (a)-[r]->(b)
-        WHERE a.`neuro.id` IN ids AND b.`neuro.id` IN ids
-        RETURN a.`neuro.id` as `from`, b.`neuro.id` as `to`,
-               type(r) as type, properties(r) as properties
-        """
-        relationships = self._nb.get_data(rel_query, {"labels": label_list})
-
-        return nfx.write(path, nodes, relationships)
+        return nfx.write(
+            path, result["nodes"], result["relationships"],
+            name="Metaontology"
+        )
 
     def import_nfx(self, path=None):
         """Import metaontology from an NFX file into the database."""

@@ -26,8 +26,13 @@ class NodeAccessor(Accessor):
     def put(self, node):
         """
         Save a Node to the database. Merges on neuro.id, sets labels and properties.
+        Validates the node against the ontology before insertion.
         :param node: Node
         """
+        result = self._nb.ontology.is_valid_node(node)
+        if result:
+            raise ValueError(f"Node validation failed: {result}")
+
         labels_str = ":".join(node.labels)
         query = f"""
         MERGE (n:{labels_str} {{`neuro.id`: $neuro_id}})
@@ -67,7 +72,7 @@ class NodeAccessor(Accessor):
             }
             self._nb.run_query(query, params)
 
-    def export_nfx(self, path, label=None, **properties):
+    def export_nfx(self, path, label=None, name="", description="", version="", **properties):
         """
         Export nodes and their relationships to an NFX file.
         Optionally filter by label and/or properties.
@@ -97,4 +102,4 @@ class NodeAccessor(Accessor):
         """
         relationships = self._nb.get_data(rel_query, params)
 
-        return nfx.write(path, nodes, relationships)
+        return nfx.write(path, nodes, relationships, name=name, description=description, version=version)

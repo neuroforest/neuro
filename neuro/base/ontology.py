@@ -2,11 +2,27 @@ import neo4j
 
 from collections import UserDict
 
-from neuro.base.api import NeuroBase
 from neuro.core import Object
 from neuro.core.data.list import ListUtils
 from neuro.core.data.dict import DictUtils
 from neuro.utils import terminal_style
+
+
+class Ontology:
+    """Accessor for ontology operations on NeuroBase."""
+
+    def __init__(self, nb):
+        self._nb = nb
+
+    def is_valid_node(self, node):
+        """Validate a node against the ontology."""
+        validator = ObjectValidator(self._nb, node)
+        violations = validator.get_violations()
+        return not bool(violations)
+
+    def info(self, label):
+        """Return an OntologyNodeInfo for the given label."""
+        return OntologyNodeInfo(self._nb, label)
 
 
 class Metaproperty:
@@ -75,30 +91,30 @@ class Metaproperties(UserDict):
     def display(self):
         return DictUtils.represent(self.data)
 
-    def validate_properties(self, properties: dict, validation_result=None):
+    def validate_properties(self, properties: dict, violations=None):
         """
         Check if the node properties conform to the metaproperties.
         :param properties: dict
-        :param validation_result: ValidationResult
+        :param violations: Violations
         :return:
         """
-        if not validation_result:
-            validation_result = ValidationResult()
+        if not violations:
+            violations = Violations()
         for property_key, property_value in properties.items():
             if property_key not in self.data:
-                validation_result.undefined_properties.append(property_key)
+                violations.undefined_properties.append(property_key)
             else:
                 val = self.data[property_key].check(property_value)
                 if not val:
-                    validation_result.invalid_properties.append((property_key, self.data[property_key]))
+                    violations.invalid_properties.append((property_key, self.data[property_key]))
                 else:
                     print("Property valid:", property_key)
 
         for p in self.data.values():
             if p.relationship_type == "REQUIRE_PROPERTY" and p.label not in properties:
-                validation_result.missing_properties.append((p.label, p))
+                violations.missing_properties.append((p.label, p))
 
-        return validation_result
+        return violations
 
 
 class OntologyNodeInfo:
@@ -144,7 +160,7 @@ class OntologyNodeInfo:
 
 
 class Validator:
-    def __init__(self, nb: NeuroBase):
+    def __init__(self, nb):
         self.nb = nb
 
     def get_metaproperties(self, node_label):
@@ -179,7 +195,7 @@ class Validator:
         return metaproperties
 
 
-class ValidationResult:
+class Violations:
     """
     missing_properties - list of missing required properties
     undefined_properties - list of properties that are not defined in the ontology
@@ -227,15 +243,15 @@ class ObjectValidator(Validator):
     """
     Validates an object to be inserted into NeuroBase.
     """
-    def __init__(self, nb: NeuroBase, o: Object):
+    def __init__(self, nb, o: Object):
         super().__init__(nb)
         self.object = o
-        self.validation_result = ValidationResult()
+        self.violations = Violations()
 
-    def validate(self):
+    def get_violations(self):
         self.validate_labels()
         self.validate_properties()
-        return self.validation_result
+        return self.violations
 
     def validate_label(self, label):
         query = """
@@ -244,7 +260,7 @@ class ObjectValidator(Validator):
         """
         ontology_node = self.nb.get_data(query, parameters={"label": label})
         if not ontology_node:
-            self.validation_result.undefined_labels.append(label)
+            self.violations.undefined_labels.append(label)
         elif len(ontology_node) > 1:
             raise ValueError(f"Multiple ontology nodes found with label: {label}")
         else:
@@ -256,17 +272,17 @@ class ObjectValidator(Validator):
 
     def validate_properties(self):
         for label in self.object.labels:
-            if label in self.validation_result.undefined_labels:
+            if label in self.violations.undefined_labels:
                 continue
             metaproperties = self.get_metaproperties(label)
-            self.validation_result = metaproperties.validate_properties(self.object.properties, self.validation_result)
+            self.violations = metaproperties.validate_properties(self.object.properties, self.violations)
 
 
 class MetaontologyValidator(Validator):
     """
     Validate metaontology.
     """
-    def __init__(self, nb: NeuroBase):
+    def __init__(self, nb):
         super().__init__(nb)
 
 
@@ -274,5 +290,5 @@ class OntologyValidator(Validator):
     """
     Validate ontology.
     """
-    def __init__(self, nb: NeuroBase):
+    def __init__(self, nb):
         super().__init__(nb)

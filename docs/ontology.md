@@ -39,16 +39,28 @@ Properties are inherited through `SUBCLASS_OF` chains. If `Species` is a subclas
 
 **`Metaproperty`** — Represents a single property constraint for a node type. Holds the property label, owning node, property type (`DateTime`, `OntologyProperty`), and relationship type (`HAS_PROPERTY` or `REQUIRE_PROPERTY`). The `check()` method validates a value against the property type.
 
-**`Metaproperties`** — A dict-like collection (`UserDict`) of `Metaproperty` objects keyed by property label. Ignores duplicate insertions. The `validate_properties()` method checks a node's properties against the collection, returning a `ValidationResult` with missing, undefined, and invalid properties.
+**`Metaproperties`** — A dict-like collection (`UserDict`) of `Metaproperty` objects keyed by property label. Ignores duplicate insertions. The `validate_properties()` method checks a node's properties against the collection, returning a `Violations` object with missing, undefined, and invalid properties.
 
-**`ValidationResult`** — Accumulates validation violations. Supports two modes via `strict` flag:
+**`Violations`** — Collects ontology violations found during validation. Truthy when violations exist, falsy when empty (no violations). Contains four lists:
 
-- **strict** (default): missing, undefined, and invalid properties are all violations
-- **lenient**: only missing and invalid properties are violations (undefined are allowed)
+- `undefined_labels` — labels not found as `OntologyNode` in the graph
+- `missing_properties` — required properties (`REQUIRE_PROPERTY`) that are absent
+- `undefined_properties` — properties present on the node but not defined in the ontology
+- `invalid_properties` — properties with values that fail type checks
 
-Supports `+` operator to merge results across multiple labels. Truthy when violations exist.
+Supports two modes via `strict` flag:
+
+- **strict** (default): all four lists count as violations
+- **lenient**: `undefined_properties` are ignored (only missing, invalid, and undefined labels count)
+
+Supports `+` operator to merge results across multiple labels.
 
 ### Database-aware classes (require a `NeuroBase` instance)
+
+**`Ontology`** — Accessor mounted on `NeuroBase` as `nb.ontology`. Provides:
+
+- `is_valid_node(node)` — validates a node's labels and properties against the ontology, returns a `Violations` object
+- `info(label)` — returns an `OntologyNodeInfo` for the given label
 
 **`OntologyNodeInfo`** — Queries and displays the full ontology profile for a node label: its lineage (`SUBCLASS_OF` chain), metaproperties (inherited through lineage), and relationships. Used by the NQL `info` command.
 
@@ -59,7 +71,7 @@ Supports `+` operator to merge results across multiple labels. Truthy when viola
 1. `validate_labels()` — verifies each label exists as an `OntologyNode`
 2. `validate_properties()` — checks properties against metaproperties for each valid label
 
-Returns a `ValidationResult`.
+Returns a `Violations` object.
 
 **`OntologyValidator`**, **`MetaontologyValidator`** — Placeholder validators for validating the ontology structure itself. Not yet implemented.
 
@@ -87,24 +99,22 @@ ObjectValidator.validate()
                     → invalid_properties (wrong type)
                         │
                         ▼
-                    ValidationResult
+                    Violations
 ```
 
 ## Usage
 
 ```python
 from neuro.base import NeuroBase
-from neuro.base.ontology import OntologyNodeInfo, ObjectValidator
 
-nb = NeuroBase()
+with NeuroBase() as nb:
+    # Inspect ontology for a label
+    nb.ontology.info("Species").display()
 
-# Inspect ontology for a label
-info = OntologyNodeInfo(nb, "Species")
-info.display()
-
-# Validate an object before insertion
-validator = ObjectValidator(nb, some_object)
-result = validator.validate()
-if result:
-    print(result)  # shows violations
+    # Validate a node before insertion
+    violations = nb.ontology.is_valid_node(node)
+    if violations:
+        print(violations)  # shows undefined labels, missing/invalid properties
 ```
+
+`nb.nodes.put(node)` calls `is_valid_node` automatically and raises `ValueError` if violations are found.
