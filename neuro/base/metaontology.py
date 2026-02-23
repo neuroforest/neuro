@@ -1,5 +1,6 @@
 from neuro.base import nfx
 from neuro.core import Node
+from neuro.utils import exceptions
 
 
 class Metaontology:
@@ -14,8 +15,7 @@ class Metaontology:
 
         count = self._nb.count("Metaontology")
         if not count:
-            self.violations.append("No Metaontology nodes found")
-            return False
+            raise exceptions.NoMetaontology
 
         # Metaontology should be a connected graph
         orphans = self._nb.get_data("""

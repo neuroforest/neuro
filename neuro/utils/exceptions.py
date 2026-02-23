@@ -37,3 +37,7 @@ class NoAPI(BaseException):
 
 class PortInUse(BaseException):
     pass
+
+
+class NoMetaontology(BaseException):
+    pass
