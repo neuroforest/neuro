@@ -278,13 +278,6 @@ class ObjectValidator(Validator):
             self.violations = metaproperties.validate_properties(self.object.properties, self.violations)
 
 
-class MetaontologyValidator(Validator):
-    """
-    Validate metaontology.
-    """
-    def __init__(self, nb):
-        super().__init__(nb)
-
 
 class OntologyValidator(Validator):
     """

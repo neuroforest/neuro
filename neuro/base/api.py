@@ -29,6 +29,12 @@ class NeuroBase:
         self.nodes = NodeAccessor(self)
         self.tiddlers = TiddlerAccessor(self)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
     def run_query(self, query, parameters=None):
         """
         Run a Cypher query and return the result.
@@ -72,12 +78,6 @@ class NeuroBase:
         DETACH DELETE o;
         """
         self.run_query(query)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
 
     def close(self):
         """
