@@ -6,13 +6,14 @@ import neo4j
 from neuro.base.accessors.nodes import NodeAccessor
 from neuro.base.accessors.tiddlers import TiddlerAccessor
 from neuro.base.metaontology import Metaontology
+from neuro.base.ontology import Ontology
 
 
 class NeuroBase:
     """
     Simple, reusable Neo4j client wrapper.
     """
-    def __init__(self, neo4j_uri=None, neo4j_user=None, neo4j_password=None, **kwargs):
+    def __init__(self, neo4j_uri=None, neo4j_user=None, neo4j_password=None):
         uri = neo4j_uri or os.getenv("NEO4J_URI")
         user = neo4j_user or os.getenv("NEO4J_USER")
         password = neo4j_password or os.getenv("NEO4J_PASSWORD")
@@ -22,8 +23,9 @@ class NeuroBase:
             logging.error(f"Incorrect Neo4j parameters: {uri}")
             return
 
-        # accessors
+        # Accessors
         self.metaontology = Metaontology(self)
+        self.ontology = Ontology(self)
         self.nodes = NodeAccessor(self)
         self.tiddlers = TiddlerAccessor(self)
 

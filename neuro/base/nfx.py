@@ -11,15 +11,29 @@ def read(path):
         return json.load(f)
 
 
-def write(path, nodes, relationships):
+def write(path, nodes, relationships, name="", description="", version=""):
     """Write nodes and relationships to an NFX file.
 
     Strips `neuro.id` from node properties (it's stored as `nid`).
     """
     for n in nodes:
         n["properties"].pop("neuro.id", None)
+        if not n["properties"]:
+            del n["properties"]
 
-    data = {"nodes": nodes, "relationships": relationships}
+    for r in relationships:
+        if not r.get("properties"):
+            r.pop("properties", None)
+
+    data = {}
+    if name:
+        data["name"] = name
+    if description:
+        data["description"] = description
+    if version:
+        data["version"] = version
+    data["nodes"] = nodes
+    data["relationships"] = relationships
     with open(path, "w") as f:
         json.dump(data, f, default=str)
 
