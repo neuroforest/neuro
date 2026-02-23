@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from neuro.base import nfx
 from neuro.core import Node
 
