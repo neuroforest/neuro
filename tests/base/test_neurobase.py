@@ -4,7 +4,6 @@ Integration tests for NeuroBase database availability.
 
 import pytest
 
-from neuro.core import Node
 
 
 @pytest.mark.integration
