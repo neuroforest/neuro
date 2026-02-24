@@ -39,5 +39,5 @@ class PortInUse(BaseException):
     pass
 
 
-class NoMetaontology(BaseException):
+class NoOntology(BaseException):
     pass
