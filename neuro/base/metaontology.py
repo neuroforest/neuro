@@ -18,7 +18,8 @@ class OntologyValidator:
         MATCH (type)-[:SUBCLASS_OF*0..]->(root)
         MATCH (n)
         WHERE type.label IN labels(n)
-        RETURN n.label as label, type.label as type, labels(n) as labels, properties(n) as properties
+        RETURN n.label as label, type.label as ontology_object_type, labels(n) as labels,
+               properties(n) as properties
         """
         data = self._nb.get_data(query, {"kind": kind})
         return [dict(record) for record in data]
@@ -27,6 +28,23 @@ class OntologyValidator:
         for kind in ONTOLOGY_OBJECTS:
             self.instances[kind] = self._fetch_instances(kind)
 
+    def _is_connected(self):
+        """Check if the ontology graph is a single connected component."""
+        query = f"""
+        MATCH (root:OntologyNode)
+        WHERE root.label IN {list(ONTOLOGY_OBJECTS)}
+        MATCH (root)<-[:SUBCLASS_OF*0..]-(type)
+        MATCH (n)
+        WHERE type.label IN labels(n)
+        WITH collect(DISTINCT n) AS ontology_nodes
+        WITH ontology_nodes, ontology_nodes[0] AS start
+        CALL apoc.path.subgraphNodes(start, {{}}) YIELD node
+        WITH count(node) AS reachable, size(ontology_nodes) AS total
+        RETURN reachable = total AS connected
+        """
+        data = self._nb.get_data(query)
+        return data[0]["connected"]
+
     def validate(self):
         """Run all validation checks. Returns an OntologyViolations instance."""
         ontology_violations = OntologyViolations()
@@ -34,14 +52,16 @@ class OntologyValidator:
         for kind in ONTOLOGY_OBJECTS:
             for instance in self.instances[kind]:
                 label = instance["label"]
-                itype = instance["type"]
+                ontology_object_type = instance["ontology_object_type"]
                 props = instance["properties"]
 
-                metaproperties = Metaproperties.from_ontology(self._nb, itype)
+                metaproperties = Metaproperties.from_ontology(self._nb, ontology_object_type)
                 v = metaproperties.validate_properties(props)
 
                 if v:
-                    ontology_violations.violations.append((label, itype, v))
+                    ontology_violations.violations.append((label, ontology_object_type, v))
+
+        ontology_violations.disconnected = not self._is_connected()
 
         return ontology_violations
 
@@ -51,27 +71,30 @@ class OntologyViolations:
 
     def __init__(self):
         self.violations: list[tuple[str, str, Violations]] = []
-        self.orphan_nodes: list[str] = []
+        self.disconnected: bool = False
         self.redundant_labels: list[str] = []
         self.redundant_relationships: list[str] = []
         self.redundant_properties: list[str] = []
 
     def __bool__(self):
         return any([
-            self.violations, self.orphan_nodes, self.redundant_labels,
+            self.violations, self.disconnected, self.redundant_labels,
             self.redundant_relationships, self.redundant_properties,
         ])
 
     def __repr__(self):
-        B, G, R, Y, RST = terminal_style.BOLD, terminal_style.GREEN, terminal_style.RED, terminal_style.YELLOW, terminal_style.RESET
+        B, SUCCESS, FAIL, Y, RST = (
+            terminal_style.BOLD, terminal_style.SUCCESS, terminal_style.FAIL,
+            terminal_style.YELLOW, terminal_style.RESET
+        )
         lines = []
 
-        for label, itype, v in self.violations:
-            lines.append(f"{R}✘{RST} {B}{label}{RST} {Y}({itype}){RST}")
+        for label, ontology_object_type, v in self.violations:
+            lines.append(f"{FAIL} {B}{label}{RST} {Y}({ontology_object_type}){RST}")
             lines.append(repr(v))
 
-        if self.orphan_nodes:
-            lines.append(f"Orphan nodes: {self.orphan_nodes}")
+        if self.disconnected:
+            lines.append("Disconnected: ontology graph is not fully connected")
         if self.redundant_labels:
             lines.append(f"Redundant labels: {self.redundant_labels}")
         if self.redundant_relationships:
@@ -80,7 +103,7 @@ class OntologyViolations:
             lines.append(f"Redundant properties: {self.redundant_properties}")
 
         if not lines:
-            return f"{G}{B}ALL VALID{RST}"
+            return f"{SUCCESS} Ontology valid"
         return "\n".join(lines)
 
 

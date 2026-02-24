@@ -5,8 +5,6 @@ Integration tests for NeuroBase database availability.
 import pytest
 
 
-
-
 class TestNeuroBase:
     def test_connectivity(self, nb):
         nb.driver.verify_connectivity()

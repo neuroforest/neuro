@@ -147,7 +147,7 @@ class Metaproperties(UserDict):
 
         for p in self.data.values():
             if p.relationship_type == "REQUIRE_PROPERTY" and p.label not in properties:
-                violations.missing_properties.append((p.label, p))
+                violations.missing_properties.append(p)
 
         return violations
 
@@ -213,7 +213,7 @@ class Violations:
         B, RST = terminal_style.BOLD, terminal_style.RESET
         lines = []
         if self.missing_properties:
-            lines.append(f"  missing: {[p for p, _ in self.missing_properties]}")
+            lines.append(f"  missing: {[p.label for p in self.missing_properties]}")
         if self.undefined_properties:
             lines.append(f"  undefined: {self.undefined_properties}")
         if self.undefined_labels:
