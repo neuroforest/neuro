@@ -2,7 +2,7 @@ import neo4j
 
 from collections import UserDict
 
-from neuro.core import Object, Tiddler
+from neuro.core import Tiddler
 from neuro.core.data.list import ListUtils
 from neuro.core.data.dict import DictUtils
 from neuro.core.data.str import Uuid
@@ -76,6 +76,33 @@ class Metaproperties(UserDict):
     def __repr__(self):
         return f"<Metaproperties node={self.node_label} len={len(self.data)}>"
 
+    @classmethod
+    def from_ontology(cls, nb, node_label):
+        """Query the ontology and return Metaproperties for a given node label."""
+        query = f"""
+        MATCH (ion:OntologyNode {{label: "{node_label}"}})
+        MATCH (ion)-[:SUBCLASS_OF*0..]->(on)
+        MATCH (or:OntologyRelationship)-[:SUBCLASS_OF*0..]->
+            (:OntologyRelationship {{label: "HAS_PROPERTY"}})
+        MATCH (iop:OntologyNode {{label: "OntologyProperty"}})
+        MATCH (op)-[:SUBCLASS_OF*0..]->(iop)
+
+        MATCH (on)-[r]-(p)
+        WHERE type(r) = or.label AND op.label IN labels(p)
+        RETURN
+            on as node_object,
+            on.label as node,
+            p as property_object,
+            type(r) as relationship_type,
+            op.label as property_type,
+            p.label as property;
+        """
+        data = nb.get_data(query)
+        metaproperties = cls(node_label)
+        for mp in data:
+            metaproperties[mp["property"]] = Metaproperty(mp)
+        return metaproperties
+
     def display(self):
         return DictUtils.represent(self.data)
 
@@ -105,70 +132,6 @@ class Metaproperties(UserDict):
         return violations
 
 
-class ObjectValidator:
-    """Validates an object to be inserted into NeuroBase."""
-
-    def __init__(self, nb, o: Object):
-        self.nb = nb
-        self.object = o
-        self.violations = Violations()
-
-    def get_metaproperties(self, node_label):
-        """Return metaproperties for a given node label."""
-        query = f"""
-        MATCH (ion:OntologyNode {{label: "{node_label}"}})
-        MATCH (ion)-[:SUBCLASS_OF*0..]->(on)
-        MATCH (or:OntologyRelationship)-[:SUBCLASS_OF*0..]->
-            (:OntologyRelationship {{label: "HAS_PROPERTY"}})
-        MATCH (iop:OntologyNode {{label: "OntologyProperty"}})
-        MATCH (op)-[:SUBCLASS_OF*0..]->(iop)
-
-        MATCH (on)-[r]-(p)
-        WHERE type(r) = or.label AND op.label IN labels(p)
-        RETURN
-            on as node_object,
-            on.label as node,
-            p as property_object,
-            type(r) as relationship_type,
-            op.label as property_type,
-            p.label as property;
-        """
-        data = self.nb.get_data(query)
-        metaproperties = Metaproperties(node_label)
-        for mp in data:
-            metaproperties[mp["property"]] = Metaproperty(mp)
-        return metaproperties
-
-    def get_violations(self):
-        self.validate_labels()
-        self.validate_properties()
-        return self.violations
-
-    def validate_label(self, label):
-        query = """
-        MATCH (n:OntologyNode {label: $label})
-        RETURN n.label as label;
-        """
-        ontology_node = self.nb.get_data(query, parameters={"label": label})
-        if not ontology_node:
-            self.violations.undefined_labels.append(label)
-        elif len(ontology_node) > 1:
-            raise ValueError(f"Multiple ontology nodes found with label: {label}")
-        else:
-            pass
-
-    def validate_labels(self):
-        for label in self.object.labels:
-            self.validate_label(label)
-
-    def validate_properties(self):
-        for label in self.object.labels:
-            if label in self.violations.undefined_labels:
-                continue
-            metaproperties = self.get_metaproperties(label)
-            self.violations = metaproperties.validate_properties(self.object.properties, self.violations)
-
-
 class OntologyNodeInfo:
     def __init__(self, nb, label):
         self.nb = nb
@@ -192,7 +155,7 @@ class OntologyNodeInfo:
         self.lineage = [next(iter(record.values())) for record in data]
 
     def get_metaproperties(self):
-        self.metaproperties = ObjectValidator(self.nb, None).get_metaproperties(self.label)
+        self.metaproperties = Metaproperties.from_ontology(self.nb, self.label)
 
     def get_relationships(self):
         self.relationships = list()
