@@ -14,5 +14,5 @@ def nb():
 @pytest.fixture
 def nb_meta(nb):
     path = get_path("resources") / "metaontology.nfx"
-    nb.metaontology.import_nfx(path)
+    nb.nodes.import_nfx(path)
     yield nb
