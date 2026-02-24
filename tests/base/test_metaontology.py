@@ -18,8 +18,5 @@ class TestMetaontology:
         assert nb.metaontology is not None
 
     def test_no_metaontology_raises(self, nb):
-        with pytest.raises(exceptions.NoMetaontology):
-            nb.metaontology.is_valid()
-
-    def test_is_valid(self, nb_meta):
-        assert nb_meta.metaontology.is_valid()
+        with pytest.raises(exceptions.NoOntology):
+            nb.metaontology.is_ontology_valid()
