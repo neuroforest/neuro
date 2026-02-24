@@ -1,5 +1,5 @@
 from neuro.base import nfx
-from neuro.base.schema import Metaproperties, OntologyViolations
+from neuro.base.schema import Metaproperties, Violations
 from neuro.utils import exceptions, terminal_style
 
 ONTOLOGY_OBJECTS = ("OntologyNode", "OntologyRelationship", "OntologyProperty")
@@ -28,19 +28,12 @@ class OntologyValidator:
     def _fetch_data(self):
         for kind in ONTOLOGY_OBJECTS:
             self.instances[kind] = self._fetch_instances(kind)
-            print(f"\n[FETCH] {kind}: {len(self.instances[kind])} instances")
-            for inst in self.instances[kind]:
-                print(f"  - {inst['label']} (type={inst['type']}, labels={inst['labels']})")
 
     def validate(self):
         """Run all validation checks. Returns an OntologyViolations instance."""
-        violations = OntologyViolations()
-        B, G, R, Y, RST = terminal_style.BOLD, terminal_style.GREEN, terminal_style.RED, terminal_style.YELLOW, terminal_style.RESET
+        ontology_violations = OntologyViolations()
 
         for kind in ONTOLOGY_OBJECTS:
-            print(f"\n{B}{Y}{kind}{RST}")
-            print(f"{Y}{'─'*40}{RST}")
-
             for instance in self.instances[kind]:
                 label = instance["label"]
                 itype = instance["type"]
@@ -49,33 +42,48 @@ class OntologyValidator:
                 metaproperties = Metaproperties.from_ontology(self._nb, itype)
                 v = metaproperties.validate_properties(props)
 
-                if v.missing_properties or v.undefined_properties:
-                    status = f"{R}✘{RST}"
-                else:
-                    status = f"{G}✔{RST}"
+                if v:
+                    ontology_violations.violations.append((label, itype, v))
 
-                print(f"{status} {B}{label}{RST} {Y}({itype}){RST}")
-                print(f"  properties: {list(props.keys())}")
-                print(f"  expected: {list(metaproperties.keys())}")
-                if v.missing_properties:
-                    print(f"  {R}missing: {[p for p, _ in v.missing_properties]}{RST}")
-                    violations.missing_properties.extend(
-                        [(label, p) for p, _ in v.missing_properties]
-                    )
-                if v.undefined_properties:
-                    print(f"  {R}undefined: {v.undefined_properties}{RST}")
-                    violations.redundant_properties.extend(
-                        [f"{label}.{p}" for p in v.undefined_properties]
-                    )
+        return ontology_violations
 
-                input("Next?")
 
-        print(f"\n{B}{'─'*40}{RST}")
-        if violations:
-            print(f"{R}{B}VIOLATIONS:{RST} {repr(violations)}")
-        else:
-            print(f"{G}{B}ALL VALID{RST}")
-        return violations
+class OntologyViolations:
+    """Ontology-level violations: collects per-instance Violations and structural issues."""
+
+    def __init__(self):
+        self.violations: list[tuple[str, str, Violations]] = []
+        self.orphan_nodes: list[str] = []
+        self.redundant_labels: list[str] = []
+        self.redundant_relationships: list[str] = []
+        self.redundant_properties: list[str] = []
+
+    def __bool__(self):
+        return any([
+            self.violations, self.orphan_nodes, self.redundant_labels,
+            self.redundant_relationships, self.redundant_properties,
+        ])
+
+    def __repr__(self):
+        B, G, R, Y, RST = terminal_style.BOLD, terminal_style.GREEN, terminal_style.RED, terminal_style.YELLOW, terminal_style.RESET
+        lines = []
+
+        for label, itype, v in self.violations:
+            lines.append(f"{R}✘{RST} {B}{label}{RST} {Y}({itype}){RST}")
+            lines.append(repr(v))
+
+        if self.orphan_nodes:
+            lines.append(f"Orphan nodes: {self.orphan_nodes}")
+        if self.redundant_labels:
+            lines.append(f"Redundant labels: {self.redundant_labels}")
+        if self.redundant_relationships:
+            lines.append(f"Redundant relationships: {self.redundant_relationships}")
+        if self.redundant_properties:
+            lines.append(f"Redundant properties: {self.redundant_properties}")
+
+        if not lines:
+            return f"{G}{B}ALL VALID{RST}"
+        return "\n".join(lines)
 
 
 class Metaontology:
@@ -96,9 +104,6 @@ class Metaontology:
 
     def export_nfx(self, path=None):
         """Export metaontology nodes and their relationships to an NFX file."""
-        if not self.is_ontology_valid():
-            raise ValueError("Metaontology validation failed:\n" + repr(self.violations))
-
         query = """
         MATCH (:OntologyNode:Metaontology)-[:SUBCLASS_OF*0..]->
               (:OntologyNode:Metaontology)-[:REQUIRE_PROPERTY]->(prop:Metaontology)
