@@ -1,5 +1,5 @@
 from neuro.base import nfx
-from neuro.base.schema import ObjectValidator, OntologyViolations
+from neuro.base.schema import Metaproperties, OntologyViolations
 from neuro.utils import exceptions, terminal_style
 
 ONTOLOGY_OBJECTS = ("OntologyNode", "OntologyRelationship", "OntologyProperty")
@@ -35,7 +35,6 @@ class OntologyValidator:
     def validate(self):
         """Run all validation checks. Returns an OntologyViolations instance."""
         violations = OntologyViolations()
-        validator = ObjectValidator(self._nb, None)
         B, G, R, Y, RST = terminal_style.BOLD, terminal_style.GREEN, terminal_style.RED, terminal_style.YELLOW, terminal_style.RESET
 
         for kind in ONTOLOGY_OBJECTS:
@@ -47,7 +46,7 @@ class OntologyValidator:
                 itype = instance["type"]
                 props = instance["properties"]
 
-                metaproperties = validator.get_metaproperties(itype)
+                metaproperties = Metaproperties.from_ontology(self._nb, itype)
                 v = metaproperties.validate_properties(props)
 
                 if v.missing_properties or v.undefined_properties:
