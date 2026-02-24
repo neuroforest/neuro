@@ -1,7 +1,7 @@
 {
     "name": "Metaontology",
     "description": "self-describing schema for NeuroBase ontology",
-    "version": "1.0",
+    "version": "1.1",
     "nodes":
     [
         {
@@ -45,7 +45,7 @@
             "labels":
             [
                 "Metaontology",
-                "String"
+                "Label"
             ],
             "properties":
             {
@@ -170,6 +170,18 @@
             "properties":
             {
                 "label": "neuro.id"
+            }
+        },
+        {
+            "nid": "8b1486e5-4f2a-42c8-a9eb-de863946f8de",
+            "labels":
+            [
+                "OntologyNode",
+                "Metaontology"
+            ],
+            "properties":
+            {
+                "label": "Label"
             }
         },
         {
@@ -354,6 +366,11 @@
         },
         {
             "to": "e2b7a579-8302-4b76-85c1-b0c9434749b3",
+            "from": "8b1486e5-4f2a-42c8-a9eb-de863946f8de",
+            "type": "SUBCLASS_OF"
+        },
+        {
+            "to": "e2b7a579-8302-4b76-85c1-b0c9434749b3",
             "from": "51960fca-ad0f-41e6-9e3a-7e00e126a06c",
             "type": "SUBCLASS_OF"
         },
@@ -365,6 +382,11 @@
         {
             "to": "e2b7a579-8302-4b76-85c1-b0c9434749b3",
             "from": "51960fca-ad0f-41e6-9e3a-7e00e126a06c",
+            "type": "SUBCLASS_OF"
+        },
+        {
+            "to": "e2b7a579-8302-4b76-85c1-b0c9434749b3",
+            "from": "8b1486e5-4f2a-42c8-a9eb-de863946f8de",
             "type": "SUBCLASS_OF"
         }
     ]
