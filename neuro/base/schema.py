@@ -25,6 +25,9 @@ class Metaproperty:
         return (f"<Metaproperty \"{self.label}\" type={self.property_type} "
                 f"r={self.relationship_type} node={self.node}>")
 
+    def is_required(self):
+        return self.relationship_type == "REQUIRE_PROPERTY"
+
     def display(self):
         return DictUtils.represent({
             "label": self.label,
@@ -34,6 +37,7 @@ class Metaproperty:
         })
 
     def check(self, property_value):
+        """Check property value. Returns None if valid, reason string if invalid."""
         check_map = {
             "DateTime": self.check_datetime,
             "OntologyProperty": self.check_ontology_property,
@@ -43,22 +47,18 @@ class Metaproperty:
         }
         handler = check_map.get(self.property_type)
 
-        if handler:
-            # noinspection PyArgumentList
-            return handler(property_value)
-        else:
-            print(f"Property not verified: {self.label} (type={self.property_type})")
-            return True
+        if not handler:
+            return None
+
+        # noinspection PyArgumentList
+        if handler(property_value):
+            return None
+        return f"expected {self.property_type}, got {property_value}"
 
     def check_datetime(self, property_value):
-        try:
-            assert property_value is neo4j.time.DateTime, f"Property {self.label} is not DateTime"
-            return True
-        except AssertionError:
-            return False
+        return isinstance(property_value, neo4j.time.DateTime)
 
     def check_ontology_property(self, property_value):
-        print(f"Property not subcategorized: {self.label}")
         return False
 
 
@@ -119,11 +119,9 @@ class Metaproperties(UserDict):
             if property_key not in self.data:
                 violations.undefined_properties.append(property_key)
             else:
-                val = self.data[property_key].check(property_value)
-                if not val:
-                    violations.invalid_properties.append((property_key, self.data[property_key]))
-                else:
-                    print("Property valid:", property_key)
+                reason = self.data[property_key].check(property_value)
+                if reason:
+                    violations.invalid_properties.append((property_key, reason))
 
         for p in self.data.values():
             if p.relationship_type == "REQUIRE_PROPERTY" and p.label not in properties:
@@ -175,88 +173,33 @@ class OntologyNodeInfo:
 
 
 class Violations:
-    """
-    missing_properties - list of missing required properties
-    undefined_properties - list of properties that are not defined in the ontology
-    invalid_properties - list of properties with invalid value
-    strict - if True, both missing and undefined properties are considered violations
-    """
-    def __init__(self, strict=True):
-        self.undefined_labels = list()
-        self.missing_properties = list()
-        self.undefined_properties = list()
-        self.invalid_properties = list()
-        self.strict = strict
+    """Collects categorized violations found during ontology validation."""
 
-    def __add__(self, other):
-        self.missing_properties.extend(other.missing_properties)
-        self.undefined_properties.extend(other.undefined_properties)
-        self.invalid_properties.extend(other.invalid_properties)
-        return self
+    def __init__(self):
+        self.undefined_labels: list[str] = []
+        self.undefined_properties: list = []
+        self.missing_properties: list = []
+        self.invalid_properties: list = []
 
     def __bool__(self):
-        if self.strict:
-            return bool(
-                self.missing_properties
-                or self.undefined_properties
-                or self.invalid_properties
-                or self.undefined_labels
-            )
-        else:
-            return bool(
-                self.missing_properties
-                or self.invalid_properties
-                or self.undefined_labels)
+        return any([
+            self.undefined_labels, self.undefined_properties,
+            self.missing_properties, self.invalid_properties,
+        ])
 
     def __repr__(self):
-        return (f"\nMissing properties: {ListUtils.represent(self.missing_properties, display=False)}"
-                f"Undefined properties: {ListUtils.represent(self.undefined_properties, display=False)}"
-                f"Invalid properties: {ListUtils.represent(self.invalid_properties, display=False)}"
-                f"Invalid Labels: {ListUtils.represent(self.undefined_labels, display=False)}")
+        B, RST = terminal_style.BOLD, terminal_style.RESET
+        lines = []
+        if self.missing_properties:
+            lines.append(f"  missing: {[p for p, _ in self.missing_properties]}")
+        if self.undefined_properties:
+            lines.append(f"  undefined: {self.undefined_properties}")
+        if self.undefined_labels:
+            lines.append(f"  undefined labels: {self.undefined_labels}")
+        if self.invalid_properties:
+            for p, reason in self.invalid_properties:
+                lines.append(f"  invalid value: {B}{p}{RST} ({reason})")
+        return "\n".join(lines) if lines else "Violations(none)"
 
     def __str__(self):
         return self.__repr__()
-
-
-class OntologyViolations:
-    """Structured ontology-level validation result with categorized violations."""
-
-    def __init__(self):
-        self.orphan_nodes: list[str] = []
-        self.undefined_labels: list[str] = []
-        self.undefined_relationships: list[str] = []
-        self.missing_properties: list[tuple] = []
-        self.redundant_labels: list[str] = []
-        self.redundant_relationships: list[str] = []
-        self.redundant_properties: list[str] = []
-
-    def __bool__(self):
-        return bool(
-            self.orphan_nodes
-            or self.undefined_labels
-            or self.undefined_relationships
-            or self.missing_properties
-            or self.redundant_labels
-            or self.redundant_relationships
-            or self.redundant_properties
-        )
-
-    def __repr__(self):
-        sections = []
-        if self.orphan_nodes:
-            sections.append(f"Orphan nodes: {self.orphan_nodes}")
-        if self.undefined_labels:
-            sections.append(f"Undefined labels: {self.undefined_labels}")
-        if self.undefined_relationships:
-            sections.append(f"Undefined relationships: {self.undefined_relationships}")
-        if self.missing_properties:
-            sections.append(f"Missing properties: {self.missing_properties}")
-        if self.redundant_labels:
-            sections.append(f"Redundant labels: {self.redundant_labels}")
-        if self.redundant_relationships:
-            sections.append(f"Redundant relationships: {self.redundant_relationships}")
-        if self.redundant_properties:
-            sections.append(f"Redundant properties: {self.redundant_properties}")
-        if not sections:
-            return "OntologyViolations(none)"
-        return "OntologyViolations(\n  " + "\n  ".join(sections) + "\n)"
