@@ -54,9 +54,9 @@ def config_logging():
 
 def main(env_path=None):
     global CONFIG_INITIALIZED
-    if CONFIG_INITIALIZED:
+    environment = os.getenv("ENVIRONMENT")
+    if CONFIG_INITIALIZED and CONFIG_INITIALIZED == environment:
         return
-    else:
-        load_env_files(env_path)
-        config_logging()
-        CONFIG_INITIALIZED = True
+    load_env_files(env_path)
+    config_logging()
+    CONFIG_INITIALIZED = os.getenv("ENVIRONMENT")
