@@ -1,8 +1,6 @@
 from neuro.base import nfx
-from neuro.base.schema import Metaproperties, Violations
+from neuro.base.schema import Metaproperties, ONTOLOGY_OBJECTS, Violations
 from neuro.utils import exceptions, terminal_style
-
-ONTOLOGY_OBJECTS = ("OntologyNode", "OntologyRelationship", "OntologyProperty")
 
 
 class OntologyValidator:
