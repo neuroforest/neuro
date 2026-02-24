@@ -6,7 +6,7 @@ import pytest
 
 
 
-@pytest.mark.integration
+
 class TestNeuroBase:
     def test_connectivity(self, nb):
         nb.driver.verify_connectivity()
@@ -16,7 +16,6 @@ class TestNeuroBase:
         assert isinstance(count, int)
 
 
-@pytest.mark.integration
 class TestNodeAccessor:
     def test_get_not_found(self, nb):
         """Getting a nonexistent neuro.id raises ValueError."""

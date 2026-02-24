@@ -8,6 +8,8 @@ from neuro.core.data.dict import DictUtils
 from neuro.core.data.str import Uuid
 from neuro.utils import terminal_style
 
+ONTOLOGY_OBJECTS = ("OntologyNode", "OntologyRelationship", "OntologyProperty")
+
 
 class Metaproperty:
     """
@@ -20,6 +22,7 @@ class Metaproperty:
         self.property = metaproperty_dict["property_object"]
         self.property_type = metaproperty_dict["property_type"]
         self.relationship_type = metaproperty_dict["relationship_type"]
+        self.deep_node = metaproperty_dict["deep_node"]
 
     def __repr__(self):
         return (f"<Metaproperty \"{self.label}\" type={self.property_type} "
@@ -40,15 +43,16 @@ class Metaproperty:
         """Check property value. Returns None if valid, reason string if invalid."""
         check_map = {
             "DateTime": self.check_datetime,
+            "Label": self.check_label,
             "OntologyProperty": self.check_ontology_property,
-            "String": str.isalpha,
+            "String": lambda v: isinstance(v, str),
             "Title": Tiddler.is_valid_title,
             "Uuid": Uuid.is_valid_uuid_v4
         }
         handler = check_map.get(self.property_type)
 
         if not handler:
-            return None
+            return f"no check for type {self.property_type}"
 
         # noinspection PyArgumentList
         if handler(property_value):
@@ -57,6 +61,20 @@ class Metaproperty:
 
     def check_datetime(self, property_value):
         return isinstance(property_value, neo4j.time.DateTime)
+
+    def check_label(self, property_value):
+        import re
+        if not isinstance(property_value, str):
+            return False
+        patterns = {
+            "OntologyNode": r"^[A-Z][a-zA-Z]*$",
+            "OntologyRelationship": r"^[A-Z][A-Z_]*$",
+            "OntologyProperty": r"^[a-z][a-z._-]*$",
+        }
+        pattern = patterns.get(self.deep_node)
+        if not pattern:
+            raise ValueError(f"invalid deep_node: {self.deep_node}")
+        return bool(re.match(pattern, property_value))
 
     def check_ontology_property(self, property_value):
         return False
@@ -87,6 +105,9 @@ class Metaproperties(UserDict):
         MATCH (iop:OntologyNode {{label: "OntologyProperty"}})
         MATCH (op)-[:SUBCLASS_OF*0..]->(iop)
 
+        OPTIONAL MATCH (ion)-[:SUBCLASS_OF*0..]->(root:OntologyNode)
+        WHERE root.label IN {list(ONTOLOGY_OBJECTS)}
+
         MATCH (on)-[r]-(p)
         WHERE type(r) = or.label AND op.label IN labels(p)
         RETURN
@@ -95,7 +116,8 @@ class Metaproperties(UserDict):
             p as property_object,
             type(r) as relationship_type,
             op.label as property_type,
-            p.label as property;
+            p.label as property,
+            root.label as deep_node
         """
         data = nb.get_data(query)
         metaproperties = cls(node_label)

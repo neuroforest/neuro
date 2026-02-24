@@ -1,7 +1,15 @@
+from pathlib import Path
+
 import pytest
 
 from neuro.base import NeuroBase
 from neuro.utils.internal_utils import get_path
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if Path(__file__).parent in Path(item.fspath).parents:
+            item.add_marker(pytest.mark.integration)
 
 
 @pytest.fixture
