@@ -161,6 +161,11 @@ class Tiddler(Node):
         return cls(tid_title=tid_title, fields=fields)
 
     @staticmethod
+    def is_valid_title(tid_title):
+        """Check that a tiddler title contains no illegal characters: {[|]}"""
+        return not any(c in tid_title for c in "{[|]}")
+
+    @staticmethod
     def get_tid_file_name(tid_title):
         """
         Replace special characters in the file name, for example: ':', '/' ,'\', ...
