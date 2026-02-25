@@ -14,5 +14,5 @@ class Uuid:
         try:
             uuid_obj = uuid.UUID(uuid_string)
             return uuid_obj.version == 4
-        except ValueError:
+        except (ValueError, AttributeError):
             return False
