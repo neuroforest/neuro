@@ -23,60 +23,60 @@ class TestCheckUuid:
     mp = _make_metaproperty("Uuid")
 
     def test_valid(self):
-        assert self.mp.check("550e8400-e29b-41d4-a716-446655440000") is None
+        assert self.mp.check("550e8400-e29b-41d4-a716-446655440000")
 
     def test_wrong_version(self):
         # UUID v1
-        assert self.mp.check("550e8400-e29b-11d4-a716-446655440000") is not None
+        assert not self.mp.check("550e8400-e29b-11d4-a716-446655440000")
 
     def test_not_a_uuid(self):
-        assert self.mp.check("not-a-uuid") is not None
+        assert not self.mp.check("not-a-uuid")
 
     def test_not_a_string(self):
-        assert self.mp.check(123) is not None
+        assert not self.mp.check(123)
 
 
 class TestCheckString:
     mp = _make_metaproperty("String")
 
     def test_valid(self):
-        assert self.mp.check("hello") is None
+        assert self.mp.check("hello")
 
     def test_integer(self):
-        assert self.mp.check(42) is not None
+        assert not self.mp.check(42)
 
     def test_none(self):
-        assert self.mp.check(None) is not None
+        assert not self.mp.check(None)
 
 
 class TestCheckLabel:
     def test_node_valid(self):
         mp = _make_metaproperty("Label", "OntologyNode")
-        assert mp.check("Tiddler") is None
+        assert mp.check("Tiddler")
 
     def test_node_lowercase(self):
         mp = _make_metaproperty("Label", "OntologyNode")
-        assert mp.check("tiddler") is not None
+        assert not mp.check("tiddler")
 
     def test_node_with_hyphen(self):
         mp = _make_metaproperty("Label", "OntologyNode")
-        assert mp.check("bad-label") is not None
+        assert not mp.check("bad-label")
 
     def test_relationship_valid(self):
         mp = _make_metaproperty("Label", "OntologyRelationship")
-        assert mp.check("PARENT_OF") is None
+        assert mp.check("PARENT_OF")
 
     def test_relationship_lowercase(self):
         mp = _make_metaproperty("Label", "OntologyRelationship")
-        assert mp.check("parent_of") is not None
+        assert not mp.check("parent_of")
 
     def test_property_valid(self):
         mp = _make_metaproperty("Label", "OntologyProperty")
-        assert mp.check("neuro.id") is None
+        assert mp.check("neuro.id")
 
     def test_property_uppercase(self):
         mp = _make_metaproperty("Label", "OntologyProperty")
-        assert mp.check("Neuro") is not None
+        assert not mp.check("Neuro")
 
 
 class TestCheckDateTime:
@@ -84,16 +84,14 @@ class TestCheckDateTime:
 
     def test_valid(self):
         dt = neo4j.time.DateTime(2025, 1, 1, 0, 0, 0)
-        assert self.mp.check(dt) is None
+        assert self.mp.check(dt)
 
     def test_string(self):
-        assert self.mp.check("2025-01-01") is not None
+        assert not self.mp.check("2025-01-01")
 
 
 class TestCheckUnknownType:
     mp = _make_metaproperty("BogusType")
 
-    def test_returns_reason(self):
-        result = self.mp.check("anything")
-        assert result is not None
-        assert "no check" in result
+    def test_returns_false(self):
+        assert not self.mp.check("anything")
