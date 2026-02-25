@@ -42,6 +42,7 @@ repository = "https://github.com/neuroforest/neuro"
 markers = [
     "integration: integration tests (TW5 webserver API and NeuroBase)",
     "e2e: end-to-end tests",
+    "unit: unit tests (no database or external dependencies)",
 ]
 
 [tool.setuptools.packages.find]
