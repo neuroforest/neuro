@@ -40,24 +40,19 @@ class Metaproperty:
         })
 
     def check(self, property_value):
-        """Check property value. Returns None if valid, reason string if invalid."""
+        """Check if property value is valid. Returns True if valid, False otherwise."""
         check_map = {
             "DateTime": self.check_datetime,
             "Label": self.check_label,
             "OntologyProperty": self.check_ontology_property,
             "String": lambda v: isinstance(v, str),
             "Title": Tiddler.is_valid_title,
-            "Uuid": Uuid.is_valid_uuid_v4
+            "Uuid": Uuid.is_valid_uuid_v4,
         }
         handler = check_map.get(self.property_type)
-
         if not handler:
-            return f"no check for type {self.property_type}"
-
-        # noinspection PyArgumentList
-        if handler(property_value):
-            return None
-        return f"expected {self.property_type}, got {property_value}"
+            return False
+        return bool(handler(property_value))
 
     def check_datetime(self, property_value):
         return isinstance(property_value, neo4j.time.DateTime)
@@ -141,8 +136,9 @@ class Metaproperties(UserDict):
             if property_key not in self.data:
                 violations.undefined_properties.append(property_key)
             else:
-                reason = self.data[property_key].check(property_value)
-                if reason:
+                mp = self.data[property_key]
+                if not mp.check(property_value):
+                    reason = f"expected {mp.property_type}, got {property_value}"
                     violations.invalid_properties.append((property_key, reason))
 
         for p in self.data.values():
