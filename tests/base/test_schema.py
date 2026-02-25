@@ -2,7 +2,10 @@
 Unit tests for neuro.base.schema — property value validation.
 """
 
+import pytest
 import neo4j.time
+
+pytestmark = pytest.mark.unit
 
 from neuro.base.schema import Metaproperty
 
