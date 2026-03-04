@@ -62,7 +62,7 @@ def integrate_local(tid_title):
                     break
 
 
-def integrate_system_files(port):
+def integrate_system_files(port, verbose=True):
     update_tids = False
     root_file_tiddler_list = tw_get.tiddler_list("[prefix[/]] [prefix[~]]", port=port)
     tiddler_list_to_update = TiddlerList()
@@ -88,8 +88,8 @@ def integrate_system_files(port):
                 if tiddler.fields["local"] != f"file://{path}":
                     print(f"Incorrect local path for {terminal_style.BOLD}{path}{terminal_style.RESET}")
         else:
-            pass
-            print(f"Missing file: {path}")
+            if verbose:
+                print(f"Missing file: {path}")
 
     if update_tids:
         width = min([max([len(tiddler.title) for tiddler in tiddler_list_to_update]), 24])
@@ -181,7 +181,7 @@ def cli(ctx, tid_title, img, quality, port):
 
     if quality:
         with Console().status("Integrating system files...", spinner="dots"):
-            integrate_system_files(port)
+            integrate_system_files(port, verbose=False)
             validated = check_local_integration(port)
         return validated
 
