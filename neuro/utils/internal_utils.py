@@ -12,7 +12,7 @@ from neuro.utils import exceptions
 
 
 BASE_PATHS = {
-    "app": "APP",
+    "build": "BUILD",
     "archive": "ARCHIVE",
     "cache": "NF_CACHE",
     "design": "DESIGN",
