@@ -14,6 +14,7 @@ from neuro.utils import exceptions
 BASE_PATHS = {
     "app": "APP",
     "archive": "ARCHIVE",
+    "cache": "NF_CACHE",
     "design": "DESIGN",
     "desktop": "DESKTOP",
     "logs": "LOGS",
