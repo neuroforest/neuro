@@ -4,7 +4,13 @@ import subprocess
 import time
 
 
-def get_free_port(host="127.0.0.1"):
+def get_free_port(host="127.0.0.1", start=0, end=0):
+    """Find a free port. If start/end are given, search within that range."""
+    if start and end:
+        for port in range(start, end + 1):
+            if not is_port_in_use(port, host):
+                return port
+        raise OSError(f"No free port in range {start}-{end}")
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((host, 0))
         return s.getsockname()[1]
