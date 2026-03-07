@@ -100,23 +100,24 @@ def load_env_files(env_path):
             resolve_xdg_paths()
             resolve_user_paths()
 
+            nf_config = os.environ.get("NF_CONFIG", "")
+            user_env_path = os.path.join(nf_config, ".env.local")
+            dotenv.load_dotenv(user_env_path, override=True)
+            logging.debug(f"Setting env {user_env_path}")
+
             if os.getenv("ENVIRONMENT") == "TESTING":
                 testing_env_path = os.path.abspath(".env.testing")
                 if os.path.exists(testing_env_path):
                     dotenv.load_dotenv(testing_env_path, override=True)
                     logging.debug(f"Setting env {testing_env_path}")
-            else:
-                nf_config = os.environ.get("NF_CONFIG", "")
-                user_env_path = os.path.join(nf_config, ".env.local")
-                dotenv.load_dotenv(user_env_path, override=True)
-                logging.debug(f"Setting env {user_env_path}")
         else:
-            if os.getenv("ENVIRONMENT") == "TESTING":
+            environment = os.getenv("ENVIRONMENT")
+            if environment == "TESTING":
                 testing_env_path = os.path.abspath(".env.testing")
                 if os.path.exists(testing_env_path):
                     dotenv.load_dotenv(testing_env_path, override=True)
                     logging.debug(f"Setting env {testing_env_path}")
-            else:
+            elif environment == "DEVELOP":
                 env_path = os.path.abspath(".env.local")
                 dotenv.load_dotenv(env_path, override=True)
                 logging.debug(f"Setting env {env_path}")
@@ -127,7 +128,17 @@ def config_logging():
     log_format = os.getenv("LOGGING_FORMAT")
 
     log_level = getattr(logging, log_level, logging.WARNING)
-    logging.basicConfig(level=log_level, format=log_format)
+    handlers = []
+
+    if os.getenv("ENVIRONMENT") == "PRODUCTION":
+        nf_state = os.getenv("NF_STATE", "")
+        if nf_state:
+            log_dir = os.path.join(nf_state, "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, "neuroforest.log")
+            handlers.append(logging.FileHandler(log_file))
+
+    logging.basicConfig(level=log_level, format=log_format, handlers=handlers or None)
     logger = logging.getLogger(__name__)
     logger.info(f"CLI Logging initialized with level {logger.getEffectiveLevel()}")
 
