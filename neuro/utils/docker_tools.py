@@ -13,6 +13,27 @@ from neuro.core import Dir
 from neuro.utils import internal_utils, time_utils
 
 
+def verify_access():
+    """Check that Docker is running and the current user can connect."""
+    result = subprocess.run(
+        ["docker", "info"], capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.lower()
+        if "permission denied" in stderr:
+            raise SystemExit(
+                "Permission denied connecting to Docker.\n"
+                "Add your user to the docker group:\n\n"
+                "  sudo usermod -aG docker $USER\n\n"
+                "Then log out and back in."
+            )
+        raise SystemExit(
+            "Docker daemon is not running.\n"
+            "Start it with:\n\n"
+            "  sudo systemctl start docker"
+        )
+
+
 class Container:
     def __init__(self, name=None, archive=None):
         self.name = name
