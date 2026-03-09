@@ -27,6 +27,7 @@ RESET = "\033[0m"
 
 SUCCESS = GREEN + "✔" + RESET
 FAIL = RED + "✘" + RESET
+SKIP = YELLOW + "–" + RESET
 
 
 def header(text: str) -> None:

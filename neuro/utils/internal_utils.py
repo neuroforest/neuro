@@ -20,6 +20,7 @@ BASE_PATHS = {
     "logs": "LOGS",
     "neuro": "NEURO",
     "nf": "NF_DIR",
+    "pkg": "PKG",
     "resources": "RESOURCES",
     "storage": "STORAGE",
     "tw5": "TW5",
