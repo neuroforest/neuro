@@ -8,6 +8,8 @@ import os
 import urllib.parse
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from neuro.utils import network_utils, exceptions
 from neuro.core.data.dict import DictUtils
@@ -31,6 +33,8 @@ class API:
         self.response = requests.Response()
         self.parsed_response = dict()
         self.session = requests.Session()
+        retry = Retry(total=3, backoff_factor=0.5, connect=0, status_forcelist=[502, 503, 504])
+        self.session.mount("http://", HTTPAdapter(max_retries=retry))
 
     def __enter__(self):
         if not network_utils.is_port_in_use(self.port, self.host):
@@ -66,8 +70,8 @@ class API:
                 "parsed": self.parsed_response,
                 **self.response.__dict__
             }
-        except exceptions.NoAPI:
-            return ""
+        except (exceptions.NoAPI, requests.ConnectionError) as e:
+            raise exceptions.NoAPI(f"Lost connection to {self.host}:{self.port}: {e}") from e
 
     def parse(self):
         # Getting the response content type.

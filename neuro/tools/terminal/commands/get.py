@@ -4,6 +4,7 @@ API GET command-line interface.
 
 import click
 
+from neuro.utils import exceptions
 from neuro.tools.terminal.cli import pass_environment
 from neuro.tools.tw5api import tw_get
 
@@ -26,5 +27,8 @@ def get_tiddler(tid_title):
 @click.argument("resource", required=True)
 @pass_environment
 def cli(ctx, resource):
-    fields = get_tiddler(resource)
+    try:
+        fields = get_tiddler(resource)
+    except exceptions.NoAPI as e:
+        raise click.ClickException(str(e))
     ctx.log(fields)
