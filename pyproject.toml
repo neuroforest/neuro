@@ -21,15 +21,19 @@ dependencies = [
     "psutil>=5.9.7",
     "pyexiv2>=2.15.3",
     "pyperclip>=1.9.0",
-    "pytest>=7.4.4",
     "python-dotenv>=1.0.1",
     "python-magic>=0.4.27",
     "pytz>=2024.1",
     "requests>=2.31.0",
     "rich>=13.9.4",
-    "ruff>=0.14.13",
     "tqdm>=4.66.1",
     "urllib3>=2.1.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.4",
+    "ruff>=0.14.13",
 ]
 
 [project.scripts]
