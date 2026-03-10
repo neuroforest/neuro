@@ -18,6 +18,7 @@ TERMINAL_LIGHT = 122
 BOLD = "\033[1m"
 
 # COLOR CODES
+ORANGE = "\033[38;5;208m"
 BASE = "\033[1;37m"
 GREEN = "\33[0;32m"
 RED = "\033[0;31m"
@@ -32,9 +33,9 @@ SKIP = YELLOW + "–" + RESET
 
 def header(text: str) -> None:
     w = os.get_terminal_size().columns if os.isatty(1) else 80
-    print(f"\033[38;5;208m╭{'─'*(w-2)}╮")
-    print(f"│\033[1;37m{text.center(w-2)}\033[38;5;208m│")
-    print(f"╰{'─'*(w-2)}╯\033[0m")
+    print(f"{ORANGE}╭{'─'*(w-2)}╮")
+    print(f"{ORANGE}│{RESET}{BOLD}{text.center(w-2)}{RESET}{ORANGE}│")
+    print(f"╰{'─'*(w-2)}╯{RESET}")
 
 
 @contextmanager
