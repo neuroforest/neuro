@@ -96,6 +96,9 @@ def load_env_files(env_path):
         dotenv.load_dotenv(default_env_path, override=True)
         logging.debug(f"Setting env {default_env_path}")
 
+        if not os.getenv("ENVIRONMENT"):
+            os.environ["ENVIRONMENT"] = "DEVELOP"
+
         if mode == "system":
             resolve_xdg_paths()
             resolve_user_paths()
