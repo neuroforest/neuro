@@ -93,7 +93,7 @@ def load_env_files(env_path):
 
     with build_utils.chdir(env_path):
         default_env_path = os.path.abspath(".env")
-        dotenv.load_dotenv(default_env_path, override=True)
+        dotenv.load_dotenv(default_env_path)
         logging.debug(f"Setting env {default_env_path}")
 
         if not os.getenv("ENVIRONMENT"):
