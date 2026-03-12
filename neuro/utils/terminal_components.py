@@ -6,17 +6,28 @@ from neuro.core.file.text import Text
 from neuro.utils import terminal_style
 
 
-def bool_prompt(question):
+def bool_prompt(question, default=None):
     """
     Bool prompt - yes converts to True, no to False.
     :param question: question to be assessed
+    :param default: default value when Enter is pressed (True, False, or None for no default)
     :return: bool
     """
+    if default is True:
+        hint = "(Y/n)"
+    elif default is False:
+        hint = "(y/N)"
+    else:
+        hint = "(y/n)"
     while True:
-        text = terminal_style.get_colored(f"{question} (y/n)", "BOLD")
+        text = terminal_style.get_colored(f"{question} {hint}", "BOLD")
         res = input(text)
         if res.lower() == "y":
             return True
+        elif res.lower() == "n":
+            return False
+        elif not res and default is not None:
+            return default
         elif not res:
             continue
         else:
