@@ -6,11 +6,11 @@ Before a wiki is archived, certain criteria must be satisfied.
 
 import os
 import json
+from abc import ABC, abstractmethod
 
 import click
 import pyperclip
-from rich.console import Console
-import tqdm
+from rich.live import Live
 
 from neuro.core.tid import TiddlerList
 from neuro.core.data.dict import DictUtils
@@ -19,266 +19,221 @@ from neuro.tools.terminal.cli import pass_environment
 from neuro.utils import exceptions, terminal_components, terminal_style
 
 
-def remove_ghost_tiddlers(port):
-    tid_titles = tw_get.tid_titles("[search:title[Draft of ']!has[draft.of]]", port=port)
-    for tid_title in tid_titles:
-        tw_del.tiddler(tid_title, port=port)
-        print(f"Removed {tid_title}")
+class QACheck(ABC):
+    name: str
+
+    def __init__(self, port):
+        self.port = port
+
+    @abstractmethod
+    def run(self) -> bool: ...
 
 
-def resolve_neuro_ids(port, verbose=False):
-    resolved = True
+class GhostTiddlers(QACheck):
+    name = "Ghost Tiddlers"
 
-    # Add neuro.id
-    unidentified = tw_get.tiddler_list("[!is[system]!has[neuro.id]]", port=port)
-    if unidentified:
-        print("Adding neuro.id fields:")
-        width = max([len(tiddler.title) for tiddler in unidentified])
-        with tqdm.tqdm(total=len(unidentified)) as pbar:
-            for tiddler in unidentified:
-                pbar.set_description(tiddler.title.ljust(width))
-                tw_put.tiddler(tiddler, port=port)
-                pbar.update(1)
-            pbar.set_description("")
-
-    # Find potential neuro.id duplicates
-    all_nids = tw_get.filter_output("[has[neuro.id]get[neuro.id]]", port=port)
-    seen = set()
-    duplicates = set()
-    for nid in all_nids:
-        if nid in seen:
-            duplicates.add(nid)
-        else:
-            seen.add(nid)
-
-    if duplicates:
-        resolved = False
-        if verbose:
-            print("The following neuro.id conflicts ware found")
-            duplicates = list(duplicates)
-            for i in range(len(duplicates)):
-                nid = duplicates[i]
-                tid_titles = tw_get.filter_output(f"[search:neuro.id:literal[{nid}]]", port=port)
-                print(f"{i+1}) {nid}:\n\t{'\n\t'.join(tid_titles)}")
-
-    if not all([len(nid) == 36 for nid in seen]):
-        resolved = False
-        print("neuro.id length variability detected")
-
-    if resolved:
-        print(f"{terminal_style.SUCCESS} Neuro ID")
-    else:
-        print(f"{terminal_style.FAIL} Neuro ID")
-
-    return resolved
+    def run(self) -> bool:
+        tid_titles = tw_get.tid_titles("[search:title[Draft of ']!has[draft.of]]", port=self.port)
+        for tid_title in tid_titles:
+            tw_del.tiddler(tid_title, port=self.port)
+            print(f"Removed {tid_title}")
+        return True
 
 
-def set_roles(port):
-    role_pairs = dict()
-    for tid_tag, role in json.loads(os.getenv("ROLE_DICT")).items():
-        tiddler_list = tw_get.tiddler_list(f"[tag[{tid_tag}]!has[neuro.role]]", port=port)
-        for tiddler in tiddler_list:
-            role_pairs[tiddler.title] = role
+class ObjectSets(QACheck):
+    name = "Object Sets"
 
-    if role_pairs:
-        print(f"\nSetting roles for {len(role_pairs)} tiddlers")
-        width = max([len(tid_title) for tid_title in role_pairs])
-        with tqdm.tqdm(total=len(role_pairs)) as pbar:
-            for tid_title, role in role_pairs.items():
-                pbar.set_description(tid_title.ljust(width))
-                tiddler = tw_get.tiddler(tid_title, port=port)
-                tiddler.add_fields({"neuro.role": role})
-                tw_put.tiddler(tiddler, port=port)
-                pbar.update(1)
-            pbar.set_description("")
+    def run(self) -> bool:
+        update_list = TiddlerList()
+        for object_set in json.loads(os.getenv("OBJECT_SETS")):
+            regexp_pattern = r"^\S+\s\S+$"
+            tiddler_list = tw_get.tiddler_list(
+                f"[prefix[.]suffix[ {object_set}]!has[neuro.role]regexp[{regexp_pattern}]]",
+                port=self.port,
+            )
+            update_list.extend(tiddler_list)
 
-    print(f"{terminal_style.SUCCESS} Roles")
-
-
-def set_object_sets(port):
-    update_list = TiddlerList()
-    for object_set in json.loads(os.getenv("OBJECT_SETS")):
-        regexp_pattern = r"^\S+\s\S+$"
-        tiddler_list = tw_get.tiddler_list(f"[prefix[.]suffix[ {object_set}]!has[neuro.role]"
-                                           f"regexp[{regexp_pattern}]]", port=port)
-        update_list.extend(tiddler_list)
-
-    if update_list:
-        print(f"\nObject sets: {len(update_list)}")
-        width = max([len(tiddler.title) for tiddler in update_list])
-        with tqdm.tqdm(total=len(update_list)) as pbar:
+        if update_list:
+            print(f"Object sets: {len(update_list)}")
             for tiddler in update_list:
-                pbar.set_description(tiddler.title.ljust(width))
-                pbar.update(1)
                 tiddler.add_fields({"neuro.role": "model"})
-                tw_put.tiddler(tiddler, port=port)
-            pbar.set_description("")
-    print(f"{terminal_style.SUCCESS} Object sets")
+                tw_put.tiddler(tiddler, port=self.port)
+
+        print(f"{terminal_style.SUCCESS} Object sets")
+        return True
 
 
-def validate_tags(port, interactive=False, verbose=True):
-    """
-    Validate every non-system tiddler to have a tag that is itself a tiddler.
-    :param port:
-    :param interactive:
-    :param verbose:
-    :return:
-    """
-    validated = True
-    tfs = tw_get.tw_fields(["title", "tags"], "[!is[system]]", port=port)
-    transformed_index = dict()
-    for tf in tfs:
-        tid_title = tf["title"]
-        transformed_index[tid_title] = tf
+class Roles(QACheck):
+    name = "Roles"
 
-    no_tags = list()
-    for tid_title, tf in transformed_index.items():
-        invalid_tags = list()
-        if "tags" not in tf or not tf["tags"]:
-            if " #" in tid_title or "Draft of " in tid_title:
-                pass
-            else:
-                no_tags.append(tid_title)
-            continue
+    def run(self) -> bool:
+        role_pairs = dict()
+        for tid_tag, role in json.loads(os.getenv("ROLE_DICT")).items():
+            tiddler_list = tw_get.tiddler_list(f"[tag[{tid_tag}]!has[neuro.role]]", port=self.port)
+            for tiddler in tiddler_list:
+                role_pairs[tiddler.title] = role
 
-        for tag in tf["tags"]:
-            if tag.startswith("$:/"):
+        if role_pairs:
+            print(f"Setting roles for {len(role_pairs)} tiddlers")
+            for tid_title, role in role_pairs.items():
+                tiddler = tw_get.tiddler(tid_title, port=self.port)
+                tiddler.add_fields({"neuro.role": role})
+                tw_put.tiddler(tiddler, port=self.port)
+
+        print(f"{terminal_style.SUCCESS} Roles")
+        return True
+
+
+class ValidateTags(QACheck):
+    name = "Tags"
+
+    def __init__(self, port, interactive=False):
+        super().__init__(port)
+        self.interactive = interactive
+
+    def run(self) -> bool:
+        validated = True
+        tfs = tw_get.tw_fields(["title", "tags"], "[!is[system]]", port=self.port)
+        transformed_index = {tf["title"]: tf for tf in tfs}
+
+        no_tags = []
+        for tid_title, tf in transformed_index.items():
+            invalid_tags = []
+            if "tags" not in tf or not tf["tags"]:
+                if " #" not in tid_title and "Draft of " not in tid_title:
+                    no_tags.append(tid_title)
                 continue
-            elif tag not in transformed_index:
-                invalid_tags.append(tag)
 
-        if invalid_tags:
+            for tag in tf["tags"]:
+                if tag.startswith("$:/"):
+                    continue
+                elif tag not in transformed_index:
+                    invalid_tags.append(tag)
+
+            if invalid_tags:
+                validated = False
+                if self.interactive:
+                    print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET} has invalid tags:")
+                    tw_actions.open_tiddler(tid_title)
+                    for tag in invalid_tags:
+                        print(f"    - {tag}")
+                    input()
+                else:
+                    print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET} has invalid tags {' | '.join(invalid_tags)}")
+
+        if no_tags:
             validated = False
-            if interactive:
-                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET} has invalid tags:")
-                tw_actions.open_tiddler(tid_title)
-                for tag in invalid_tags:
-                    print(f"    - {tag}")
-                input()
-            else:
-                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET} has invalid tags {' | '.join(invalid_tags)}")
-
-    # Resolve no tag tiddlers
-    if no_tags:
-        validated = False
-        if interactive:
-            for tid_title in no_tags:
-                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{no_tags[0]}{terminal_style.RESET} has no tags")
-                tw_actions.open_tiddler(tid_title)
-                input()
-        else:
-            no_tags_len = len(no_tags)
-            if no_tags_len == 1:
-                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{no_tags[0]}{terminal_style.RESET} has no tags")
-            else:
-                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}NOTE:{terminal_style.RESET} {no_tags_len} "
-                      f"tiddlers have no tags")
+            if self.interactive:
                 for tid_title in no_tags:
-                    print(f"    - {tid_title}")
+                    print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET} has no tags")
+                    tw_actions.open_tiddler(tid_title)
+                input()
+            else:
+                no_tags_len = len(no_tags)
+                if no_tags_len == 1:
+                    print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{no_tags[0]}{terminal_style.RESET} has no tags")
+                else:
+                    print(f"{terminal_style.YELLOW}{terminal_style.BOLD}NOTE:{terminal_style.RESET} {no_tags_len} tiddlers have no tags")
+                    for tid_title in no_tags:
+                        print(f"    - {tid_title}")
 
-    if verbose:
         if validated:
             print(f"{terminal_style.SUCCESS} Tags")
         else:
             print(f"{terminal_style.FAIL} Invalid tags")
 
-    return validated
+        return validated
 
 
-def resolve_missing_tiddlers(port, interactive=False, verbose=True):
-    validated = True
-    missing_tiddlers = tw_get.filter_output("[all[missing]!is[system]]", port=port)
-    if missing_tiddlers:
-        validated = False
-    for missing_tiddler in missing_tiddlers:
-        backlinks = tw_get.filter_output(f"[[{missing_tiddler}]backlinks[]]", port=port)
-        for backlink in backlinks:
-            if interactive:
+class MissingTiddlers(QACheck):
+    name = "Missing Tiddlers"
+
+    def __init__(self, port, interactive=False):
+        super().__init__(port)
+        self.interactive = interactive
+
+    def run(self) -> bool:
+        validated = True
+        missing_tiddlers = tw_get.filter_output("[all[missing]!is[system]]", port=self.port)
+        if missing_tiddlers:
+            validated = False
+        for missing_tiddler in missing_tiddlers:
+            backlinks = tw_get.filter_output(f"[[{missing_tiddler}]backlinks[]]", port=self.port)
+            for backlink in backlinks:
                 print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{backlink}{terminal_style.RESET} has a broken link")
-                tw_actions.open_tiddler(backlink)
-                input()
-            else:
-                print(f"{terminal_style.YELLOW}{terminal_style.BOLD}{backlink}{terminal_style.RESET} has a broken link")
+                if self.interactive:
+                    tw_actions.open_tiddler(backlink)
+                    input()
 
-    if verbose:
         if validated:
             print(f"{terminal_style.SUCCESS} Missing tiddlers resolved")
         else:
             print(f"{terminal_style.FAIL} Missing tiddlers")
 
-    return validated
+        return validated
 
 
-class Primary:
-    def __init__(self, interactive, port, verbose):
-        self.validated = True
-        self.port = port
-        self.verbose = verbose
+class Primary(QACheck):
+    name = "Primary"
+
+    def __init__(self, port, interactive=False, verbose=False):
+        super().__init__(port)
         self.interactive = interactive
-        self.sorting_bin = {
-            "primary=tag": list(),
-            "primary≠tag": list(),
-            "primary∈tags": list(),
-            "primary∉tags": list(),
-            "¬∃primary∃tag": list(),
-            "¬∃primary∃tags": list(),
-            "¬∃primary¬∃tag": list(),
-            "∃primary¬∃tag": list()
-        }
-        self.simple_tfs = list()
-        self.complex_tfs = list()
+        self.verbose = verbose
+        self.validated = True
         self.lineage_integrity = True
+        self.sorting_bin = {
+            "primary=tag": [],
+            "primary≠tag": [],
+            "primary∈tags": [],
+            "primary∉tags": [],
+            "¬∃primary∃tag": [],
+            "¬∃primary∃tags": [],
+            "¬∃primary¬∃tag": [],
+            "∃primary¬∃tag": [],
+        }
 
-    def analyse(self):
+    def _reset_bins(self):
+        for key in self.sorting_bin:
+            self.sorting_bin[key] = []
+
+    def _analyse(self):
+        self._reset_bins()
         tw_fields = tw_get.tw_fields(["title", "neuro.primary", "tags"], "[!is[system]]", port=self.port)
         for tf in tw_fields:
-            tags = list()
-            if "tags" in tf:  # Short-circuiting
-                tags = tf["tags"]
+            tags = tf.get("tags", [])
 
             if not tags:
-                if "neuro.primary" in tf:
-                    self.sorting_bin["∃primary¬∃tag"].append(tf)
-                else:
-                    self.sorting_bin["¬∃primary¬∃tag"].append(tf)
+                key = "∃primary¬∃tag" if "neuro.primary" in tf else "¬∃primary¬∃tag"
+                self.sorting_bin[key].append(tf)
                 continue
 
             if "neuro.primary" not in tf:
-                if len(tags) == 1:
-                    self.sorting_bin["¬∃primary∃tag"].append(tf)
-                else:
-                    self.sorting_bin["¬∃primary∃tags"].append(tf)
+                key = "¬∃primary∃tag" if len(tags) == 1 else "¬∃primary∃tags"
+                self.sorting_bin[key].append(tf)
             else:
                 np = tf["neuro.primary"]
                 if np in tags:
-                    if len(tags) == 1:
-                        self.sorting_bin["primary=tag"].append(tf)
-                    else:
-                        self.sorting_bin["primary∈tags"].append(tf)
+                    key = "primary=tag" if len(tags) == 1 else "primary∈tags"
                 else:
-                    if len(tags) == 1:
-                        self.sorting_bin["primary≠tag"].append(tf)
-                    else:
-                        self.sorting_bin["primary∉tags"].append(tf)
+                    key = "primary≠tag" if len(tags) == 1 else "primary∉tags"
+                self.sorting_bin[key].append(tf)
 
         if self.verbose:
-            counter = dict()
-            for key in self.sorting_bin:
-                counter[key] = len(self.sorting_bin[key])
-
+            counter = {key: len(val) for key, val in self.sorting_bin.items()}
             print("")
             print("-" * 30)
             DictUtils.represent(counter)
 
-    def verify_lineage(self):
+    def _verify_lineage(self):
         lineage_root = "$:/plugins/neuroforest/front/tags/Contents"
         lineage = tw_get.lineage(lineage_root, port=self.port)
-        cycles = list()
+        cycles = []
         for tid_title, lineage_item in lineage.items():
             if not lineage_item:
                 pass
             elif len(lineage_item) >= 20:
-                cycle = list()
+                cycle = []
                 for tt in lineage_item:
                     if tt not in cycle:
                         cycle.append(tt)
@@ -286,48 +241,34 @@ class Primary:
                     cycles.append(cycle)
                 self.lineage_integrity = False
             elif lineage_item[0] != lineage_root:
-                if lineage_item[0].startswith("$:/"):
-                    # These are tiddlers rooted in system
-                    pass
-                else:
+                if not lineage_item[0].startswith("$:/"):
                     self.lineage_integrity = False
-                    print(
-                        f"Lineage problem for tiddler {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}:")
+                    print(f"Lineage problem for tiddler {terminal_style.YELLOW}{terminal_style.BOLD}{tid_title}{terminal_style.RESET}:")
                     print(" - ".join(lineage_item))
-            else:
-                pass
 
-        # Resolve cycles
         if cycles:
             print("Cycles found:")
             for cycle in cycles:
                 print("    " + " - ".join(cycle))
 
-    def resolve_simple(self):
+    def _resolve_simple(self):
         simple_tfs = self.sorting_bin["primary≠tag"] + self.sorting_bin["¬∃primary∃tag"]
-        if len(simple_tfs) > 0:
-            print(f"\nAutomated corrections: {len(simple_tfs)}")
-        else:
+        if not simple_tfs:
             return
+        print(f"Automated corrections: {len(simple_tfs)}")
 
-        width = min([max([len(tf["title"]) for tf in simple_tfs]), 24])
-        with tqdm.tqdm(total=len(simple_tfs)) as pbar:
-            for tf in simple_tfs:
-                title = tf["title"]
-                tiddler = tw_get.tiddler(title, port=self.port)
-                tiddler.fields["neuro.primary"] = tf["tags"][0]
-                if self.verbose:
-                    if "primary" in tf:
-                        print(f"Resolved simple error: {title}")
-                    else:
-                        print(f"Added primary: {title}")
+        for tf in simple_tfs:
+            title = tf["title"]
+            tiddler = tw_get.tiddler(title, port=self.port)
+            tiddler.fields["neuro.primary"] = tf["tags"][0]
+            if self.verbose:
+                if "primary" in tf:
+                    print(f"  Resolved simple error: {title}")
                 else:
-                    pbar.set_description(title.ljust(width)[:width])
-                    pbar.update(1)
-                tw_put.tiddler(tiddler, port=self.port)
-            pbar.set_description("")
+                    print(f"  Added primary: {title}")
+            tw_put.tiddler(tiddler, port=self.port)
 
-    def resolve_complex(self):
+    def _resolve_complex(self):
         complex_tfs = self.sorting_bin["primary∉tags"] + self.sorting_bin["¬∃primary∃tags"]
         if complex_tfs and not self.interactive:
             self.validated = False
@@ -335,7 +276,7 @@ class Primary:
 
         for tf in complex_tfs:
             tid_title = tf["title"]
-            tid_tags = sorted(tf['tags'])
+            tid_tags = sorted(tf["tags"])
             tw_actions.open_tiddler(tid_title)
             print(f"\n{'-' * 30}\nSetting primary for {terminal_style.BOLD}{tf['title']}{terminal_style.RESET}", end="")
             if "neuro.primary" in tf:
@@ -352,15 +293,24 @@ class Primary:
             else:
                 self.validated = False
 
-    def report(self):
-        self.analyse()
+    def run(self) -> bool:
+        self._analyse()
+        self._verify_lineage()
+        self._resolve_simple()
+        self._resolve_complex()
+
+        # Re-analyse to verify corrections took effect
+        self._analyse()
+
         if self.sorting_bin["∃primary¬∃tag"]:
             self.validated = False
             print(f"Rare error: {self.sorting_bin['∃primary¬∃tag']}")
-        if self.simple_tfs:
+        remaining_simple = self.sorting_bin["primary≠tag"] + self.sorting_bin["¬∃primary∃tag"]
+        if remaining_simple:
             self.validated = False
             raise exceptions.InternalError("Automated corrections")
-        if self.complex_tfs:
+        remaining_complex = self.sorting_bin["primary∉tags"] + self.sorting_bin["¬∃primary∃tags"]
+        if remaining_complex:
             self.validated = False
             print(f"{terminal_style.FAIL} Manual corrections were not resolved")
         if not self.lineage_integrity:
@@ -370,12 +320,52 @@ class Primary:
         if self.validated:
             print(f"{terminal_style.SUCCESS} Primary resolved")
 
-    def run(self):
-        self.analyse()
-        self.resolve_simple()
-        self.resolve_complex()
-        self.report()
         return self.validated
+
+
+class NeuroIDs(QACheck):
+    name = "Neuro IDs"
+
+    def __init__(self, port, verbose=False):
+        super().__init__(port)
+        self.verbose = verbose
+
+    def run(self) -> bool:
+        resolved = True
+
+        unidentified = tw_get.tiddler_list("[!is[system]!has[neuro.id]]", port=self.port)
+        if unidentified:
+            print(f"Adding neuro.id fields: {len(unidentified)}")
+            for tiddler in unidentified:
+                tw_put.tiddler(tiddler, port=self.port)
+
+        all_nids = tw_get.filter_output("[has[neuro.id]get[neuro.id]]", port=self.port)
+        seen = set()
+        duplicates = set()
+        for nid in all_nids:
+            if nid in seen:
+                duplicates.add(nid)
+            else:
+                seen.add(nid)
+
+        if duplicates:
+            resolved = False
+            if self.verbose:
+                print("The following neuro.id conflicts were found")
+                for i, nid in enumerate(duplicates):
+                    tid_titles = tw_get.filter_output(f"[search:neuro.id:literal[{nid}]]", port=self.port)
+                    print(f"{i + 1}) {nid}:\n\t{'\n\t'.join(tid_titles)}")
+
+        if not all(len(nid) == 36 for nid in seen):
+            resolved = False
+            print("neuro.id length variability detected")
+
+        if resolved:
+            print(f"{terminal_style.SUCCESS} Neuro ID")
+        else:
+            print(f"{terminal_style.FAIL} Neuro ID")
+
+        return resolved
 
 
 @click.command("qa", short_help="quality assurance")
@@ -384,25 +374,17 @@ class Primary:
 @click.option("-v", "--verbose", is_flag=True)
 @pass_environment
 def cli(ctx, interactive, port, verbose):
-    """
-    :param ctx:
-    :param interactive:
-    :param port:
-    :param verbose:
-    """
+    checks = [
+        GhostTiddlers(port),
+        ObjectSets(port),
+        Roles(port),
+        ValidateTags(port, interactive),
+        MissingTiddlers(port, interactive),
+        Primary(port, interactive, verbose),
+        NeuroIDs(port, verbose),
+    ]
 
-    remove_ghost_tiddlers(port)
-    set_object_sets(port)
-    set_roles(port)
+    with Live(redirect_stdout=True):
+        results = [check.run() for check in checks]
 
-    if interactive:
-        with Console().status("Validating tags...", spinner="dots"):
-            validate_tags(port, interactive=True, verbose=False)
-            resolve_missing_tiddlers(port, interactive=True, verbose=False)
-
-    tags_response = validate_tags(port)
-    missing_response = resolve_missing_tiddlers(port)
-    primary_response = Primary(interactive, port, verbose).run()
-    neuro_ids_response = resolve_neuro_ids(port, verbose=True)
-
-    return all([tags_response, missing_response, primary_response, neuro_ids_response])
+    return all(results)
