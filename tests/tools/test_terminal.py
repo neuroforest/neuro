@@ -30,7 +30,7 @@ class TestQa:
         from neuro.tools.terminal.commands import qa
         tid_titles = tw_get.tid_titles("[search:title[Draft of ']!has[draft.of]]", **kwargs)
         assert len(tid_titles) > 0
-        qa.remove_ghost_tiddlers(wf_qa.port)
+        qa.GhostTiddlers(wf_qa.port).run()
         tid_titles = tw_get.tid_titles("[search:title[Draft of ']!has[draft.of]]", **kwargs)
         assert len(tid_titles) == 0
 
@@ -38,14 +38,14 @@ class TestQa:
         from neuro.core.data.str import Uuid
         from neuro.tools.tw5api import tw_get
         from neuro.tools.terminal.commands import qa
-        qa.resolve_neuro_ids(wf_qa.port)
+        qa.NeuroIDs(wf_qa.port).run()
         example = tw_get.fields("Example", **kwargs)
         assert "neuro.id" in example
         assert Uuid.is_valid_uuid_v4(example["neuro.id"])
 
     def test_resolve_neuro_id_duplicate(self, wf_qa, capsys):
         from neuro.tools.terminal.commands import qa
-        qa_pass = qa.resolve_neuro_ids(port=wf_qa.port, verbose=True)
+        qa_pass = qa.NeuroIDs(wf_qa.port, verbose=True).run()
         assert not qa_pass
         stdout = capsys.readouterr().out
         assert len(stdout.splitlines()) == 5
@@ -58,7 +58,7 @@ class TestQa:
         os.environ["ROLE_DICT"] = json.dumps({
             "Taxons": "taxon"
         })
-        qa.set_roles(port=wf_qa.port)
+        qa.Roles(wf_qa.port).run()
         fields = tw_get.fields("Lysobacter enzymogenes", **kwargs)
         assert fields["neuro.role"] == "taxon"
 
@@ -66,19 +66,19 @@ class TestQa:
         from neuro.tools.tw5api import tw_get
         from neuro.tools.terminal.commands import qa
         os.environ["OBJECT_SETS"] = json.dumps(["Fundamentals"])
-        qa.set_object_sets(port=wf_qa.port)
+        qa.ObjectSets(wf_qa.port).run()
         model = tw_get.fields(". Fundamentals", **kwargs)
         assert model["neuro.role"] == "model"
 
     def test_validate_tags(self, wf_qa):
         from neuro.tools.terminal.commands import qa
-        assert qa.validate_tags(wf_qa.port)
+        assert qa.ValidateTags(wf_qa.port).run()
 
     def test_validate_tags_untagged(self, wf_qa, capsys):
         from neuro.tools.tw5api import tw_put
         from neuro.tools.terminal.commands import qa
         tw_put.fields({"title": "Untagged"}, **kwargs)
-        assert not qa.validate_tags(wf_qa.port)
+        assert not qa.ValidateTags(wf_qa.port).run()
         stdout = capsys.readouterr().out
         assert "Untagged" in stdout
         assert "has no tags" in stdout
@@ -88,7 +88,7 @@ class TestQa:
         from neuro.tools.tw5api import tw_put
         from neuro.tools.terminal.commands import qa
         tw_put.fields({"title": "Inexistent Tag", "tags": "Inexistent"}, **kwargs)
-        assert not qa.validate_tags(wf_qa.port)
+        assert not qa.ValidateTags(wf_qa.port).run()
         stdout = capsys.readouterr().out
         assert "Inexistent Tag" in stdout
         assert "has invalid tags" in stdout
@@ -96,7 +96,7 @@ class TestQa:
 
     def test_resolve_missing_tiddlers(self, wf_qa, capsys):
         from neuro.tools.terminal.commands import qa
-        assert not qa.resolve_missing_tiddlers(wf_qa.port)
+        assert not qa.MissingTiddlers(wf_qa.port).run()
         stdout = capsys.readouterr().out
         assert "Broken Link" in stdout
         assert "broken link" in stdout
