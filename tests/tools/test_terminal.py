@@ -122,9 +122,8 @@ class TestQa:
         from neuro.tools.terminal.commands import qa
         from click.testing import CliRunner
         # noinspection PyTypeChecker
-        res = CliRunner().invoke(qa.cli, ["--port", wf_qa.port], standalone_mode=False)
-        assert res.exit_code == 0
-        assert res.return_value is False
+        res = CliRunner().invoke(qa.cli, ["--port", wf_qa.port])
+        assert res.exit_code == 1
 
 
 class TestTaxon:
