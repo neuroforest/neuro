@@ -5,18 +5,32 @@ Before a wiki is archived, certain criteria must be satisfied.
 """
 
 import os
+import sys
 import json
 from abc import ABC, abstractmethod
 
 import click
 import pyperclip
-from rich.live import Live
+from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeRemainingColumn
 
 from neuro.core.tid import TiddlerList
 from neuro.core.data.dict import DictUtils
 from neuro.tools.tw5api import tw_actions, tw_del, tw_get, tw_put
 from neuro.tools.terminal.cli import pass_environment
-from neuro.utils import exceptions, terminal_components, terminal_style
+from neuro.utils import exceptions, network_utils, terminal_components, terminal_style
+
+
+def _truncate(text, max_len=32):
+    return text if len(text) <= max_len else text[:max_len - 1] + "…"
+
+
+def _progress():
+    return Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(bar_width=None),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
+    )
 
 
 class QACheck(ABC):
@@ -45,7 +59,11 @@ class ObjectSets(QACheck):
 
     def run(self) -> bool:
         update_list = TiddlerList()
-        for object_set in json.loads(os.getenv("OBJECT_SETS")):
+        object_sets_raw = os.getenv("OBJECT_SETS")
+        if not object_sets_raw:
+            print(f"{terminal_style.FAIL} OBJECT_SETS environment variable is not set")
+            return False
+        for object_set in json.loads(object_sets_raw):
             regexp_pattern = r"^\S+\s\S+$"
             tiddler_list = tw_get.tiddler_list(
                 f"[prefix[.]suffix[ {object_set}]!has[neuro.role]regexp[{regexp_pattern}]]",
@@ -54,10 +72,14 @@ class ObjectSets(QACheck):
             update_list.extend(tiddler_list)
 
         if update_list:
-            print(f"Object sets: {len(update_list)}")
-            for tiddler in update_list:
-                tiddler.add_fields({"neuro.role": "model"})
-                tw_put.tiddler(tiddler, port=self.port)
+            with _progress() as progress:
+                task = progress.add_task("Object sets", total=len(update_list))
+                for tiddler in update_list:
+                    progress.update(task, description=f"Object sets: {_truncate(tiddler.title).ljust(32)}")
+                    tiddler.add_fields({"neuro.role": "model"})
+                    tw_put.tiddler(tiddler, port=self.port)
+                    progress.advance(task)
+                progress.update(task, description="Object sets".ljust(32))
 
         print(f"{terminal_style.SUCCESS} Object sets")
         return True
@@ -68,17 +90,25 @@ class Roles(QACheck):
 
     def run(self) -> bool:
         role_pairs = dict()
-        for tid_tag, role in json.loads(os.getenv("ROLE_DICT")).items():
+        role_dict_raw = os.getenv("ROLE_DICT")
+        if not role_dict_raw:
+            print(f"{terminal_style.FAIL} ROLE_DICT environment variable is not set")
+            return False
+        for tid_tag, role in json.loads(role_dict_raw).items():
             tiddler_list = tw_get.tiddler_list(f"[tag[{tid_tag}]!has[neuro.role]]", port=self.port)
             for tiddler in tiddler_list:
                 role_pairs[tiddler.title] = role
 
         if role_pairs:
-            print(f"Setting roles for {len(role_pairs)} tiddlers")
-            for tid_title, role in role_pairs.items():
-                tiddler = tw_get.tiddler(tid_title, port=self.port)
-                tiddler.add_fields({"neuro.role": role})
-                tw_put.tiddler(tiddler, port=self.port)
+            with _progress() as progress:
+                task = progress.add_task("Roles", total=len(role_pairs))
+                for tid_title, role in role_pairs.items():
+                    progress.update(task, description=f"Roles: {_truncate(tid_title).ljust(32)}")
+                    tiddler = tw_get.tiddler(tid_title, port=self.port)
+                    tiddler.add_fields({"neuro.role": role})
+                    tw_put.tiddler(tiddler, port=self.port)
+                    progress.advance(task)
+                progress.update(task, description="Roles".ljust(32))
 
         print(f"{terminal_style.SUCCESS} Roles")
         return True
@@ -255,18 +285,22 @@ class Primary(QACheck):
         simple_tfs = self.sorting_bin["primary≠tag"] + self.sorting_bin["¬∃primary∃tag"]
         if not simple_tfs:
             return
-        print(f"Automated corrections: {len(simple_tfs)}")
 
-        for tf in simple_tfs:
-            title = tf["title"]
-            tiddler = tw_get.tiddler(title, port=self.port)
-            tiddler.fields["neuro.primary"] = tf["tags"][0]
-            if self.verbose:
-                if "primary" in tf:
-                    print(f"  Resolved simple error: {title}")
-                else:
-                    print(f"  Added primary: {title}")
-            tw_put.tiddler(tiddler, port=self.port)
+        with _progress() as progress:
+            task = progress.add_task("Primary corrections", total=len(simple_tfs))
+            for tf in simple_tfs:
+                title = tf["title"]
+                progress.update(task, description=f"Primary: {_truncate(title).ljust(32)}")
+                tiddler = tw_get.tiddler(title, port=self.port)
+                tiddler.fields["neuro.primary"] = tf["tags"][0]
+                if self.verbose:
+                    if "neuro.primary" in tf:
+                        progress.print(f"  Resolved simple error: {title}")
+                    else:
+                        progress.print(f"  Added primary: {title}")
+                tw_put.tiddler(tiddler, port=self.port)
+                progress.advance(task)
+            progress.update(task, description="Primary".ljust(32))
 
     def _resolve_complex(self):
         complex_tfs = self.sorting_bin["primary∉tags"] + self.sorting_bin["¬∃primary∃tags"]
@@ -294,13 +328,15 @@ class Primary(QACheck):
                 self.validated = False
 
     def run(self) -> bool:
+        self.validated = True
+        self.lineage_integrity = True
         self._analyse()
-        self._verify_lineage()
         self._resolve_simple()
         self._resolve_complex()
 
-        # Re-analyse to verify corrections took effect
+        # Re-analyse and verify lineage after corrections
         self._analyse()
+        self._verify_lineage()
 
         if self.sorting_bin["∃primary¬∃tag"]:
             self.validated = False
@@ -335,9 +371,13 @@ class NeuroIDs(QACheck):
 
         unidentified = tw_get.tiddler_list("[!is[system]!has[neuro.id]]", port=self.port)
         if unidentified:
-            print(f"Adding neuro.id fields: {len(unidentified)}")
-            for tiddler in unidentified:
-                tw_put.tiddler(tiddler, port=self.port)
+            with _progress() as progress:
+                task = progress.add_task("Adding neuro.id", total=len(unidentified))
+                for tiddler in unidentified:
+                    progress.update(task, description=f"neuro.id: {_truncate(tiddler.title).ljust(32)}")
+                    tw_put.tiddler(tiddler, port=self.port)
+                    progress.advance(task)
+                progress.update(task, description="neuro.id".ljust(32))
 
         all_nids = tw_get.filter_output("[has[neuro.id]get[neuro.id]]", port=self.port)
         seen = set()
@@ -384,7 +424,11 @@ def cli(ctx, interactive, port, verbose):
         NeuroIDs(port, verbose),
     ]
 
-    with Live(redirect_stdout=True):
-        results = [check.run() for check in checks]
+    host = os.getenv("HOST", "127.0.0.1")
+    if not network_utils.is_port_in_use(port, host):
+        print(f"{terminal_style.FAIL} Service not running on {host}:{port}")
+        sys.exit(1)
 
-    return all(results)
+    results = [check.run() for check in checks]
+
+    sys.exit(0 if all(results) else 1)
