@@ -46,11 +46,13 @@ def resolve_xdg_paths():
     """Set NF_CONFIG, NF_DATA, NF_STATE, NF_CACHE from XDG base directories."""
     home = Path.home()
 
+    app_name = os.environ["APP_NAME"].lower()
+
     xdg_map = {
-        "NF_CONFIG": (os.getenv("XDG_CONFIG_HOME", home / ".config"), "neuroforest"),
-        "NF_DATA": (os.getenv("XDG_DATA_HOME", home / ".local" / "share"), "neuroforest"),
-        "NF_STATE": (os.getenv("XDG_STATE_HOME", home / ".local" / "state"), "neuroforest"),
-        "NF_CACHE": (os.getenv("XDG_CACHE_HOME", home / ".cache"), "neuroforest"),
+        "NF_CONFIG": (os.getenv("XDG_CONFIG_HOME", home / ".config"), app_name),
+        "NF_DATA": (os.getenv("XDG_DATA_HOME", home / ".local" / "share"), app_name),
+        "NF_STATE": (os.getenv("XDG_STATE_HOME", home / ".local" / "state"), app_name),
+        "NF_CACHE": (os.getenv("XDG_CACHE_HOME", home / ".cache"), app_name),
     }
 
     for var, (base, subdir) in xdg_map.items():
@@ -138,7 +140,7 @@ def config_logging():
         if nf_state:
             log_dir = os.path.join(nf_state, "logs")
             os.makedirs(log_dir, exist_ok=True)
-            log_file = os.path.join(log_dir, "neuroforest.log")
+            log_file = os.path.join(log_dir, "desktop.log")
             handlers.append(logging.FileHandler(log_file))
 
     logging.basicConfig(level=log_level, format=log_format, handlers=handlers or None)
