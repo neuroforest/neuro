@@ -5,7 +5,6 @@ Before a wiki is archived, certain criteria must be satisfied.
 """
 
 import os
-import sys
 import json
 from abc import ABC, abstractmethod
 
@@ -427,8 +426,8 @@ def cli(ctx, interactive, port, verbose):
     host = os.getenv("HOST", "127.0.0.1")
     if not network_utils.is_port_in_use(port, host):
         print(f"{terminal_style.FAIL} Service not running on {host}:{port}")
-        sys.exit(1)
+        raise SystemExit(1)
 
     results = [check.run() for check in checks]
-
-    sys.exit(0 if all(results) else 1)
+    if not all(results):
+        raise SystemExit(1)
