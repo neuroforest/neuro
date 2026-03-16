@@ -84,7 +84,7 @@ def load_env_files(env_path):
     System mode:
         .env        — read-only system baseline (from NF_DIR).
         XDG paths resolved + relative user paths remapped.
-        .env.local  — per-user overrides (from $NF_CONFIG/).
+        env         — per-user overrides (from $NF_CONFIG/).
     """
     if not env_path:
         env_path = os.getenv("NF_DIR", os.getcwd())
@@ -106,7 +106,7 @@ def load_env_files(env_path):
             resolve_user_paths()
 
             nf_config = os.environ.get("NF_CONFIG", "")
-            user_env_path = os.path.join(nf_config, ".env.local")
+            user_env_path = os.path.join(nf_config, "env")
             dotenv.load_dotenv(user_env_path, override=True)
             logging.debug(f"Setting env {user_env_path}")
 
