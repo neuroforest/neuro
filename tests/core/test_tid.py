@@ -172,7 +172,10 @@ class TestWikiFolder:
         wf_path = test_file.path("output/wf-test-start")
         wf = WikiFolder(wf_path, tiddlywiki_info=test_file.get("input/tiddlywiki.info"))
         wf.start()
-        assert network_utils.is_port_in_use(wf.port, host=wf.host)
+        try:
+            assert network_utils.is_port_in_use(wf.port, host=wf.host)
+        finally:
+            wf.stop()
 
     def test_api_exposed(self, test_file):
         from neuro.core.tid import WikiFolder
@@ -180,8 +183,11 @@ class TestWikiFolder:
         wf_path = test_file.path("output/wf-test-api-exposed")
         wf = WikiFolder(wf_path, tiddlywiki_info=test_file.get("input/tiddlywiki.info"))
         wf.start()
-        response = requests.get(f"http://{wf.host}:{wf.port}/neuro/info", timeout=5)
-        assert response.status_code == 200
-        info = json.loads(response.text)
-        assert type(info["local-path"]) is str
-        assert not info["dirty"]
+        try:
+            response = requests.get(f"http://{wf.host}:{wf.port}/neuro/info", timeout=5)
+            assert response.status_code == 200
+            info = json.loads(response.text)
+            assert type(info["local-path"]) is str
+            assert not info["dirty"]
+        finally:
+            wf.stop()
