@@ -26,7 +26,7 @@ def wf_process(test_file):
         )
         wiki_folder.start()
         yield wiki_folder
-        wiki_folder.process.terminate()
+        wiki_folder.stop()
 
 
 def populate_wf(wf, fields_json):

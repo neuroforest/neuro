@@ -102,11 +102,10 @@ def migrate_neo4j_to_json(json_path):
 
 def migrate_wf_to_json(wf_path, json_path, port=8222, **kwargs):
     wf = WikiFolder(wf_path, port=port, silent=True, **kwargs)
-    process = wf.start()
-    fields_list = tw_get.all_fields(port=port, params={"exclude": ","})
-    with open(json_path, "w+") as f:
-        json.dump(fields_list, f)
-    process.kill()
+    with wf:
+        fields_list = tw_get.all_fields(port=port, params={"exclude": ","})
+        with open(json_path, "w+") as f:
+            json.dump(fields_list, f)
 
 
 def migrate_html_to_wf(html_path, wf_path, port=8222, **kwargs):

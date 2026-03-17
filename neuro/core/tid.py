@@ -477,6 +477,21 @@ class WikiFolder:
 
         return self.process
 
+    def stop(self):
+        if hasattr(self, "process") and self.process.poll() is None:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stop()
+
     def validate(self):
         """
         Validate WikiFolder structure.
