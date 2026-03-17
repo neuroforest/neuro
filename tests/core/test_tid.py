@@ -19,6 +19,7 @@ def tiddler_object(test_file):
     return tiddler
 
 
+@pytest.mark.integration
 class TestTiddler:
     def test_add_tag(self, tiddler_object):
         from neuro.core.tid import Tiddler
@@ -143,6 +144,7 @@ class TestTiddlerList:
         assert tiddler_list.tiddler_index["test2"].fields["text"] == "Positive."
 
 
+@pytest.mark.integration
 class TestNeuroTW:
     def test_from_html(self, test_file):
         from neuro.core.tid import TiddlywikiHtml

@@ -1,9 +1,0 @@
-# Test query used for WikiData integration testing
-
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-PREFIX wd: <http://www.wikidata.org/entity/>
-SELECT ?organismLabel
-WHERE {
-  wd:_entity-id_ rdfs:label ?organismLabel.
-  FILTER(LANG(?organismLabel) = "en")
-}

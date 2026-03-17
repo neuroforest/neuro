@@ -2,6 +2,10 @@
 Unit tests of the module neuro.core.files.file
 """
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 
 class TestFileUtils:
     def test_are_identical(self, test_file):

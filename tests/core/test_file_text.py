@@ -7,6 +7,8 @@ import filecmp
 import json
 import pytest
 
+pytestmark = pytest.mark.integration
+
 
 class TestText:
     def test_read(self, test_file):

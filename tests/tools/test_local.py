@@ -3,6 +3,10 @@ Unit tests for the package neuro.tools.local.
 """
 import shutil
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 
 class TestRefactor:
     """
