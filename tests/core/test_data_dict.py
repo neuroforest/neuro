@@ -2,7 +2,10 @@
 Unit tests of the module neuro.core.data.dict
 """
 
+import pytest
 
+
+@pytest.mark.integration
 class TestDictUtils:
     def test_display_string(self, test_file):
         from neuro.core.data.dict import DictUtils

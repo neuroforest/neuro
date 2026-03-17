@@ -7,6 +7,5 @@ __pycache__/
 /.pytest_cache
 /build
 /neuro.egg-info
-/resources/test/output
 /temp
 /venv

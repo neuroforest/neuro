@@ -4,7 +4,10 @@ Unit tests of the module neuro.core.deep
 
 import os
 
+import pytest
 
+
+@pytest.mark.integration
 class TestDir:
     def test_get_children(self, test_file):
         from neuro.core import Dir
@@ -29,6 +32,7 @@ class TestDir:
         assert len(all_paths) == 11
 
 
+@pytest.mark.integration
 class TestFile:
     def test_mime(self, test_file):
         from neuro.core import File
@@ -46,6 +50,7 @@ class TestMoment:
         assert int(dt.unix) == 1627257600
 
 
+@pytest.mark.integration
 class TestSymlink:
     def test_symlink(self, test_file):
         from neuro.core.file.file import Symlink
