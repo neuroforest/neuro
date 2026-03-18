@@ -431,3 +431,4 @@ def cli(ctx, interactive, port, verbose):
     results = [check.run() for check in checks]
     if not all(results):
         raise SystemExit(1)
+    return True
