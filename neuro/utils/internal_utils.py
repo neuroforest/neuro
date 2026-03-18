@@ -47,6 +47,10 @@ def get_path(keyword, create_if_missing=False):
 
     if keyword in BASE_PATHS:
         path = Path(os.environ[BASE_PATHS[keyword]])
+        if not path.is_absolute():
+            nf_dir = os.environ.get("NF_DIR", "")
+            if nf_dir:
+                path = Path(nf_dir) / path
     elif keyword in DERIVED_PATHS:
         base, *parts = DERIVED_PATHS[keyword]
         path = get_path(base) / Path(*parts)
