@@ -23,10 +23,10 @@ def get_free_ports(count, host="127.0.0.1"):
             s.bind((host, 0))
             ports.append(s.getsockname()[1])
             sockets.append(s)
-        return ports
     finally:
-        for s in sockets:
-            s.close()
+        while sockets:
+            sockets.pop().close()
+    return ports
 
 
 def is_port_in_use(port, host="127.0.0.1"):
