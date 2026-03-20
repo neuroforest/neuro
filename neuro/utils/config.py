@@ -43,21 +43,41 @@ def detect_mode():
 
 
 def resolve_xdg_paths():
-    """Set NF_CONFIG, NF_DATA, NF_STATE, NF_CACHE from XDG base directories."""
+    """Set NF_CONFIG, NF_DATA, NF_STATE, NF_CACHE from XDG base directories.
+
+    NF_CONFIG is shared across environments (holds env files).
+    NF_DATA uses XDG_DATA_HOME for production, XDG_STATE_HOME for develop/testing.
+    NF_STATE, NF_CACHE are always namespaced per environment.
+    """
     home = Path.home()
-
     app_name = os.environ["APP_NAME"].lower()
+    env_name = os.environ["ENVIRONMENT"].lower()
 
+    # Config is shared (holds env.develop, env.testing, env.production)
+    if "NF_CONFIG" not in os.environ:
+        base = os.getenv("XDG_CONFIG_HOME", home / ".config")
+        os.environ["NF_CONFIG"] = str(Path(base) / app_name)
+    logging.debug(f"XDG path NF_CONFIG={os.environ['NF_CONFIG']}")
+
+    # Data: production uses XDG_DATA_HOME, develop/testing use XDG_STATE_HOME
+    if "NF_DATA" not in os.environ:
+        if env_name == "production":
+            base = os.getenv("XDG_DATA_HOME", home / ".local" / "share")
+            os.environ["NF_DATA"] = str(Path(base) / app_name)
+        else:
+            base = os.getenv("XDG_STATE_HOME", home / ".local" / "state")
+            os.environ["NF_DATA"] = str(Path(base) / app_name / env_name)
+    logging.debug(f"XDG path NF_DATA={os.environ['NF_DATA']}")
+
+    # State and cache: always namespaced per environment
     xdg_map = {
-        "NF_CONFIG": (os.getenv("XDG_CONFIG_HOME", home / ".config"), app_name),
-        "NF_DATA": (os.getenv("XDG_DATA_HOME", home / ".local" / "share"), app_name),
-        "NF_STATE": (os.getenv("XDG_STATE_HOME", home / ".local" / "state"), app_name),
-        "NF_CACHE": (os.getenv("XDG_CACHE_HOME", home / ".cache"), app_name),
+        "NF_STATE": os.getenv("XDG_STATE_HOME", home / ".local" / "state"),
+        "NF_CACHE": os.getenv("XDG_CACHE_HOME", home / ".cache"),
     }
 
-    for var, (base, subdir) in xdg_map.items():
+    for var, base in xdg_map.items():
         if var not in os.environ:
-            os.environ[var] = str(Path(base) / subdir)
+            os.environ[var] = str(Path(base) / app_name / env_name)
         logging.debug(f"XDG path {var}={os.environ[var]}")
 
 
@@ -74,17 +94,17 @@ def resolve_user_paths():
             logging.debug(f"Remapped {env_var}={os.environ[env_var]}")
 
 
+VALID_ENVIRONMENTS = frozenset({"DEVELOP", "TESTING", "PRODUCTION"})
+
+
 def load_env_files(env_path):
     """Loads environment variables from .env files.
 
-    Dev mode:
-        .env        — tracked defaults, committed to the repository.
-        .env.local  — local overrides, gitignored (from NF_DIR).
-
-    System mode:
-        .env        — read-only system baseline (from NF_DIR).
-        XDG paths resolved + relative user paths remapped.
-        env         — per-user overrides (from $NF_CONFIG/).
+    Loading order:
+        1. .env           — tracked defaults from NF_DIR (repo baseline).
+        2. XDG paths      — resolve NF_CONFIG, NF_DATA, NF_STATE, NF_CACHE.
+        3. env.{env}      — environment-specific overrides from $NF_CONFIG/.
+        4. (system mode)  — remap relative user paths to XDG locations.
     """
     if not env_path:
         env_path = os.getenv("NF_DIR", os.getcwd())
@@ -94,6 +114,7 @@ def load_env_files(env_path):
     logging.debug(f"Config mode: {mode}")
 
     with build_utils.chdir(env_path):
+        # 1. Repo defaults
         default_env_path = os.path.abspath(".env")
         dotenv.load_dotenv(default_env_path)
         logging.debug(f"Setting env {default_env_path}")
@@ -101,31 +122,22 @@ def load_env_files(env_path):
         if not os.getenv("ENVIRONMENT"):
             os.environ["ENVIRONMENT"] = "DEVELOP"
 
+        # 2. XDG paths (always, not just system mode)
+        resolve_xdg_paths()
+
+        # 3. Environment-specific overrides from XDG
+        env_name = os.environ["ENVIRONMENT"]
+        if env_name not in VALID_ENVIRONMENTS:
+            logging.warning(f"Unknown ENVIRONMENT: {env_name}")
+        nf_config = os.environ.get("NF_CONFIG", "")
+        env_file = os.path.join(nf_config, f"env.{env_name.lower()}")
+        if os.path.exists(env_file):
+            dotenv.load_dotenv(env_file, override=True)
+            logging.debug(f"Setting env {env_file}")
+
+        # 4. System mode: remap relative paths to XDG
         if mode == "system":
-            resolve_xdg_paths()
             resolve_user_paths()
-
-            nf_config = os.environ.get("NF_CONFIG", "")
-            user_env_path = os.path.join(nf_config, "env")
-            dotenv.load_dotenv(user_env_path, override=True)
-            logging.debug(f"Setting env {user_env_path}")
-
-            if os.getenv("ENVIRONMENT") == "TESTING":
-                testing_env_path = os.path.abspath(".env.testing")
-                if os.path.exists(testing_env_path):
-                    dotenv.load_dotenv(testing_env_path, override=True)
-                    logging.debug(f"Setting env {testing_env_path}")
-        else:
-            environment = os.getenv("ENVIRONMENT")
-            if environment == "TESTING":
-                testing_env_path = os.path.abspath(".env.testing")
-                if os.path.exists(testing_env_path):
-                    dotenv.load_dotenv(testing_env_path, override=True)
-                    logging.debug(f"Setting env {testing_env_path}")
-            elif environment == "DEVELOP":
-                env_path = os.path.abspath(".env.local")
-                dotenv.load_dotenv(env_path, override=True)
-                logging.debug(f"Setting env {env_path}")
 
 
 def config_logging():
