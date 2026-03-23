@@ -28,6 +28,7 @@ RESET = "\033[0m"
 
 SUCCESS = GREEN + "✔" + RESET
 FAIL = RED + "✘" + RESET
+WARN = YELLOW + "⚠" + RESET
 SKIP = YELLOW + "–" + RESET
 
 
