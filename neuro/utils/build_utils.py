@@ -5,6 +5,11 @@ import subprocess
 from neuro.utils import terminal_style
 
 
+def quiet():
+    """Return True unless VERBOSE is set."""
+    return not os.environ.get("VERBOSE")
+
+
 def rsync_local(source, dest, name=None):
     """Rsync submodule into app/ with gitignore filter."""
     rsync_command = [
