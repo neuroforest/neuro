@@ -8,8 +8,9 @@ import importlib.metadata
 
 import click
 
-from neuro.utils import terminal_style
+from neuro.utils import config, terminal_style
 
+config.main()
 
 CONTEXT_SETTINGS = dict(auto_envvar_prefix="NEURO")
 
