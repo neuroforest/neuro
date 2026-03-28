@@ -53,7 +53,7 @@ def resolve_xdg_paths():
     app_name = os.environ["APP_NAME"].lower()
     env_name = os.environ["ENVIRONMENT"].lower()
 
-    # Config is shared (holds env.develop, env.testing, env.production)
+    # Config is shared (holds env, env.{name} overrides)
     if "NF_CONFIG" not in os.environ:
         base = os.getenv("XDG_CONFIG_HOME", home / ".config")
         os.environ["NF_CONFIG"] = str(Path(base) / app_name)
@@ -94,17 +94,15 @@ def resolve_user_paths():
             logging.debug(f"Remapped {env_var}={os.environ[env_var]}")
 
 
-VALID_ENVIRONMENTS = frozenset({"DEVELOP", "TESTING", "PRODUCTION"})
-
-
 def load_env_files(env_path):
     """Loads environment variables from .env files.
 
     Loading order:
         1. .env           — tracked defaults from NF_DIR (repo baseline).
         2. XDG paths      — resolve NF_CONFIG, NF_DATA, NF_STATE, NF_CACHE.
-        3. env.{env}      — environment-specific overrides from $NF_CONFIG/.
-        4. (system mode)  — remap relative user paths to XDG locations.
+        3. env             — common user settings from $NF_CONFIG/ (all environments).
+        4. env.{env}      — environment-specific overrides from $NF_CONFIG/.
+        5. (system mode)  — remap relative user paths to XDG locations.
     """
     if not env_path:
         env_path = os.getenv("NF_DIR", os.getcwd())
@@ -125,17 +123,21 @@ def load_env_files(env_path):
         # 2. XDG paths (always, not just system mode)
         resolve_xdg_paths()
 
-        # 3. Environment-specific overrides from XDG
-        env_name = os.environ["ENVIRONMENT"]
-        if env_name not in VALID_ENVIRONMENTS:
-            logging.warning(f"Unknown ENVIRONMENT: {env_name}")
+        # 3. Common user settings from XDG
         nf_config = os.environ.get("NF_CONFIG", "")
+        common_env_file = os.path.join(nf_config, "env")
+        if os.path.exists(common_env_file):
+            dotenv.load_dotenv(common_env_file, override=True)
+            logging.debug(f"Setting env {common_env_file}")
+
+        # 4. Environment-specific overrides from XDG
+        env_name = os.environ["ENVIRONMENT"]
         env_file = os.path.join(nf_config, f"env.{env_name.lower()}")
         if os.path.exists(env_file):
             dotenv.load_dotenv(env_file, override=True)
             logging.debug(f"Setting env {env_file}")
 
-        # 4. System mode: remap relative paths to XDG
+        # 5. System mode: remap relative paths to XDG
         if mode == "system":
             resolve_user_paths()
 
@@ -160,10 +162,12 @@ def config_logging():
     logger.info(f"CLI Logging initialized with level {logger.getEffectiveLevel()}")
 
 
-def main(env_path=None):
+def main(env_path=None, environment=None):
     global CONFIG_INITIALIZED
-    environment = os.getenv("ENVIRONMENT")
-    if CONFIG_INITIALIZED and CONFIG_INITIALIZED == environment:
+    if environment:
+        os.environ["ENVIRONMENT"] = environment
+    env = os.getenv("ENVIRONMENT")
+    if CONFIG_INITIALIZED and CONFIG_INITIALIZED == env:
         return
     load_env_files(env_path)
     config_logging()
