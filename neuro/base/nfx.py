@@ -11,7 +11,8 @@ def read(path):
         return json.load(f)
 
 
-def write(path, nodes, relationships, name="", description="", version=""):
+def write(path, nodes, relationships, name="", description="", version="",
+          dependencies=None):
     """Write nodes and relationships to an NFX file.
 
     Strips `neuro.id` from node properties (it's stored as `nid`).
@@ -32,6 +33,8 @@ def write(path, nodes, relationships, name="", description="", version=""):
         data["description"] = description
     if version:
         data["version"] = version
+    if dependencies:
+        data["dependencies"] = dependencies
     data["nodes"] = nodes
     data["relationships"] = relationships
     with open(path, "w") as f:
