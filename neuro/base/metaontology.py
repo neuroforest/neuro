@@ -180,5 +180,5 @@ class Metaontology:
 
         return nfx.write(
             path, result["nodes"], result["relationships"],
-            name="Metaontology"
+            name="neuroforest/metaontology"
         )

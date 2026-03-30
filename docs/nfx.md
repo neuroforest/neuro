@@ -9,12 +9,13 @@ Graph interchange format for nodes and relationships.
 
 ```json
 {
-  "name": "Graph Name",
+  "name": "namespace/name",
   "description": "Optional description",
   "version": "1.0",
+  "dependencies": ["namespace/dep@1.0"],
   "nodes": [
     {
-      "nid": "<neuro.id>",
+      "nid": "<nid>",
       "labels": ["Label1", "Label2"],
       "properties": {
         "title": "Example",
@@ -24,8 +25,8 @@ Graph interchange format for nodes and relationships.
   ],
   "relationships": [
     {
-      "from": "<neuro.id>",
-      "to": "<neuro.id>",
+      "from": "<nid>",
+      "to": "<nid>",
       "type": "PARENT_OF",
       "properties": {"weight": 1}
     }
@@ -37,11 +38,12 @@ Graph interchange format for nodes and relationships.
 
 ### Top-level
 
-| Field         | Type     | Description                          |
-|---------------|----------|--------------------------------------|
-| `name`        | `string` | Name of the export (e.g. `"Metaontology"`) |
-| `description` | `string` | Human-readable description           |
-| `version`     | `string` | Version identifier                   |
+| Field          | Type     | Description                                                    |
+|----------------|----------|----------------------------------------------------------------|
+| `name`         | `string` | Qualified name: `namespace/name` (e.g. `neuroforest/metaontology`) |
+| `description`  | `string` | Human-readable description                                     |
+| `version`      | `string` | Version identifier                                             |
+| `dependencies` | `list`   | Required ontologies: `namespace/name@version` (e.g. `["neuroforest/metaontology@1.2"]`) |
 
 ### Node
 
@@ -77,14 +79,18 @@ nb.metaontology.export_nfx(path)
 ### Import
 
 ```python
+# Import nodes with ontology validation
 nb.nodes.import_nfx(path)
+
+# Import metaontology (bypasses validation — schema defines validation rules)
+nb.metaontology.import_nfx(path)
 ```
 
-Reads the file, validates each node against the ontology, and merges on `neuro.id`. Relationships are merged between the referenced nodes. Existing data is updated, not duplicated.
+Reads the file and merges on `neuro.id`. Relationships are merged between the referenced nodes. Existing data is updated, not duplicated. `nodes.import_nfx` validates each node against the ontology; `metaontology.import_nfx` uses direct Cypher MERGE.
 
 ## Low-level I/O
 
 The `neuro.base.nfx` module provides pure read/write functions with no database dependency:
 
 - `nfx.read(path)` — returns the parsed JSON dict
-- `nfx.write(path, nodes, relationships, name="", description="", version="")` — writes to file, returns the data dict
+- `nfx.write(path, nodes, relationships, name="", description="", version="", dependencies=None)` — writes to file, returns the data dict
