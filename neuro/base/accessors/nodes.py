@@ -30,7 +30,7 @@ class NodeAccessor(Accessor):
         :param node: Node
         """
         result = self._nb.ontology.is_valid_node(node)
-        if result:
+        if not result:
             raise ValueError(f"Node validation failed: {result}")
 
         labels_str = ":".join(node.labels)

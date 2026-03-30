@@ -113,6 +113,35 @@ class Metaontology:
     def __init__(self, nb):
         self._nb = nb
 
+    def import_nfx(self, path):
+        """Import metaontology from an NFX file. Merges nodes and relationships
+        without ontology validation (schema defines the validation rules)."""
+        data = nfx.read(path)
+
+        for entry in data.get("nodes", []):
+            labels_str = ":".join(entry["labels"])
+            query = f"""
+            MERGE (n:{labels_str} {{`neuro.id`: $neuro_id}})
+            SET n += $properties
+            """
+            self._nb.run_query(query, {
+                "neuro_id": entry["nid"],
+                "properties": entry.get("properties", {}),
+            })
+
+        for rel in data.get("relationships", []):
+            query = f"""
+            MATCH (a {{`neuro.id`: $from_id}})
+            MATCH (b {{`neuro.id`: $to_id}})
+            MERGE (a)-[r:{rel["type"]}]->(b)
+            SET r += $properties
+            """
+            self._nb.run_query(query, {
+                "from_id": rel["from"],
+                "to_id": rel["to"],
+                "properties": rel.get("properties", {}),
+            })
+
     def is_ontology_valid(self):
         """Validate metaontology structure. Returns True if valid, False otherwise."""
         count = self._nb.count("Metaontology")
