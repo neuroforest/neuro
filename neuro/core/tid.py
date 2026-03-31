@@ -409,7 +409,7 @@ class WikiFolder:
     """
     Wrapper for WikiFolder. It operates on port 8099 by default.
     """
-    def __init__(self, wf_path, tw5="tw5/tiddlywiki.js", **kwargs):
+    def __init__(self, wf_path, tw5=None, **kwargs):
         """
         Initialize and verify WikiFolder
         :param wf_path: WikiFolder path
@@ -423,7 +423,7 @@ class WikiFolder:
         """
         self.process: subprocess.Popen
         self.wf_path = wf_path
-        self.tw5 = tw5
+        self.tw5 = tw5 or os.path.join(os.environ["TW5"], "tiddlywiki.js")
         self.port = kwargs.get("port", 8099)
         self.host = kwargs.get("host", "127.0.0.1")
         self.silent = kwargs.get("silent", False)
