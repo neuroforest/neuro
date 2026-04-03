@@ -6,16 +6,17 @@ import json
 
 
 def read(path):
-    """Read an NFX file and return {"nodes": [...], "relationships": [...]}."""
+    """Read an NFX file and return its full contents as a dict."""
     with open(path) as f:
         return json.load(f)
 
 
-def write(path, nodes, relationships, name="", description="", version="",
+def write(path, nodes, relationships, nid="", name="", description="", version="",
           dependencies=None):
     """Write nodes and relationships to an NFX file.
 
-    Strips `neuro.id` from node properties (it's stored as `nid`).
+    Strips `neuro.id` from node properties (it is stored as top-level `nid` on each node).
+    Omits empty `properties` dicts and empty relationship `properties`.
     """
     for n in nodes:
         n["properties"].pop("neuro.id", None)
@@ -27,6 +28,8 @@ def write(path, nodes, relationships, name="", description="", version="",
             r.pop("properties", None)
 
     data = {}
+    if nid:
+        data["nid"] = nid
     if name:
         data["name"] = name
     if description:

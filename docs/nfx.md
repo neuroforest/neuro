@@ -9,13 +9,14 @@ Graph interchange format for nodes and relationships.
 
 ```json
 {
-  "name": "namespace/name",
+  "nid": "<uuid-v4>",
+  "name": "Namespace/Name",
   "description": "Optional description",
   "version": "1.0",
-  "dependencies": ["namespace/dep@1.0"],
+  "dependencies": ["<nid>@1.0"],
   "nodes": [
     {
-      "nid": "<nid>",
+      "nid": "<uuid-v4>",
       "labels": ["Label1", "Label2"],
       "properties": {
         "title": "Example",
@@ -25,8 +26,8 @@ Graph interchange format for nodes and relationships.
   ],
   "relationships": [
     {
-      "from": "<nid>",
       "to": "<nid>",
+      "from": "<nid>",
       "type": "PARENT_OF",
       "properties": {"weight": 1}
     }
@@ -38,27 +39,28 @@ Graph interchange format for nodes and relationships.
 
 ### Top-level
 
-| Field          | Type     | Description                                                    |
-|----------------|----------|----------------------------------------------------------------|
-| `name`         | `string` | Qualified name: `namespace/name` (e.g. `neuroforest/metaontology`) |
-| `description`  | `string` | Human-readable description                                     |
-| `version`      | `string` | Version identifier                                             |
-| `dependencies` | `list`   | Required ontologies: `namespace/name@version` (e.g. `["neuroforest/metaontology@1.2"]`) |
+| Field          | Type     | Required | Description                               |
+|----------------|----------|----------|-------------------------------------------|
+| `nid`          | `string` | yes      | Stable UUID v4 identity of this ontology  |
+| `name`         | `string` | no       | Human-readable name (e.g. `Metaontology`) |
+| `description`  | `string` | no       | Human-readable description                |
+| `version`      | `string` | no       | Version identifier (e.g. `"2.0"`)         |
+| `dependencies` | `list`   | no       | Required ontologies: `<nid>@<version>`    |
 
 ### Node
 
-| Field        | Type     | Description                          |
-|--------------|----------|--------------------------------------|
-| `nid`        | `string` | UUID identifying the node (stored as `neuro.id` in Neo4j) |
-| `labels`     | `list`   | Neo4j labels (e.g. `["Tiddler"]`)    |
-| `properties` | `dict`   | Node properties (excludes `neuro.id`). Omitted when empty. |
+| Field        | Type     | Description                                                  |
+|--------------|----------|--------------------------------------------------------------|
+| `nid`        | `string` | UUID v4 identifying the node (stored as `neuro.id` in Neo4j) |
+| `labels`     | `list`   | Neo4j labels (e.g. `["Tiddler"]`)                            |
+| `properties` | `dict`   | Node properties (excludes `neuro.id`). Omitted when empty.   |
 
 ### Relationship
 
 | Field        | Type     | Description                                  |
 |--------------|----------|----------------------------------------------|
-| `from`       | `string` | `nid` of the source node                     |
 | `to`         | `string` | `nid` of the target node                     |
+| `from`       | `string` | `nid` of the source node                     |
 | `type`       | `string` | Relationship type (e.g. `"PARENT_OF"`)       |
 | `properties` | `dict`   | Relationship properties. Omitted when empty. |
 
@@ -86,11 +88,11 @@ nb.nodes.import_nfx(path)
 nb.metaontology.import_nfx(path)
 ```
 
-Reads the file and merges on `neuro.id`. Relationships are merged between the referenced nodes. Existing data is updated, not duplicated. `nodes.import_nfx` validates each node against the ontology; `metaontology.import_nfx` uses direct Cypher MERGE.
+Reads the file and merges on `neuro.id`. Relationships are merged between the referenced nodes. Existing data is updated, not duplicated. Also creates/updates an `OntologyMetadata` node from the top-level fields and wires `DEPENDS_ON` edges to declared dependencies.
 
 ## Low-level I/O
 
 The `neuro.base.nfx` module provides pure read/write functions with no database dependency:
 
 - `nfx.read(path)` — returns the parsed JSON dict
-- `nfx.write(path, nodes, relationships, name="", description="", version="", dependencies=None)` — writes to file, returns the data dict
+- `nfx.write(path, nodes, relationships, nid="", name="", description="", version="", dependencies=None)` — writes to file, returns the data dict
