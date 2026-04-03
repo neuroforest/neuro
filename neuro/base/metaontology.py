@@ -118,6 +118,28 @@ class Metaontology:
         without ontology validation (schema defines the validation rules)."""
         data = nfx.read(path)
 
+        nid = data.get("nid")
+        name = data.get("name")
+        if nid and name:
+            properties = {k: data[k] for k in ("name", "version", "description") if k in data}
+            self._nb.run_query(
+                """
+                MERGE (m:OntologyMetadata {`neuro.id`: $neuro_id})
+                SET m += $props
+                """,
+                {"neuro_id": nid, "props": properties},
+            )
+            for dep in data.get("dependencies", []):
+                dep_nid = dep.split("@")[0]
+                self._nb.run_query(
+                    """
+                    MATCH (m:OntologyMetadata {`neuro.id`: $neuro_id})
+                    MATCH (d:OntologyMetadata {`neuro.id`: $dep_nid})
+                    MERGE (m)-[:DEPENDS_ON]->(d)
+                    """,
+                    {"neuro_id": nid, "dep_nid": dep_nid},
+                )
+
         for entry in data.get("nodes", []):
             labels_str = ":".join(entry["labels"])
             query = f"""
@@ -178,7 +200,18 @@ class Metaontology:
         """
         result = self._nb.get_data(query)[0]
 
+        meta_query = """
+        MATCH (m:OntologyMetadata {name: "Metaontology"})
+        RETURN m.`neuro.id` as nid, m.name as name, m.version as version,
+               m.description as description
+        """
+        meta = self._nb.get_data(meta_query)
+        meta = meta[0] if meta else {}
+
         return nfx.write(
             path, result["nodes"], result["relationships"],
-            name="neuroforest/metaontology"
+            nid=meta.get("nid", ""),
+            name=meta.get("name", "Metaontology"),
+            version=meta.get("version", ""),
+            description=meta.get("description", ""),
         )
