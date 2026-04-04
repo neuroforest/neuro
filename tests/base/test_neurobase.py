@@ -26,7 +26,7 @@ class TestNodeAccessor:
         from neuro.base import nfx
         from neuro.utils.internal_utils import get_path
 
-        original = nfx.read(get_path("resources") / "ontology" / "metaontology.nfx")
+        original = nfx.read(get_path("assets") / "ontology" / "metaontology.nfx")
         export_path = tmp_path / "metaontology_export.nfx"
         nb_meta.metaontology.export_nfx(export_path)
         exported = nfx.read(export_path)
