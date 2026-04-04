@@ -19,7 +19,7 @@ BASE_PATHS = {
     "desktop": "DESKTOP",
     "logs": "LOGS",
     "neuro": "NEURO",
-    "nf": "NF_DIR",
+    "app": "APP_DIR",
     "pkg": "PKG",
     "resources": "RESOURCES",
     "storage": "STORAGE",
@@ -48,7 +48,7 @@ def get_path(keyword, create_if_missing=False):
     if keyword in BASE_PATHS:
         path = Path(os.environ[BASE_PATHS[keyword]])
         if not path.is_absolute():
-            nf_dir = os.environ.get("NF_DIR", "")
+            nf_dir = os.environ.get("APP_DIR", "")
             if nf_dir:
                 path = Path(nf_dir) / path
     elif keyword in DERIVED_PATHS:
