@@ -10,7 +10,7 @@ import pytest
 
 @pytest.fixture(scope="session", autouse=True)
 def test_file(tmp_path_factory):
-    test_data_dir = Path(os.getenv("RESOURCES", "resources")) / "test"
+    test_data_dir = Path(os.getenv("ASSETS", "assets")) / "test"
     output_dir = Path(tempfile.mkdtemp(prefix="neuro-test-"))
 
     class TestFileLib:

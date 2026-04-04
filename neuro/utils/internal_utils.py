@@ -21,19 +21,19 @@ BASE_PATHS = {
     "neuro": "NEURO",
     "app": "APP_DIR",
     "pkg": "PKG",
-    "resources": "RESOURCES",
+    "assets": "ASSETS",
     "storage": "STORAGE",
     "tw5": "TW5",
 }
 
 DERIVED_PATHS = {
     "plugins": ("tw5", "plugins"),
-    "templates": ("resources", "templates"),
+    "templates": ("assets", "templates"),
     "tests": ("neuro", "tests"),
     "themes": ("tw5", "themes"),
     "tiddlers": ("storage", "tiddlers"),
     "tiddlywiki.js": ("tw5", "tiddlywiki.js"),
-    "wd_queries": ("resources", "queries"),
+    "wd_queries": ("assets", "queries"),
 }
 
 
