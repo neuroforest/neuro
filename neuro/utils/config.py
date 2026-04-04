@@ -28,13 +28,13 @@ def detect_mode():
     """Detect whether we're running in dev or system mode.
 
     Returns "system" if NF_MODE is explicitly set, or if the .env file
-    at NF_DIR is not writable by the current user. Otherwise returns "dev".
+    at APP_DIR is not writable by the current user. Otherwise returns "dev".
     """
     mode = os.getenv("NF_MODE")
     if mode:
         return mode
 
-    nf_dir = os.getenv("NF_DIR", os.getcwd())
+    nf_dir = os.getenv("APP_DIR", os.getcwd())
     env_file = os.path.join(nf_dir, ".env")
     if os.path.exists(env_file) and not os.access(env_file, os.W_OK):
         return "system"
@@ -98,14 +98,14 @@ def load_env_files(env_path):
     """Loads environment variables from .env files.
 
     Loading order:
-        1. .env           — tracked defaults from NF_DIR (repo baseline).
+        1. .env           — tracked defaults from APP_DIR (repo baseline).
         2. XDG paths      — resolve NF_CONFIG, NF_DATA, NF_STATE, NF_CACHE.
         3. env             — common user settings from $NF_CONFIG/ (all environments).
         4. env.{env}      — environment-specific overrides from $NF_CONFIG/.
         5. (system mode)  — remap relative user paths to XDG locations.
     """
     if not env_path:
-        env_path = os.getenv("NF_DIR", os.getcwd())
+        env_path = os.getenv("APP_DIR", os.getcwd())
 
     mode = detect_mode()
     os.environ["NF_MODE"] = mode
