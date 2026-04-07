@@ -8,7 +8,7 @@ from neuro.core.data.dict import DictUtils
 from neuro.core.data.str import Uuid
 from neuro.utils import terminal_style
 
-ONTOLOGY_OBJECTS = ("OntologyNode", "OntologyRelationship", "OntologyProperty")
+ONTOLOGY_OBJECTS = ("OntologyNode", "OntologyRelationship", "OntologyProperty", "OntologyMetadata")
 
 
 class Metaproperty:

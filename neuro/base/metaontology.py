@@ -30,9 +30,10 @@ class OntologyValidator:
 
     def _is_connected(self):
         """Check if the ontology graph is a single connected component."""
+        structural = ["OntologyNode", "OntologyRelationship", "OntologyProperty"]
         query = f"""
         MATCH (root:OntologyNode)
-        WHERE root.label IN {list(ONTOLOGY_OBJECTS)}
+        WHERE root.label IN {structural}
         MATCH (root)<-[:SUBCLASS_OF*0..]-(type)
         MATCH (n)
         WHERE type.label IN labels(n)
