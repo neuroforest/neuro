@@ -72,34 +72,43 @@ class NodeAccessor(Accessor):
             }
             self._nb.run_query(query, params)
 
-    def export_nfx(self, path, label=None, name="", description="", version="", **properties):
+    def export_nfx(self, path, label=None, name="", description="", version="",
+                   query=None, query_params=None, **properties):
         """
         Export nodes and their relationships to an NFX file.
-        Optionally filter by label and/or properties.
+
+        Modes (mutually exclusive, checked in order):
+        - query=<cypher>: custom Cypher returning nid, labels, properties columns;
+          use query_params for parameterized queries
+        - default: filter by label and/or property kwargs
         """
-        node = f"(n:{label})" if label else "(n)"
-        conditions = ["n.`neuro.id` IS NOT NULL"]
         params = {}
-        for key, value in properties.items():
-            param_name = key.replace(".", "_")
-            conditions.append(f"n.`{key}` = ${param_name}")
-            params[param_name] = value
-        where = " WHERE " + " AND ".join(conditions)
 
-        node_query = f"""
-        MATCH {node}{where}
-        RETURN n.`neuro.id` as nid, labels(n) as labels, properties(n) as properties
-        """
+        if query is not None:
+            node_query = query
+            params = query_params or {}
+        else:
+            node = f"(n:{label})" if label else "(n)"
+            conditions = ["n.`neuro.id` IS NOT NULL"]
+            for key, value in properties.items():
+                param_name = key.replace(".", "_")
+                conditions.append(f"n.`{key}` = ${param_name}")
+                params[param_name] = value
+            where = " WHERE " + " AND ".join(conditions)
+            node_query = f"""
+            MATCH {node}{where}
+            RETURN n.`neuro.id` as nid, labels(n) as labels, properties(n) as properties
+            """
+
         nodes = self._nb.get_data(node_query, params)
+        ids = [n["nid"] for n in nodes]
 
-        rel_query = f"""
-        MATCH {node}{where}
-        WITH collect(n.`neuro.id`) as ids
+        rel_query = """
         MATCH (a)-[r]->(b)
-        WHERE a.`neuro.id` IN ids AND b.`neuro.id` IN ids
+        WHERE a.`neuro.id` IN $ids AND b.`neuro.id` IN $ids
         RETURN a.`neuro.id` as from, b.`neuro.id` as to,
                type(r) as type, properties(r) as properties
         """
-        relationships = self._nb.get_data(rel_query, params)
+        relationships = self._nb.get_data(rel_query, {"ids": ids})
 
         return nfx.write(path, nodes, relationships, name=name, description=description, version=version)
