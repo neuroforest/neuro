@@ -1,4 +1,5 @@
-from neuro.base.schema import Metaproperties, OntologyNodeInfo, Violations
+from neuro.base import nfx
+from neuro.base.schema import Metaproperties, ONTOLOGY_OBJECTS, OntologyNodeInfo, Violations
 
 
 class Ontology:
@@ -16,6 +17,34 @@ class Ontology:
     def info(self, label):
         """Return an OntologyNodeInfo for the given label."""
         return OntologyNodeInfo(self._nb, label)
+
+    def export_nfx(self, path, name="", description="", version=""):
+        """Export all ontology instances to an NFX file.
+
+        Fetches every node whose label is a subclass (via SUBCLASS_OF) of any
+        root ontology type (OntologyNode, OntologyRelationship, OntologyProperty),
+        together with all relationships between them.
+        """
+        node_query = f"""
+        MATCH (root:OntologyNode)
+        WHERE root.label IN {list(ONTOLOGY_OBJECTS)}
+        MATCH (type)-[:SUBCLASS_OF*0..]->(root)
+        MATCH (n)
+        WHERE type.label IN labels(n) AND n.`neuro.id` IS NOT NULL
+        RETURN DISTINCT n.`neuro.id` as nid, labels(n) as labels, properties(n) as properties
+        """
+        nodes = self._nb.get_data(node_query)
+        ids = [n["nid"] for n in nodes]
+
+        rel_query = """
+        MATCH (a)-[r]->(b)
+        WHERE a.`neuro.id` IN $ids AND b.`neuro.id` IN $ids
+        RETURN a.`neuro.id` as from, b.`neuro.id` as to,
+               type(r) as type, properties(r) as properties
+        """
+        relationships = self._nb.get_data(rel_query, {"ids": ids})
+
+        return nfx.write(path, nodes, relationships, name=name, description=description, version=version)
 
 
 class ObjectValidator:
