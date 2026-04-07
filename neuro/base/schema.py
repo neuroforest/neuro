@@ -1,4 +1,6 @@
+import json
 import neo4j
+import os
 
 from collections import UserDict
 
@@ -8,7 +10,7 @@ from neuro.core.data.dict import DictUtils
 from neuro.core.data.str import Uuid
 from neuro.utils import terminal_style
 
-ONTOLOGY_OBJECTS = ("OntologyNode", "OntologyRelationship", "OntologyProperty", "OntologyMetadata")
+ONTOLOGY_OBJECTS = tuple(json.loads(os.environ["ONTOLOGY_OBJECTS"]))
 
 
 class Metaproperty:
