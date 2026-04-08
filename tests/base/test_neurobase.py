@@ -14,6 +14,23 @@ class TestNeuroBase:
         assert isinstance(count, int)
 
 
+class TestOntology:
+    def test_clear_preserves_data_nodes(self, nb_meta):
+        """nb.ontology.clear() must not delete non-ontology nodes."""
+        nb_meta.run_query("""
+            MATCH (o:OntologyNode {label: "OntologyNode"})
+            CREATE (d:DataNode {name: "test-data-clear", value: "hello"})
+            CREATE (d)-[:LINKED_TO]->(o)
+        """)
+
+        assert nb_meta.count("DataNode") == 1
+        nb_meta.ontology.clear(confirm=True)
+        assert nb_meta.count("OntologyNode") == 0
+        assert nb_meta.count("DataNode") == 1
+        r = nb_meta.get_data("MATCH (d:DataNode {name: 'test-data-clear'}) RETURN d.value as v")
+        assert r[0]["v"] == "hello"
+
+
 class TestNodeAccessor:
     def test_get_not_found(self, nb):
         """Getting a nonexistent neuro.id raises ValueError."""
