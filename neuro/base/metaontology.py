@@ -1,5 +1,8 @@
+import json
+import os
+
 from neuro.base import nfx
-from neuro.base.schema import Metaproperties, ONTOLOGY_OBJECTS, Violations
+from neuro.base.schema import Metaproperties, Violations
 from neuro.utils import exceptions, terminal_style
 
 
@@ -25,7 +28,7 @@ class OntologyValidator:
         return [dict(record) for record in data]
 
     def _fetch_data(self):
-        for kind in ONTOLOGY_OBJECTS:
+        for kind in json.loads(os.environ["ONTOLOGY_OBJECTS"]):
             self.instances[kind] = self._fetch_instances(kind)
 
     def _is_connected(self):
@@ -50,7 +53,7 @@ class OntologyValidator:
         """Run all validation checks. Returns an OntologyViolations instance."""
         ontology_violations = OntologyViolations()
 
-        for kind in ONTOLOGY_OBJECTS:
+        for kind in json.loads(os.environ["ONTOLOGY_OBJECTS"]):
             for instance in self.instances[kind]:
                 label = instance["label"]
                 ontology_object_type = instance["ontology_object_type"]

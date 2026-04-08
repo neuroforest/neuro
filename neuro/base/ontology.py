@@ -1,5 +1,8 @@
+import json
+import os
+
 from neuro.base import nfx
-from neuro.base.schema import Metaproperties, ONTOLOGY_OBJECTS, OntologyNodeInfo, Violations
+from neuro.base.schema import Metaproperties, OntologyNodeInfo, Violations
 
 
 class Ontology:
@@ -25,9 +28,10 @@ class Ontology:
         root ontology type (OntologyNode, OntologyRelationship, OntologyProperty),
         together with all relationships between them.
         """
+        ontology_objects = json.loads(os.environ["ONTOLOGY_OBJECTS"])
         node_query = f"""
         MATCH (root:OntologyNode)
-        WHERE root.label IN {list(ONTOLOGY_OBJECTS)}
+        WHERE root.label IN {list(ontology_objects)}
         MATCH (type)-[:SUBCLASS_OF*0..]->(root)
         MATCH (n)
         WHERE type.label IN labels(n) AND n.`neuro.id` IS NOT NULL
