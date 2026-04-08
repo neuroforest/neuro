@@ -11,6 +11,22 @@ class Ontology:
     def __init__(self, nb):
         self._nb = nb
 
+    def clear(self, confirm=False):
+        """Delete all ontology nodes (including metaontology) and their relationships."""
+        if not confirm:
+            raise ValueError("Refusing to clear ontology without confirm=True")
+
+        ontology_objects = json.loads(os.environ["ONTOLOGY_OBJECTS"])
+        query = f"""
+        MATCH (root:OntologyNode)
+        WHERE root.label IN {list(ontology_objects)}
+        MATCH (type)-[:SUBCLASS_OF*0..]->(root)
+        MATCH (n)
+        WHERE type.label IN labels(n) AND n.`neuro.id` IS NOT NULL
+        DETACH DELETE n
+        """
+        self._nb.run_query(query)
+
     def is_valid_node(self, node):
         """Validate a node against the ontology."""
         validator = ObjectValidator(self._nb, node)
