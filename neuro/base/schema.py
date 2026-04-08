@@ -1,6 +1,7 @@
 import json
-import neo4j
 import os
+
+import neo4j
 
 from collections import UserDict
 
@@ -10,7 +11,6 @@ from neuro.core.data.dict import DictUtils
 from neuro.core.data.str import Uuid
 from neuro.utils import terminal_style
 
-ONTOLOGY_OBJECTS = tuple(json.loads(os.environ["ONTOLOGY_OBJECTS"]))
 
 
 class Metaproperty:
@@ -94,6 +94,7 @@ class Metaproperties(UserDict):
     @classmethod
     def from_ontology(cls, nb, node_label):
         """Query the ontology and return Metaproperties for a given node label."""
+        ontology_objects = tuple(json.loads(os.environ["ONTOLOGY_OBJECTS"]))
         query = f"""
         MATCH (ion:OntologyNode {{label: "{node_label}"}})
         MATCH (ion)-[:SUBCLASS_OF*0..]->(on)
@@ -103,7 +104,7 @@ class Metaproperties(UserDict):
         MATCH (op)-[:SUBCLASS_OF*0..]->(iop)
 
         OPTIONAL MATCH (ion)-[:SUBCLASS_OF*0..]->(root:OntologyNode)
-        WHERE root.label IN {list(ONTOLOGY_OBJECTS)}
+        WHERE root.label IN {list(ontology_objects)}
 
         MATCH (on)-[r]-(p)
         WHERE type(r) = or.label AND op.label IN labels(p)
