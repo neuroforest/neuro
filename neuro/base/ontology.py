@@ -3,6 +3,7 @@ import os
 
 from neuro.base import nfx
 from neuro.base.schema import Metaproperties, OntologyNodeInfo, Violations
+from neuro.utils import terminal_components
 
 
 class Ontology:
@@ -11,10 +12,27 @@ class Ontology:
     def __init__(self, nb):
         self._nb = nb
 
+    def count(self):
+        """Count all ontology nodes."""
+        ontology_objects = json.loads(os.environ["ONTOLOGY_OBJECTS"])
+        query = f"""
+        MATCH (root:OntologyNode)
+        WHERE root.label IN {list(ontology_objects)}
+        MATCH (type)-[:SUBCLASS_OF*0..]->(root)
+        MATCH (n)
+        WHERE type.label IN labels(n) AND n.`neuro.id` IS NOT NULL
+        RETURN count(DISTINCT n) AS count
+        """
+        result = self._nb.get_data(query)
+        return result[0]["count"]
+
     def clear(self, confirm=False):
         """Delete all ontology nodes (including metaontology) and their relationships."""
         if not confirm:
-            raise ValueError("Refusing to clear ontology without confirm=True")
+            base_name = os.getenv("BASE_NAME")
+            node_count = self.count()
+            if not terminal_components.bool_prompt(f"Clear ontology in '{base_name}'? ({node_count} nodes)"):
+                raise SystemExit("Aborting clear.")
 
         ontology_objects = json.loads(os.environ["ONTOLOGY_OBJECTS"])
         query = f"""
