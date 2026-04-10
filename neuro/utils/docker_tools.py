@@ -175,18 +175,26 @@ class Container:
         self.restore_data()
         self.restore_container()
 
-    def restore_data(self):
+    def restore_data(self, target_volume=None):
+        """Restore backup data into a volume. Clears existing contents first.
+
+        If target_volume is given, restores into that volume.
+        Otherwise creates a new volume named {name}-{instant} and tracks it for cleanup.
+        """
         logging.debug("Restoring data")
-        volume_name = f"{self.name}-{self.instant}"
+        if target_volume:
+            volume_name = target_volume
+        else:
+            volume_name = f"{self.name}-{self.instant}"
+            self.dirty["volume"].append(volume_name)
         subprocess.run([
             "docker",
             "run", "--rm",
-            "-v",  f"{volume_name}:/data",
+            "-v", f"{volume_name}:/data",
             "-v", f"{self.backup_location}:/backup",
             "alpine", "sh", "-c",
-            "cd /data && tar xzf /backup/data.tar.gz"
+            "find /data -mindepth 1 -delete && cd /data && tar xzf /backup/data.tar.gz"
         ], capture_output=True)
-        self.dirty["volume"].append(volume_name)
 
     def restore_container(self):
         logging.debug("Restoring container as image")
