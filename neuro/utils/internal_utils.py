@@ -68,6 +68,24 @@ def get_path(keyword, create_if_missing=False):
     return path
 
 
+def get_path_list(var_name):
+    """Parse colon-separated env var into list of resolved Paths."""
+    raw = os.environ.get(var_name, "")
+    app_dir = Path(os.environ["APP_DIR"])
+    paths = []
+    for entry in raw.split(os.pathsep):
+        entry = entry.strip()
+        if not entry:
+            continue
+        p = Path(entry)
+        if not p.is_absolute():
+            p = app_dir / p
+        if not p.exists():
+            raise exceptions.InvalidPath(f"Path '{p}' from {var_name} does not exist.")
+        paths.append(p.resolve())
+    return paths
+
+
 def get_process(name, value):
     """
 
