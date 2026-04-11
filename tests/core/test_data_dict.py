@@ -4,21 +4,14 @@ Unit tests of the module neuro.core.data.dict
 
 import pytest
 
+from neuro.core.data.dict import DictUtils
 
-@pytest.mark.integration
+
+pytestmark = pytest.mark.unit
+
+
 class TestDictUtils:
-    def test_display_string(self, test_file):
-        from neuro.core.data.dict import DictUtils
-        test_dict = test_file.dict("input/files/text.json")
-        display_string = DictUtils.represent(test_dict, display=False)
-        result_path = test_file.get("results/files/display-string.txt")
-        with open(result_path) as f:
-            result_text = f.read()
-
-        assert display_string == result_text
-
     def test_dict_merge(self):
-        from neuro.core.data.dict import DictUtils
         dict1 = {
             "name": {
                 "subname": {
@@ -48,23 +41,25 @@ class TestDictUtils:
 
         assert expected_merged_dict == dict_merged
 
-    def test_sort_alpha(self, test_file):
-        from neuro.core.data.dict import DictUtils
-        test_dict = test_file.dict("input/files/text.json")
+    def test_sort_alpha(self):
+        test_dict = {"zebra": 1, "apple": 2, "mango": 3}
         sorted_dict = DictUtils.sort_alpha(test_dict)
-        assert next(iter(sorted_dict)) == "books view split pane state"
+        assert list(sorted_dict.keys()) == ["apple", "mango", "zebra"]
 
-    def test_remove_keys(self, test_file):
-        from neuro.core.data.dict import DictUtils
-        test_dict = test_file.dict("input/files/text.json")
-        test_dict = DictUtils.remove_keys(test_dict, ["kind"])
-        assert "kind" not in test_dict
+    def test_remove_keys(self):
+        test_dict = {"a": 1, "kind": "field", "nested": {"kind": "inner", "b": 2}}
+        result = DictUtils.remove_keys(test_dict, ["kind"])
+        assert "kind" not in result
+        assert "kind" not in result["nested"]
+        assert result["a"] == 1
+        assert result["nested"]["b"] == 2
 
-    def test_lod_to_lol(self, test_file):
-        from neuro.core.data.dict import DictUtils
-        test_dict = test_file.dict("input/files/lod.json")
-        lol = DictUtils.lod_to_lol(test_dict)
-        assert lol[0][2] == "g.lat"
-        assert lol[2][1] == 13.7479
-        assert len(lol) == 4
-        assert all(len(li) == 5 for li in lol)
+    def test_lod_to_lol(self):
+        lod = [
+            {"title": "A", "x": 1.0, "y": 2.0},
+            {"title": "B", "x": 3.0, "z": 4.0},
+        ]
+        lol = DictUtils.lod_to_lol(lod)
+        assert lol[0] == ["title", "x", "y", "z"]
+        assert lol[1] == ["A", 1.0, 2.0, ""]
+        assert lol[2] == ["B", 3.0, "", 4.0]

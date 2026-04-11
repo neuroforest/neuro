@@ -19,24 +19,39 @@ def tiddler_object(test_file):
     return tiddler
 
 
-@pytest.mark.integration
-class TestTiddler:
-    def test_add_tag(self, tiddler_object):
+@pytest.mark.unit
+class TestTiddlerUnit:
+    def test_add_tag(self):
         from neuro.core.tid import Tiddler
         tiddler = Tiddler("test")
 
-        # There should not be 'tags' field by default
         with pytest.raises(KeyError):
             tiddler.fields["tags"]
 
-        # Test adding a tag
         tiddler.add_tag("test_tag")
         assert tiddler.fields["tags"][0] == "test_tag"
 
-        # Test adding tag list
         tiddler.add_tag(["test_tag1", "test_tag2"])
         assert len(tiddler.fields["tags"]) == 3
 
+    def test_get_tid_file_name(self):
+        from neuro.core.tid import Tiddler
+        assert Tiddler.get_tid_file_name("$:/core/modules/utils/filesystem.js") == "$__core_modules_utils_filesystem.js"
+        assert Tiddler.get_tid_file_name("tiddler <|>|~|test\\:|\"|") == "tiddler ______test_____"
+
+    def test_item_handling(self):
+        from neuro.core.tid import Tiddler
+        tiddler = Tiddler("test")
+        assert "test" not in tiddler
+        assert "title" in tiddler
+        tiddler["test"] = "Lorem"
+        assert "test" in tiddler
+        del tiddler["test"]
+        assert tiddler.fields == {}
+
+
+@pytest.mark.integration
+class TestTiddler:
     def test_from_html(self, tiddler_object):
         from neuro.core.tid import Tiddler
 
@@ -61,30 +76,6 @@ class TestTiddler:
         del fields["title"]
         with pytest.raises(exceptions.MissingTitle):
             Tiddler.from_fields(fields)
-
-    def test_get_tid_file_name(self):
-        from neuro.core.tid import Tiddler
-        test_tid_title_1 = "$:/core/modules/utils/filesystem.js"
-        tid_file_name_1 = Tiddler.get_tid_file_name(test_tid_title_1)
-        assert tid_file_name_1 == "$__core_modules_utils_filesystem.js"
-
-        test_tid_title_2 = "tiddler <|>|~|test\\:|\"|"
-        tid_file_name_2 = Tiddler.get_tid_file_name(test_tid_title_2)
-        assert tid_file_name_2 == "tiddler ______test_____"
-
-    def test_item_handling(self):
-        """
-        Test special methods __contains__, __delitem__, __getitem__
-        and __setitem__.
-        """
-        from neuro.core.tid import Tiddler
-        tiddler = Tiddler("test")
-        assert "test" not in tiddler
-        assert "title" in tiddler
-        tiddler["test"] = "Lorem"
-        assert "test" in tiddler
-        del tiddler["test"]
-        assert tiddler.fields == {}
 
     def test_to_text(self, test_file, tiddler_object):
         text = tiddler_object.to_text()
