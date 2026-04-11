@@ -4,15 +4,23 @@ NFX format I/O — pure read/write, no database, no validation.
 
 import json
 
+from neuro.core.data.str import Uuid
+
 
 def validate(data, dependency_nids=None):
     """Validate NFX referential integrity and jurisdiction.
 
-    Returns dict with 'unresolved' (endpoints not in local or dependency nodes)
-    and 'foreign' (both endpoints are non-local).
+    Returns dict with 'unresolved' (endpoints not in local or dependency nodes),
+    'foreign' (both endpoints are non-local), and 'invalid_nids' (not valid UUID v4).
     """
     local_nids = {n["nid"] for n in data.get("nodes", [])}
     valid_nids = local_nids | (dependency_nids or set())
+
+    all_nids = {n["nid"] for n in data.get("nodes", [])}
+    for rel in data.get("relationships", []):
+        all_nids.add(rel["from"])
+        all_nids.add(rel["to"])
+    invalid_nids = sorted(nid for nid in all_nids if not Uuid.is_valid_uuid_v4(nid))
 
     unresolved = []
     foreign = []
@@ -22,7 +30,7 @@ def validate(data, dependency_nids=None):
             unresolved.append(rel)
         elif from_nid not in local_nids and to_nid not in local_nids:
             foreign.append(rel)
-    return {"unresolved": unresolved, "foreign": foreign}
+    return {"unresolved": unresolved, "foreign": foreign, "invalid_nids": invalid_nids}
 
 
 def read(path):
