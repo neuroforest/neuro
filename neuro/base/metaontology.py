@@ -86,6 +86,18 @@ class OntologyViolations:
             self.redundant_relationships, self.redundant_properties,
         ])
 
+    def __iter__(self):
+        for label, otype, v in self.violations:
+            yield f"{label} ({otype}): {v}"
+        if self.disconnected:
+            yield "disconnected"
+        for rl in self.redundant_labels:
+            yield f"redundant label: {rl}"
+        for rr in self.redundant_relationships:
+            yield f"redundant relationship: {rr}"
+        for rp in self.redundant_properties:
+            yield f"redundant property: {rp}"
+
     def __repr__(self):
         B, SUCCESS, FAIL, Y, RST = (
             terminal_style.BOLD, terminal_style.SUCCESS, terminal_style.FAIL,
