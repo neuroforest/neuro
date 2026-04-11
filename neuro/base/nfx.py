@@ -5,6 +5,26 @@ NFX format I/O — pure read/write, no database, no validation.
 import json
 
 
+def validate(data, dependency_nids=None):
+    """Validate NFX referential integrity and jurisdiction.
+
+    Returns dict with 'unresolved' (endpoints not in local or dependency nodes)
+    and 'foreign' (both endpoints are non-local).
+    """
+    local_nids = {n["nid"] for n in data.get("nodes", [])}
+    valid_nids = local_nids | (dependency_nids or set())
+
+    unresolved = []
+    foreign = []
+    for rel in data.get("relationships", []):
+        from_nid, to_nid = rel["from"], rel["to"]
+        if from_nid not in valid_nids or to_nid not in valid_nids:
+            unresolved.append(rel)
+        elif from_nid not in local_nids and to_nid not in local_nids:
+            foreign.append(rel)
+    return {"unresolved": unresolved, "foreign": foreign}
+
+
 def read(path):
     """Read an NFX file and return its full contents as a dict."""
     with open(path) as f:

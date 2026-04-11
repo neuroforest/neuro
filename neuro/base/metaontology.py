@@ -33,7 +33,7 @@ class OntologyValidator:
 
     def _is_connected(self):
         """Check if the ontology graph is a single connected component."""
-        structural = ["OntologyNode", "OntologyRelationship", "OntologyProperty"]
+        structural = json.loads(os.environ["ONTOLOGY_OBJECTS"])
         query = f"""
         MATCH (root:OntologyNode)
         WHERE root.label IN {structural}
@@ -117,13 +117,42 @@ class Metaontology:
     def __init__(self, nb):
         self._nb = nb
 
+    def _resolve_dependency_nids(self, dependencies):
+        """Query DB for nids of all nodes defined by dependency ontologies."""
+        dep_nids = [dep.split("@")[0] for dep in dependencies]
+        if not dep_nids:
+            return set()
+        data = self._nb.get_data(
+            """
+            MATCH (m:OntologyMetadata)-[:DEFINES]->(n)
+            WHERE m.`neuro.id` IN $dep_nids
+            RETURN n.`neuro.id` as nid
+            """,
+            {"dep_nids": dep_nids},
+        )
+        return {record["nid"] for record in data}
+
     def import_nfx(self, path):
         """Import metaontology from an NFX file. Merges nodes and relationships
-        without ontology validation (schema defines the validation rules)."""
+        with referential integrity and jurisdiction validation."""
         data = nfx.read(path)
 
         nid = data.get("nid")
         name = data.get("name")
+
+        # Validate referential integrity and jurisdiction
+        dependency_nids = self._resolve_dependency_nids(data.get("dependencies", []))
+        violations = nfx.validate(data, dependency_nids)
+        if violations["unresolved"] or violations["foreign"]:
+            msgs = []
+            for rel in violations["unresolved"]:
+                msgs.append(f"  unresolved: {rel['from']} -> {rel['to']} ({rel['type']})")
+            for rel in violations["foreign"]:
+                msgs.append(f"  foreign: {rel['from']} -> {rel['to']} ({rel['type']})")
+            raise exceptions.NfxViolation(
+                f"NFX validation failed for {path}:\n" + "\n".join(msgs)
+            )
+
         if nid and name:
             properties = {k: data[k] for k in ("name", "version", "description") if k in data}
             self._nb.run_query(
@@ -154,6 +183,15 @@ class Metaontology:
                 "neuro_id": entry["nid"],
                 "properties": entry.get("properties", {}),
             })
+            if nid:
+                self._nb.run_query(
+                    """
+                    MATCH (m:OntologyMetadata {`neuro.id`: $ontology_nid})
+                    MATCH (n {`neuro.id`: $node_nid})
+                    MERGE (m)-[:DEFINES]->(n)
+                    """,
+                    {"ontology_nid": nid, "node_nid": entry["nid"]},
+                )
 
         for rel in data.get("relationships", []):
             query = f"""

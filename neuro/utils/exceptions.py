@@ -39,5 +39,9 @@ class PortInUse(BaseException):
     pass
 
 
+class NfxViolation(BaseException):
+    pass
+
+
 class NoOntology(BaseException):
     pass

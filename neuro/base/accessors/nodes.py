@@ -1,6 +1,7 @@
 from neuro.core import Node
 from neuro.base.accessors import Accessor
 from neuro.base import nfx
+from neuro.utils import exceptions
 
 
 class NodeAccessor(Accessor):
@@ -42,12 +43,24 @@ class NodeAccessor(Accessor):
         parameters = {"neuro_id": node.uuid, "properties": node.properties}
         self._nb.run_query(query, parameters=parameters)
 
-    def import_nfx(self, path):
+    def import_nfx(self, path, dependency_nids=None):
         """
         Import nodes and relationships from an NFX file.
         Nodes are merged on neuro.id; relationships are merged between them.
+        Validates referential integrity and jurisdiction before import.
         """
         data = nfx.read(path)
+
+        violations = nfx.validate(data, dependency_nids)
+        if violations["unresolved"] or violations["foreign"]:
+            msgs = []
+            for rel in violations["unresolved"]:
+                msgs.append(f"  unresolved: {rel['from']} -> {rel['to']} ({rel['type']})")
+            for rel in violations["foreign"]:
+                msgs.append(f"  foreign: {rel['from']} -> {rel['to']} ({rel['type']})")
+            raise exceptions.NfxViolation(
+                f"NFX validation failed for {path}:\n" + "\n".join(msgs)
+            )
 
         for entry in data.get("nodes", []):
             node = Node(
