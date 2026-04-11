@@ -56,6 +56,21 @@ def bool_prompt_show(question, file_path):
             return False
 
 
+def table(rows, header=None, indent=2):
+    """Print aligned columns from a list of tuples with optional header."""
+    if not rows:
+        return
+    all_rows = [header] + rows if header else rows
+    widths = [max(len(str(r[i])) for r in all_rows) for i in range(len(all_rows[0]))]
+    prefix = " " * indent
+    if header:
+        cells = "  ".join(f"{str(val):<{widths[i]}}" for i, val in enumerate(header))
+        print(f"{prefix}{terminal_style.BOLD}{cells}{terminal_style.RESET}")
+    for row in rows:
+        cells = "  ".join(f"{str(val):<{widths[i]}}" for i, val in enumerate(row))
+        print(f"{prefix}{cells}")
+
+
 def selector(options, metadata=None):
     indices = range(len(options))
     if metadata and len(options) == len(metadata):
