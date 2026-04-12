@@ -216,9 +216,9 @@ class Metaontology:
             })
             if nid:
                 self._nb.run_query(
-                    """
-                    MATCH (m:OntologyMetadata {`neuro.id`: $ontology_nid})
-                    MATCH (n {`neuro.id`: $node_nid})
+                    f"""
+                    MATCH (m:OntologyMetadata {{`neuro.id`: $ontology_nid}})
+                    MATCH (n:{labels_str} {{`neuro.id`: $node_nid}})
                     MERGE (m)-[:DEFINES]->(n)
                     """,
                     {"ontology_nid": nid, "node_nid": entry["nid"]},
@@ -226,8 +226,8 @@ class Metaontology:
 
         for rel in data.get("relationships", []):
             query = f"""
-            MATCH (a {{`neuro.id`: $from_id}})
-            MATCH (b {{`neuro.id`: $to_id}})
+            MATCH (:OntologyMetadata)-[:DEFINES]->(a {{`neuro.id`: $from_id}})
+            MATCH (:OntologyMetadata)-[:DEFINES]->(b {{`neuro.id`: $to_id}})
             MERGE (a)-[r:{rel["type"]}]->(b)
             SET r += $properties
             """
