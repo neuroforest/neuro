@@ -39,10 +39,10 @@ class OntologyValidator:
         WHERE root.label IN {structural}
         MATCH (root)<-[:SUBCLASS_OF*0..]-(type)
         MATCH (n)
-        WHERE type.label IN labels(n)
+        WHERE type.label IN labels(n) AND NOT n:OntologyMetadata
         WITH collect(DISTINCT n) AS ontology_nodes
         WITH ontology_nodes, ontology_nodes[0] AS start
-        CALL apoc.path.subgraphNodes(start, {{}}) YIELD node
+        CALL apoc.path.subgraphNodes(start, {{whitelistNodes: ontology_nodes}}) YIELD node
         WITH count(node) AS reachable, size(ontology_nodes) AS total
         RETURN reachable = total AS connected
         """
@@ -65,6 +65,15 @@ class OntologyValidator:
                 if v:
                     ontology_violations.violations.append((label, ontology_object_type, v))
 
+        if "OntologyProperty" in self.instances:
+            specific = {i["label"] for i in self.instances["OntologyProperty"]
+                        if i["ontology_object_type"] != "OntologyProperty"}
+            ontology_violations.generic_properties = sorted(
+                {i["label"] for i in self.instances["OntologyProperty"]
+                 if i["ontology_object_type"] == "OntologyProperty"}
+                - specific
+            )
+
         ontology_violations.disconnected = not self._is_connected()
 
         return ontology_violations
@@ -79,6 +88,7 @@ class OntologyViolations:
         self.redundant_labels: list[str] = []
         self.redundant_relationships: list[str] = []
         self.redundant_properties: list[str] = []
+        self.generic_properties: list[str] = []
 
     def __bool__(self):
         return any([
@@ -97,6 +107,12 @@ class OntologyViolations:
             yield f"redundant relationship: {rr}"
         for rp in self.redundant_properties:
             yield f"redundant property: {rp}"
+
+    @property
+    def warnings(self):
+        B, Y, RST = terminal_style.BOLD, terminal_style.YELLOW, terminal_style.RESET
+        for prop in self.generic_properties:
+            yield f"{Y}warning: {B}{prop}{RST}{Y} uses generic OntologyProperty{RST}"
 
     def __repr__(self):
         B, SUCCESS, FAIL, Y, RST = (
@@ -117,6 +133,9 @@ class OntologyViolations:
             lines.append(f"Redundant relationships: {self.redundant_relationships}")
         if self.redundant_properties:
             lines.append(f"Redundant properties: {self.redundant_properties}")
+
+        for w in self.warnings:
+            lines.append(f"  {w}")
 
         if not lines:
             return f"{SUCCESS} Ontology valid"
