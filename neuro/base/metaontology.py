@@ -185,6 +185,15 @@ class Metaontology:
             )
 
         if nid and name:
+            # Delete all nodes this ontology DEFINES so stale nodes and
+            # relationships are removed. Dependencies are left untouched.
+            self._nb.run_query(
+                """
+                MATCH (m:OntologyMetadata {`neuro.id`: $neuro_id})-[:DEFINES]->(n)
+                DETACH DELETE n
+                """,
+                {"neuro_id": nid},
+            )
             properties = {k: data[k] for k in ("name", "version", "description") if k in data}
             self._nb.run_query(
                 """
