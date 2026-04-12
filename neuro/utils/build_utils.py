@@ -2,7 +2,7 @@ import contextlib
 import os
 import subprocess
 
-from neuro.utils import terminal_style
+from neuro.utils import terminal_components
 
 
 def quiet():
@@ -21,7 +21,7 @@ def rsync_local(source, dest, name=None):
     ]
     if not name:
         name = os.path.basename(source)
-    with terminal_style.step(f"Sync {name}"):
+    with terminal_components.step(f"Sync {name}"):
         subprocess.run(rsync_command, check=True, capture_output=True)
 
 
