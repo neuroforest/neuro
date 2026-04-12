@@ -2,8 +2,38 @@
 General terminal interaction components.
 """
 
+from contextlib import contextmanager
+
+from rich.console import Console
+
 from neuro.core.file.text import Text
 from neuro.utils import terminal_style
+
+
+@contextmanager
+def step(message, display=True):
+    """Spinner during execution, ✔ on completion.
+
+    Yields a status object with a ``.log(text)`` method that temporarily
+    pauses the spinner, prints text, and resumes.
+    """
+    status = Console().status(f"[bold] {message}...", spinner="dots")
+    status.start()
+
+    def log(text):
+        status.stop()
+        print(text)
+        status.start()
+
+    status.log = log
+    try:
+        yield status
+        status.stop()
+        if display:
+            print(f"{terminal_style.SUCCESS} {message}")
+    except BaseException as e:
+        status.stop()
+        print(f"{terminal_style.FAIL} {message}: {e}")
 
 
 def bool_prompt(question, default=None):
