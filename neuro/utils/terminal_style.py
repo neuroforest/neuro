@@ -41,14 +41,28 @@ def header(text: str) -> None:
 
 @contextmanager
 def step(message, display=True):
-    """Spinner during execution, ✔ on completion."""
-    with Console().status(f"[bold] {message}...", spinner="dots"):
-        try:
-            yield
-            if display:
-                print(f"{SUCCESS} {message}")
-        except BaseException as e:
-            print(f"{FAIL} {message} {e}")
+    """Spinner during execution, ✔ on completion.
+
+    Yields a status object with a ``.log(text)`` method that temporarily
+    pauses the spinner, prints text, and resumes.
+    """
+    status = Console().status(f"[bold] {message}...", spinner="dots")
+    status.start()
+
+    def log(text):
+        status.stop()
+        print(text)
+        status.start()
+
+    status.log = log
+    try:
+        yield status
+        status.stop()
+        if display:
+            print(f"{SUCCESS} {message}")
+    except BaseException as e:
+        status.stop()
+        print(f"{FAIL} {message}: {e}")
 
 
 PROG_ICON = [
