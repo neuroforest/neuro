@@ -148,31 +148,74 @@ class Metaontology:
     def __init__(self, nb):
         self._nb = nb
 
-    def _resolve_dependency_nids(self, dependencies):
-        """Query DB for nids of all nodes defined by dependency ontologies."""
-        dep_nids = [dep.split("@")[0] for dep in dependencies]
-        if not dep_nids:
-            return set()
-        data = self._nb.get_data(
-            """
-            MATCH (m:OntologyMetadata)-[:DEFINES]->(n)
-            WHERE m.`neuro.id` IN $dep_nids
-            RETURN n.`neuro.id` as nid
-            """,
-            {"dep_nids": dep_nids},
-        )
-        return {record["nid"] for record in data}
+    def _import_dependencies(self, dependencies, index=None, on_import=None):
+        """Ensure dependencies are in the DB. Import from index if missing or version mismatch.
 
-    def import_nfx(self, path):
-        """Import metaontology from an NFX file. Merges nodes and relationships
-        with referential integrity and jurisdiction validation."""
+        on_import(name, imported): callback for each dependency.
+            imported=True if freshly imported, False if already loaded.
+        """
+        for dep in dependencies:
+            dep_nid, _, dep_version = dep.partition("@")
+            data = self._nb.get_data(
+                """
+                MATCH (m:OntologyMetadata {`neuro.id`: $nid})
+                RETURN m.name as name, m.version as version
+                """,
+                {"nid": dep_nid},
+            )
+            if data and (not dep_version or data[0]["version"] == dep_version):
+                if on_import:
+                    on_import(data[0]["name"], imported=False)
+                continue
+            if not index:
+                raise exceptions.NfxViolation(f"Missing dependency: {dep}")
+            dep_path = index.resolve(dep_nid)
+            if not dep_path:
+                raise exceptions.NfxViolation(f"Dependency {dep} not found in index")
+            self.import_nfx(dep_path, index=index)
+            dep_name = nfx.read(dep_path).get("name", dep_path.stem)
+            if on_import:
+                on_import(dep_name, imported=True)
+
+    def _dependency_nids(self, dependencies, index=None):
+        """Collect nids of all nodes defined by dependencies."""
+        result = set()
+        for dep in dependencies:
+            dep_nid = dep.split("@")[0]
+            if index:
+                dep_path = index.resolve(dep_nid)
+                if dep_path:
+                    dep_data = nfx.read(dep_path)
+                    result.update(e["nid"] for e in dep_data.get("nodes", []))
+                    continue
+            data = self._nb.get_data(
+                """
+                MATCH (m:OntologyMetadata {`neuro.id`: $nid})-[:DEFINES]->(n)
+                RETURN n.`neuro.id` as nid
+                """,
+                {"nid": dep_nid},
+            )
+            result.update(r["nid"] for r in data)
+        return result
+
+    def import_nfx(self, path, index=None, on_import=None):
+        """Import an ontology from an NFX file.
+
+        Clears and rewrites this ontology's nodes. Dependencies are checked
+        in the DB; if missing or version mismatch, imported via the index.
+
+        on_import(name, imported): optional callback for dependency status.
+        """
         data = nfx.read(path)
-
         nid = data.get("nid")
         name = data.get("name")
+        dependencies = data.get("dependencies", [])
 
-        # Validate referential integrity and jurisdiction
-        dependency_nids = self._resolve_dependency_nids(data.get("dependencies", []))
+        # Ensure dependencies are present in the DB.
+        self._import_dependencies(dependencies, index, on_import)
+
+        # Validate referential integrity.
+        dependency_nids = self._dependency_nids(dependencies, index)
         violations = nfx.validate(data, dependency_nids)
         if violations["unresolved"] or violations["foreign"]:
             msgs = []
@@ -184,45 +227,37 @@ class Metaontology:
                 f"NFX validation failed for {path}:\n" + "\n".join(msgs)
             )
 
+        # Clear and rewrite this ontology's nodes.
         if nid and name:
-            # Delete all nodes this ontology DEFINES so stale nodes and
-            # relationships are removed. Dependencies are left untouched.
             self._nb.run_query(
                 """
-                MATCH (m:OntologyMetadata {`neuro.id`: $neuro_id})-[:DEFINES]->(n)
+                MATCH (m:OntologyMetadata {`neuro.id`: $nid})-[:DEFINES]->(n)
                 DETACH DELETE n
                 """,
-                {"neuro_id": nid},
+                {"nid": nid},
             )
             properties = {k: data[k] for k in ("name", "version", "description") if k in data}
             self._nb.run_query(
-                """
-                MERGE (m:OntologyMetadata {`neuro.id`: $neuro_id})
-                SET m += $props
-                """,
-                {"neuro_id": nid, "props": properties},
+                "MERGE (m:OntologyMetadata {`neuro.id`: $nid}) SET m += $props",
+                {"nid": nid, "props": properties},
             )
-            for dep in data.get("dependencies", []):
+            for dep in dependencies:
                 dep_nid = dep.split("@")[0]
                 self._nb.run_query(
                     """
-                    MATCH (m:OntologyMetadata {`neuro.id`: $neuro_id})
+                    MATCH (m:OntologyMetadata {`neuro.id`: $nid})
                     MATCH (d:OntologyMetadata {`neuro.id`: $dep_nid})
                     MERGE (m)-[:DEPENDS_ON]->(d)
                     """,
-                    {"neuro_id": nid, "dep_nid": dep_nid},
+                    {"nid": nid, "dep_nid": dep_nid},
                 )
 
         for entry in data.get("nodes", []):
             labels_str = ":".join(entry["labels"])
-            query = f"""
-            MERGE (n:{labels_str} {{`neuro.id`: $neuro_id}})
-            SET n += $properties
-            """
-            self._nb.run_query(query, {
-                "neuro_id": entry["nid"],
-                "properties": entry.get("properties", {}),
-            })
+            self._nb.run_query(
+                f"MERGE (n:{labels_str} {{`neuro.id`: $nid}}) SET n += $props",
+                {"nid": entry["nid"], "props": entry.get("properties", {})},
+            )
             if nid:
                 self._nb.run_query(
                     f"""
@@ -234,17 +269,16 @@ class Metaontology:
                 )
 
         for rel in data.get("relationships", []):
-            query = f"""
-            MATCH (:OntologyMetadata)-[:DEFINES]->(a {{`neuro.id`: $from_id}})
-            MATCH (:OntologyMetadata)-[:DEFINES]->(b {{`neuro.id`: $to_id}})
-            MERGE (a)-[r:{rel["type"]}]->(b)
-            SET r += $properties
-            """
-            self._nb.run_query(query, {
-                "from_id": rel["from"],
-                "to_id": rel["to"],
-                "properties": rel.get("properties", {}),
-            })
+            self._nb.run_query(
+                f"""
+                MATCH (:OntologyMetadata)-[:DEFINES]->(a {{`neuro.id`: $from_id}})
+                MATCH (:OntologyMetadata)-[:DEFINES]->(b {{`neuro.id`: $to_id}})
+                MERGE (a)-[r:{rel["type"]}]->(b)
+                SET r += $props
+                """,
+                {"from_id": rel["from"], "to_id": rel["to"],
+                 "props": rel.get("properties", {})},
+            )
 
     def is_ontology_valid(self):
         """Validate metaontology structure. Returns True if valid, False otherwise."""
