@@ -148,8 +148,16 @@ class Metaontology:
     def __init__(self, nb):
         self._nb = nb
 
+    @staticmethod
+    def _version_tuple(version_str):
+        """Parse a version string like '2.1' into a comparable tuple (2, 1)."""
+        return tuple(int(x) for x in version_str.split("."))
+
     def _import_dependencies(self, dependencies, index=None, on_import=None):
-        """Ensure dependencies are in the DB. Import from index if missing or version mismatch.
+        """Ensure dependencies are in the DB. Import from index if missing or below minimum.
+
+        Version pins are treated as minimum versions (Go-style): @2.1 means >=2.1.
+        The resolver keeps the highest version already loaded if it satisfies the minimum.
 
         on_import(name, imported): callback for each dependency.
             imported=True if freshly imported, False if already loaded.
@@ -163,7 +171,8 @@ class Metaontology:
                 """,
                 {"nid": dep_nid},
             )
-            if data and (not dep_version or data[0]["version"] == dep_version):
+            if data and (not dep_version or
+                         self._version_tuple(data[0]["version"]) >= self._version_tuple(dep_version)):
                 if on_import:
                     on_import(data[0]["name"], imported=False)
                 continue
