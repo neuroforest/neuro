@@ -37,11 +37,7 @@ class Node(Object):
     def __hash__(self):
         return int(self.uuid, 16)
 
-    def __repr__(self, ignore=tuple()):
-        """
-        Display the node data in the terminal.
-        :return:
-        """
+    def __repr__(self):
         repr_str = (
             f"Node: {self.uuid}\n"
             f"Type: {self.labels}\n"
@@ -52,9 +48,6 @@ class Node(Object):
     def __setitem__(self, key, value):
         setattr(self, key, value)
 
-    def __str__(self):
-        return str(self.__repr__())
-
     @classmethod
     def from_neurobase(cls, nb, neuro_id):
         query = f"""
@@ -64,9 +57,6 @@ class Node(Object):
         data = nb.get_data(query)
         assert len(data) == 1
         return cls(data[0]["labels"], properties=data[0]["properties"])
-
-    def display(self):
-        print(self.__repr__())
 
     @staticmethod
     def generate_neuro_id():

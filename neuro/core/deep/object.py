@@ -1,3 +1,6 @@
+from neuro.core.data.dict import DictUtils
+
+
 class Object(object):
     def __init__(self, labels=None, properties=None):
         # Set labels
@@ -15,3 +18,17 @@ class Object(object):
             self.properties = properties
         else:
             raise TypeError(f"Properties must be a dict or None, got {type(properties).__name__}")
+
+    def __repr__(self):
+        repr_str = (
+            f"Object\n"
+            f"Type: {self.labels}\n"
+            f"Properties:\n{DictUtils.represent(self.properties, display=False, level=1)}\n"
+        )
+        return repr_str
+
+    def __str__(self):
+        return self.__repr__()
+
+    def display(self):
+        print(self.__repr__())
