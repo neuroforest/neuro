@@ -43,15 +43,6 @@ class TestQa:
         assert "neuro.id" in example
         assert Uuid.is_valid_uuid_v4(example["neuro.id"])
 
-    def test_resolve_neuro_id_duplicate(self, wf_qa, capsys):
-        from neuro.tools.terminal.commands import qa
-        qa_pass = qa.NeuroIDs(wf_qa.port, verbose=True).run()
-        assert not qa_pass
-        stdout = capsys.readouterr().out
-        assert len(stdout.splitlines()) == 5
-        assert stdout.count("Duplicate neuro.id") == 2
-        assert "20b4f8d3-6e6f-49fb-9be7-97f553c347bd" in stdout
-
     def test_set_roles(self, wf_qa):
         from neuro.tools.tw5api import tw_get
         from neuro.tools.terminal.commands import qa

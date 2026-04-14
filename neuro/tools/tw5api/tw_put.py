@@ -36,8 +36,6 @@ def fields(tw_fields, **kwargs):
 def tiddler(tid: Tiddler, **kwargs):
     tid_fields = tid.fields
     tid_fields["title"] = tid.title
-    if "neuro.id" not in tid_fields:
-        tid_fields["neuro.id"] = tid.uuid
     fields(tid_fields, **kwargs)
 
 

@@ -47,7 +47,7 @@ class TestTiddlerUnit:
         tiddler["test"] = "Lorem"
         assert "test" in tiddler
         del tiddler["test"]
-        assert tiddler.fields == {}
+        assert list(tiddler.fields.keys()) == ["neuro.id"]
 
 
 @pytest.mark.integration
@@ -82,7 +82,11 @@ class TestTiddler:
         result_text_path = test_file.get("results/files/tiddler_text.txt")
         with open(result_text_path) as f:
             result_text = f.read()
-        assert result_text == text
+        # Filter out neuro.id line (auto-generated, differs each run)
+        text_lines = [line for line in text.splitlines() if not line.startswith("neuro.id:")]
+        result_lines = [line for line in result_text.splitlines() if not line.startswith("neuro.id:")]
+        assert result_lines == text_lines
+        assert tiddler_object.uuid is not None
 
 
 class TestTiddlerList:

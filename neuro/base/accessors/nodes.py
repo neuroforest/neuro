@@ -14,15 +14,14 @@ class NodeAccessor(Accessor):
 
         MATCH (n)
         WHERE node_label in labels(n) AND n.`neuro.id` = $neuro_id
-        RETURN n as properties, labels(n) as labels, n.`neuro.id` as uuid;
+        RETURN properties(n) as properties, labels(n) as labels;
         """
         data = self._nb.get_data(query, {"neuro_id": neuro_id})
         if not data:
             raise ValueError(f"No node found with neuro.id: {neuro_id}")
         if len(data) > 1:
             raise ValueError(f"Multiple nodes found with neuro.id: {neuro_id}")
-        d = data[0]
-        return Node(uuid=d["uuid"], labels=d["labels"], properties=d["properties"])
+        return Node(labels=data[0]["labels"], properties=data[0]["properties"])
 
     def put(self, node):
         """
@@ -63,10 +62,11 @@ class NodeAccessor(Accessor):
             )
 
         for entry in data.get("nodes", []):
+            properties = entry.get("properties", {})
+            properties["neuro.id"] = entry["nid"]
             node = Node(
-                uuid=entry["nid"],
                 labels=entry["labels"],
-                properties=entry.get("properties", {}),
+                properties=properties,
             )
             self.put(node)
 
