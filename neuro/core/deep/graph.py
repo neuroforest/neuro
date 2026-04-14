@@ -11,9 +11,19 @@ class Node(Object):
     and the NeuroForest platform.
     """
     def __init__(self, labels: list, **kwargs):
-        super().__init__(labels=labels)
-        self.uuid = kwargs.get("uuid", self.generate_neuro_id())
-        self.properties = kwargs.get("properties", dict())
+        super().__init__(labels=labels, properties=kwargs.get("properties", dict()))
+        if "uuid" in kwargs:
+            self.uuid = kwargs["uuid"]
+        elif "neuro.id" not in self.properties:
+            self.uuid = self.generate_neuro_id()
+
+    @property
+    def uuid(self):
+        return self.properties.get("neuro.id")
+
+    @uuid.setter
+    def uuid(self, value):
+        self.properties["neuro.id"] = value
 
     def __eq__(self, other):
         if isinstance(other, Node):
@@ -53,9 +63,7 @@ class Node(Object):
         """
         data = nb.get_data(query)
         assert len(data) == 1
-        properties = data[0]["properties"]
-        labels = data[0]["labels"]
-        return cls(labels, uuid=neuro_id, properties=properties)
+        return cls(data[0]["labels"], properties=data[0]["properties"])
 
     def display(self):
         print(self.__repr__())

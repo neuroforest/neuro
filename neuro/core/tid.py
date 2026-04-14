@@ -27,13 +27,11 @@ class Tiddler(Node):
         - fields - a dictionary of all fields, some with special handling (tags, list)
     """
     def __init__(self, tid_title="", fields=None, **kwargs):
+        if fields and isinstance(fields, dict):
+            kwargs.setdefault("properties", fields)
         super().__init__(["Tiddler"], **kwargs)
         self.title = tid_title
-        if fields and isinstance(fields, dict):
-            self.fields = fields
-        else:
-            self.fields = dict()
-        self.properties = self.fields
+        self.fields = self.properties
 
     def __bool__(self):
         return bool(self.title)
@@ -284,8 +282,8 @@ class TiddlerList(list[Tiddler]):
         if tiddler.title in [t.title for t in self]:
             logging.warning(conflict_message.format("title", tiddler.title))
             return
-        if tiddler.uuid in [t.uuid for t in self]:
-            logging.warning(conflict_message.format("uuid", tiddler["uuid"]))
+        if tiddler.uuid and tiddler.uuid in [t.uuid for t in self]:
+            logging.warning(conflict_message.format("uuid", tiddler.uuid))
             return
 
         # Writing
