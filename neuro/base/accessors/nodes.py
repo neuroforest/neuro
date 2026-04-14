@@ -29,18 +29,7 @@ class NodeAccessor(Accessor):
         Validates the node against the ontology before insertion.
         :param node: Node
         """
-        result = self._nb.ontology.is_valid_node(node)
-        if not result:
-            raise ValueError(f"Node validation failed: {result}")
-
-        labels_str = ":".join(node.labels)
-        query = f"""
-        MERGE (n:{labels_str} {{`neuro.id`: $neuro_id}})
-        SET n += $properties
-        RETURN n
-        """
-        parameters = {"neuro_id": node.uuid, "properties": node.properties}
-        self._nb.run_query(query, parameters=parameters)
+        self._nb.objects.put(node, identifier_key="neuro.id")
 
     def import_nfx(self, path, dependency_nids=None):
         """

@@ -4,6 +4,7 @@ import logging
 import neo4j
 
 from neuro.base.accessors.nodes import NodeAccessor
+from neuro.base.accessors.objects import ObjectAccessor
 from neuro.base.accessors.tiddlers import TiddlerAccessor
 from neuro.base.metaontology import Metaontology
 from neuro.base.ontology import Ontology
@@ -26,6 +27,7 @@ class NeuroBase:
         # Accessors
         self.metaontology = Metaontology(self)
         self.ontology = Ontology(self)
+        self.objects = ObjectAccessor(self)
         self.nodes = NodeAccessor(self)
         self.tiddlers = TiddlerAccessor(self)
 
