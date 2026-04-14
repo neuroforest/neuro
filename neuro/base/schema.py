@@ -151,13 +151,72 @@ class Metaproperties(UserDict):
         return violations
 
 
+class Metarelationship:
+    """Describes a relationship defined in the ontology for a node type."""
+
+    def __init__(self, record):
+        self.label = record["relationship"]
+        self.node = record["node"]
+        self.target = record["target"]
+        self.direction = record["direction"]
+
+    def __repr__(self):
+        if self.direction == "outgoing":
+            return f"<Metarelationship ({self.node})-[:{self.label}]->({self.target})>"
+        return f"<Metarelationship ({self.target})-[:{self.label}]->({self.node})>"
+
+
+class Metarelationships(UserDict):
+    def __init__(self, node_label):
+        super().__init__()
+        self.node_label = node_label
+
+    def __repr__(self):
+        return f"<Metarelationships node={self.node_label} len={len(self.data)}>"
+
+    @classmethod
+    def from_ontology(cls, nb, node_label):
+        """Query the ontology and return Metarelationships for a given node label."""
+        query = f"""
+        MATCH (ion:OntologyNode {{label: "{node_label}"}})
+        MATCH (ion)-[:SUBCLASS_OF*0..]->(on)
+
+        // Outgoing: this node has a relationship to a target
+        OPTIONAL MATCH (on)-[:HAS_RELATIONSHIP]->(orel:OntologyRelationship)
+        OPTIONAL MATCH (orel)-[:HAS_TARGET]->(otarget:OntologyNode)
+        WITH ion, collect(DISTINCT {{
+            node: on.label, relationship: orel.label,
+            target: otarget.label, direction: "outgoing"
+        }}) as outgoing
+
+        // Incoming: another node has a relationship targeting this node
+        MATCH (ion)-[:SUBCLASS_OF*0..]->(ancestor)
+        OPTIONAL MATCH (source:OntologyNode)-[:HAS_RELATIONSHIP]->(irel:OntologyRelationship)
+        WHERE (irel)-[:HAS_TARGET]->(ancestor)
+        WITH outgoing, collect(DISTINCT {{
+            node: ancestor.label, relationship: irel.label,
+            target: source.label, direction: "incoming"
+        }}) as incoming
+
+        UNWIND (outgoing + incoming) as r
+        WITH r WHERE r.relationship IS NOT NULL
+        RETURN DISTINCT r.node as node, r.relationship as relationship,
+               r.target as target, r.direction as direction
+        """
+        data = nb.get_data(query)
+        metarelationships = cls(node_label)
+        for record in data:
+            metarelationships[record["relationship"] + ":" + record["direction"]] = Metarelationship(record)
+        return metarelationships
+
+
 class OntologyNodeInfo:
     def __init__(self, nb, label):
         self.nb = nb
         self.label = label
         self.lineage: list
-        self.relationships: list
         self.metaproperties: Metaproperties
+        self.metarelationships: Metarelationships
         self.get_lineage()
         self.get_metaproperties()
         self.get_relationships()
@@ -177,19 +236,20 @@ class OntologyNodeInfo:
         self.metaproperties = Metaproperties.from_ontology(self.nb, self.label)
 
     def get_relationships(self):
-        self.relationships = list()
+        self.metarelationships = Metarelationships.from_ontology(self.nb, self.label)
 
     def display(self):
-        print(f"Ontology info for {terminal_style.BOLD}{self.label}{terminal_style.RESET}")
+        print(f"Type info for {terminal_style.BOLD}{self.label}{terminal_style.RESET}")
         print("-" * 50)
         print("Lineage:")
         print("   ", " ➜  ".join(self.lineage))
-        print("\nMetaproperties:")
+        print("\nProperties:")
         sorted_metaproperties = sorted(self.metaproperties.values(), key=lambda x: x.label)
         list_represent = ListUtils.represent(sorted_metaproperties, display=False)
         print(list_represent[2:-3])
         print("\nRelationships:")
-        list_represent = ListUtils.represent(self.relationships, level=0, display=False)
+        sorted_metarelationships = sorted(self.metarelationships.values(), key=lambda x: x.label)
+        list_represent = ListUtils.represent(sorted_metarelationships, level=0, display=False)
         print(list_represent[2:-3])
 
 
