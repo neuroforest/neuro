@@ -4,18 +4,20 @@ from neuro.base.ontology import ObjectValidator
 
 class ObjectAccessor(Accessor):
 
-    def put(self, obj, identifier_key=None):
+    def put(self, obj, identifier_key=None, validate=True):
         """
         Save an Object to the database. Validates against the ontology before insertion.
 
         :param obj: Object with .labels and .properties
         :param identifier_key: property key used as MERGE key (e.g. "neuro.id").
             If provided, MERGE on that property; otherwise CREATE.
+        :param validate: if False, skip ontology validation.
         """
-        validator = ObjectValidator(self._nb, obj)
-        violations = validator.get_violations()
-        if violations:
-            raise ValueError(f"Object validation failed: {violations}")
+        if validate:
+            validator = ObjectValidator(self._nb, obj)
+            violations = validator.get_violations()
+            if violations:
+                raise ValueError(f"Object validation failed: {violations}")
 
         labels_str = ":".join(obj.labels)
 
