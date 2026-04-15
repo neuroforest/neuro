@@ -162,9 +162,13 @@ class Metarelationship:
         self.label = record["relationship"]
         self.source = record["source"]
         self.target = record["target"]
+        self.relationship_type = record["relationship_type"]
 
     def __repr__(self):
         return f"<Metarelationship ({self.source})-[:{self.label}]->({self.target})>"
+
+    def is_required(self):
+        return self.relationship_type == "REQUIRE_RELATIONSHIP"
 
     def direction(self, node_label):
         """Return 'outgoing' or 'incoming' relative to node_label."""
@@ -191,26 +195,34 @@ class Metarelationships(UserDict):
         MATCH (ion)-[:SUBCLASS_OF*0..]->(osource)
 
         // Outgoing: this node has a relationship to a target
-        OPTIONAL MATCH (osource)-[:HAS_RELATIONSHIP]->(orel:OntologyRelationship)
+        // Collect link types (HAS_RELATIONSHIP and its subclasses)
+        MATCH (linktype:OntologyRelationship)-[:SUBCLASS_OF*0..]->
+            (:OntologyRelationship {{label: "HAS_RELATIONSHIP"}})
+
+        // Outgoing: this node has a relationship to a target
+        OPTIONAL MATCH (osource)-[olink]->(orel:OntologyRelationship)
+        WHERE type(olink) = linktype.label
         OPTIONAL MATCH (orel)-[:HAS_TARGET]->(otarget:OntologyNode)
         WITH ion, collect(DISTINCT {{
             source: osource.label, relationship: orel.label,
-            target: otarget.label
+            target: otarget.label, relationship_type: type(olink)
         }}) as outgoing
 
         // Incoming: another node has a relationship targeting this node
         MATCH (ion)-[:SUBCLASS_OF*0..]->(itarget)
-        OPTIONAL MATCH (isource:OntologyNode)-[:HAS_RELATIONSHIP]->(irel:OntologyRelationship)
-        WHERE (irel)-[:HAS_TARGET]->(itarget)
+        MATCH (ilinktype:OntologyRelationship)-[:SUBCLASS_OF*0..]->
+            (:OntologyRelationship {{label: "HAS_RELATIONSHIP"}})
+        OPTIONAL MATCH (isource:OntologyNode)-[ilink]->(irel:OntologyRelationship)
+        WHERE type(ilink) = ilinktype.label AND (irel)-[:HAS_TARGET]->(itarget)
         WITH outgoing, collect(DISTINCT {{
             source: isource.label, relationship: irel.label,
-            target: itarget.label
+            target: itarget.label, relationship_type: type(ilink)
         }}) as incoming
 
         UNWIND (outgoing + incoming) as r
         WITH r WHERE r.relationship IS NOT NULL
         RETURN DISTINCT r.source as source, r.relationship as relationship,
-               r.target as target
+               r.target as target, r.relationship_type as relationship_type
         """
         data = nb.get_data(query)
         metarelationships = cls(node_label)
@@ -233,10 +245,12 @@ class Metarelationships(UserDict):
         """
         relationships = nb.get_data(query, {"neuro_id": neuro_id})
 
+        present_keys = set()
         for rel in relationships:
             rel_type = rel["rel_type"]
             direction = rel["direction"]
             key = f"{rel_type}:{direction}"
+            present_keys.add(key)
             if key not in self.data:
                 violations.undefined_relationships.append(
                     (rel_type, direction, rel["target_labels"])
@@ -248,6 +262,10 @@ class Metarelationships(UserDict):
                     violations.invalid_relationships.append(
                         (rel_type, direction, rel["target_labels"], expected_label)
                     )
+
+        for key, mr in self.data.items():
+            if mr.is_required() and key not in present_keys:
+                violations.missing_relationships.append(mr)
 
         return violations
 
@@ -304,13 +322,15 @@ class Violations:
         self.missing_properties: list = []
         self.invalid_properties: list = []
         self.undefined_relationships: list = []
+        self.missing_relationships: list = []
         self.invalid_relationships: list = []
 
     def __bool__(self):
         return any([
             self.undefined_labels, self.undefined_properties,
             self.missing_properties, self.invalid_properties,
-            self.undefined_relationships, self.invalid_relationships,
+            self.undefined_relationships, self.missing_relationships,
+            self.invalid_relationships,
         ])
 
     def __repr__(self):
@@ -328,6 +348,8 @@ class Violations:
         if self.undefined_relationships:
             for rel_type, direction, labels in self.undefined_relationships:
                 lines.append(f"  undefined relationship: {B}{rel_type}{RST} ({direction}, {labels})")
+        if self.missing_relationships:
+            lines.append(f"  missing relationships: {[mr.label for mr in self.missing_relationships]}")
         if self.invalid_relationships:
             for rel_type, direction, actual, expected in self.invalid_relationships:
                 lines.append(f"  invalid relationship target: {B}{rel_type}{RST} ({direction}, expected {expected}, got {actual})")
