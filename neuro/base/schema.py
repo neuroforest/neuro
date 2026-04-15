@@ -205,7 +205,8 @@ class Metarelationships(UserDict):
         OPTIONAL MATCH (orel)-[:HAS_TARGET]->(otarget:OntologyNode)
         WITH ion, collect(DISTINCT {{
             source: osource.label, relationship: orel.label,
-            target: otarget.label, relationship_type: type(olink)
+            target: otarget.label, relationship_type: type(olink),
+            direction: "outgoing"
         }}) as outgoing
 
         // Incoming: another node has a relationship targeting this node
@@ -216,20 +217,27 @@ class Metarelationships(UserDict):
         WHERE type(ilink) = ilinktype.label AND (irel)-[:HAS_TARGET]->(itarget)
         WITH outgoing, collect(DISTINCT {{
             source: isource.label, relationship: irel.label,
-            target: itarget.label, relationship_type: type(ilink)
+            target: itarget.label, relationship_type: type(ilink),
+            direction: "incoming"
         }}) as incoming
 
         UNWIND (outgoing + incoming) as r
         WITH r WHERE r.relationship IS NOT NULL
         RETURN DISTINCT r.source as source, r.relationship as relationship,
-               r.target as target, r.relationship_type as relationship_type
+               r.target as target, r.relationship_type as relationship_type,
+               r.direction as direction
         """
         data = nb.get_data(query)
         metarelationships = cls(node_label)
         for record in data:
             mr = Metarelationship(record)
-            direction = mr.direction(node_label)
-            metarelationships[record["relationship"] + ":" + direction] = mr
+            key = record["relationship"] + ":" + record["direction"]
+            # Skip duplicate incoming entry for self-referential relationships
+            if record["direction"] == "incoming" and mr.source == mr.target:
+                outgoing_key = record["relationship"] + ":outgoing"
+                if outgoing_key in metarelationships:
+                    continue
+            metarelationships[key] = mr
         return metarelationships
 
     def validate_relationships(self, nb, neuro_id, violations):
