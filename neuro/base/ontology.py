@@ -2,7 +2,7 @@ import json
 import os
 
 from neuro.base import nfx
-from neuro.base.schema import Metaproperties, OntologyNodeInfo, Violations
+from neuro.base.schema import Metaproperties, Metarelationships, OntologyNodeInfo, Violations
 from neuro.utils import terminal_components
 
 
@@ -93,9 +93,11 @@ class ObjectValidator:
         self.object = o
         self.violations = Violations()
 
-    def get_violations(self):
+    def get_violations(self, validate_relationships=False):
         self.validate_labels()
         self.validate_properties()
+        if validate_relationships:
+            self.validate_relationships()
         return self.violations
 
     def validate_label(self, label):
@@ -121,4 +123,14 @@ class ObjectValidator:
                 continue
             metaproperties = Metaproperties.from_ontology(self.nb, label)
             self.violations = metaproperties.validate_properties(self.object.properties, self.violations)
+
+    def validate_relationships(self):
+        neuro_id = self.object.properties.get("neuro.id")
+        if not neuro_id:
+            return
+        for label in self.object.labels:
+            if label in self.violations.undefined_labels:
+                continue
+            metarelationships = Metarelationships.from_ontology(self.nb, label)
+            self.violations = metarelationships.validate_relationships(self.nb, neuro_id, self.violations)
 

@@ -5,7 +5,7 @@ Unit tests for neuro.base.schema — property value validation.
 import pytest
 import neo4j.time
 
-from neuro.base.schema import Metaproperty
+from neuro.base.schema import Metaproperty, Metarelationship
 
 pytestmark = pytest.mark.unit
 
@@ -98,3 +98,21 @@ class TestCheckUnknownType:
 
     def test_returns_false(self):
         assert not self.mp.check("anything")
+
+
+class TestMetarelationship:
+    mr = Metarelationship({"relationship": "PARENT_OF", "source": "Taxon", "target": "Taxon"})
+
+    def test_repr(self):
+        assert repr(self.mr) == "<Metarelationship (Taxon)-[:PARENT_OF]->(Taxon)>"
+
+    def test_direction_source(self):
+        assert self.mr.direction("Taxon") == "outgoing"
+
+    def test_direction_unrelated(self):
+        assert self.mr.direction("Gene") is None
+
+    def test_direction_asymmetric(self):
+        mr = Metarelationship({"relationship": "HAS_GENE", "source": "Genome", "target": "Gene"})
+        assert mr.direction("Genome") == "outgoing"
+        assert mr.direction("Gene") == "incoming"
