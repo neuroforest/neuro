@@ -70,7 +70,7 @@ def handle_connect(data, relationship_type):
         print("Property already set.")
 
 
-def handle_set_relationship(data):
+def handle_set_relationship(data, relationship_type="HAS_RELATIONSHIP"):
     properties = {
         "label": data["label"],
         **data["properties"]
@@ -91,8 +91,8 @@ def handle_set_relationship(data):
         MATCH (o:OntologyNode {properties_string})
         MATCH (r:OntologyRelationship {relationship_properties_string})
         MATCH (t:OntologyNode {target_properties_string})
-        OPTIONAL MATCH (o)-[er:HAS_RELATIONSHIP]->(r)-[et:HAS_TARGET]->(t)
-        MERGE (o)-[:HAS_RELATIONSHIP]->(r)
+        OPTIONAL MATCH (o)-[er:{relationship_type}]->(r)-[et:HAS_TARGET]->(t)
+        MERGE (o)-[:{relationship_type}]->(r)
         MERGE (r)-[:HAS_TARGET]->(t)
         RETURN o, r, t, er, et;
     """
@@ -123,12 +123,16 @@ def handler(nb, tree):
     }
     data = NqlTransformer().transform(tree)
     ontology_type = data["type"]
+    relationship_type = {
+        "set_relationship": "HAS_RELATIONSHIP",
+        "require_relationship": "REQUIRE_RELATIONSHIP",
+    }
     if ontology_type in ["node", "property", "relationship"]:
         handle_node(data)
     elif ontology_type in connection_type:
         handle_connect(data, connection_type[ontology_type])
-    elif ontology_type == "set_relationship":
-        handle_set_relationship(data)
+    elif ontology_type in relationship_type:
+        handle_set_relationship(data, relationship_type[ontology_type])
     elif ontology_type == "info":
         handle_info(data["label"])
     else:

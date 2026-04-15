@@ -101,7 +101,8 @@ class TestCheckUnknownType:
 
 
 class TestMetarelationship:
-    mr = Metarelationship({"relationship": "PARENT_OF", "source": "Taxon", "target": "Taxon"})
+    mr = Metarelationship({"relationship": "PARENT_OF", "source": "Taxon", "target": "Taxon",
+                           "relationship_type": "HAS_RELATIONSHIP"})
 
     def test_repr(self):
         assert repr(self.mr) == "<Metarelationship (Taxon)-[:PARENT_OF]->(Taxon)>"
@@ -113,6 +114,13 @@ class TestMetarelationship:
         assert self.mr.direction("Gene") is None
 
     def test_direction_asymmetric(self):
-        mr = Metarelationship({"relationship": "HAS_GENE", "source": "Genome", "target": "Gene"})
+        mr = Metarelationship({"relationship": "HAS_GENE", "source": "Genome", "target": "Gene",
+                               "relationship_type": "HAS_RELATIONSHIP"})
         assert mr.direction("Genome") == "outgoing"
         assert mr.direction("Gene") == "incoming"
+
+    def test_is_required(self):
+        mr = Metarelationship({"relationship": "HAS_GENE", "source": "Genome", "target": "Gene",
+                               "relationship_type": "REQUIRE_RELATIONSHIP"})
+        assert mr.is_required()
+        assert not self.mr.is_required()
