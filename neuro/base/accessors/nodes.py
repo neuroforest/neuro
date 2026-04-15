@@ -1,6 +1,7 @@
 from neuro.core import Node
 from neuro.base.accessors import Accessor
 from neuro.base import nfx
+from neuro.base.schema import Metarelationships, Violations
 from neuro.utils import exceptions
 
 
@@ -58,6 +59,40 @@ class NodeAccessor(Accessor):
                 properties=properties,
             )
             self.put(node)
+
+        # Build label lookup from imported nodes for relationship validation
+        nid_labels = {}
+        for entry in data.get("nodes", []):
+            nid_labels[entry["nid"]] = entry["labels"]
+
+        violations = Violations()
+        for rel in data.get("relationships", []):
+            rel_type = rel["type"]
+            from_labels = nid_labels.get(rel["from"], [])
+            to_labels = nid_labels.get(rel["to"], [])
+
+            # Validate against the source node's metarelationships
+            validated = False
+            for label in from_labels:
+                mrs = Metarelationships.from_ontology(self._nb, label)
+                key = f"{rel_type}:outgoing"
+                if key in mrs:
+                    mr = mrs[key]
+                    if mr.target not in to_labels:
+                        violations.invalid_relationships.append(
+                            (rel_type, "outgoing", to_labels, mr.target)
+                        )
+                    validated = True
+                    break
+            if not validated:
+                violations.undefined_relationships.append(
+                    (rel_type, "outgoing", to_labels)
+                )
+
+        if violations:
+            raise exceptions.NfxViolation(
+                f"Relationship validation failed for {path}:\n{violations}"
+            )
 
         for rel in data.get("relationships", []):
             rel_type = rel["type"]

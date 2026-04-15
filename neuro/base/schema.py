@@ -152,18 +152,27 @@ class Metaproperties(UserDict):
 
 
 class Metarelationship:
-    """Describes a relationship defined in the ontology for a node type."""
+    """Describes a relationship defined in the ontology for a node type.
+
+    Always stored as (source)-[:label]->(target).
+    Direction relative to a given node is deduced from source/target.
+    """
 
     def __init__(self, record):
         self.label = record["relationship"]
-        self.node = record["node"]
+        self.source = record["source"]
         self.target = record["target"]
-        self.direction = record["direction"]
 
     def __repr__(self):
-        if self.direction == "outgoing":
-            return f"<Metarelationship ({self.node})-[:{self.label}]->({self.target})>"
-        return f"<Metarelationship ({self.target})-[:{self.label}]->({self.node})>"
+        return f"<Metarelationship ({self.source})-[:{self.label}]->({self.target})>"
+
+    def direction(self, node_label):
+        """Return 'outgoing' or 'incoming' relative to node_label."""
+        if self.source == node_label:
+            return "outgoing"
+        if self.target == node_label:
+            return "incoming"
+        return None
 
 
 class Metarelationships(UserDict):
@@ -179,35 +188,68 @@ class Metarelationships(UserDict):
         """Query the ontology and return Metarelationships for a given node label."""
         query = f"""
         MATCH (ion:OntologyNode {{label: "{node_label}"}})
-        MATCH (ion)-[:SUBCLASS_OF*0..]->(on)
+        MATCH (ion)-[:SUBCLASS_OF*0..]->(osource)
 
         // Outgoing: this node has a relationship to a target
-        OPTIONAL MATCH (on)-[:HAS_RELATIONSHIP]->(orel:OntologyRelationship)
+        OPTIONAL MATCH (osource)-[:HAS_RELATIONSHIP]->(orel:OntologyRelationship)
         OPTIONAL MATCH (orel)-[:HAS_TARGET]->(otarget:OntologyNode)
         WITH ion, collect(DISTINCT {{
-            node: on.label, relationship: orel.label,
-            target: otarget.label, direction: "outgoing"
+            source: osource.label, relationship: orel.label,
+            target: otarget.label
         }}) as outgoing
 
         // Incoming: another node has a relationship targeting this node
-        MATCH (ion)-[:SUBCLASS_OF*0..]->(ancestor)
-        OPTIONAL MATCH (source:OntologyNode)-[:HAS_RELATIONSHIP]->(irel:OntologyRelationship)
-        WHERE (irel)-[:HAS_TARGET]->(ancestor)
+        MATCH (ion)-[:SUBCLASS_OF*0..]->(itarget)
+        OPTIONAL MATCH (isource:OntologyNode)-[:HAS_RELATIONSHIP]->(irel:OntologyRelationship)
+        WHERE (irel)-[:HAS_TARGET]->(itarget)
         WITH outgoing, collect(DISTINCT {{
-            node: ancestor.label, relationship: irel.label,
-            target: source.label, direction: "incoming"
+            source: isource.label, relationship: irel.label,
+            target: itarget.label
         }}) as incoming
 
         UNWIND (outgoing + incoming) as r
         WITH r WHERE r.relationship IS NOT NULL
-        RETURN DISTINCT r.node as node, r.relationship as relationship,
-               r.target as target, r.direction as direction
+        RETURN DISTINCT r.source as source, r.relationship as relationship,
+               r.target as target
         """
         data = nb.get_data(query)
         metarelationships = cls(node_label)
         for record in data:
-            metarelationships[record["relationship"] + ":" + record["direction"]] = Metarelationship(record)
+            mr = Metarelationship(record)
+            direction = mr.direction(node_label)
+            metarelationships[record["relationship"] + ":" + direction] = mr
         return metarelationships
+
+    def validate_relationships(self, nb, neuro_id, violations):
+        """Validate that all relationships on a node comply with the ontology."""
+        query = """
+        MATCH (n {`neuro.id`: $neuro_id})-[r]->(target)
+        WHERE target.`neuro.id` IS NOT NULL
+        RETURN type(r) as rel_type, labels(target) as target_labels, "outgoing" as direction
+        UNION
+        MATCH (source)-[r]->(n {`neuro.id`: $neuro_id})
+        WHERE source.`neuro.id` IS NOT NULL
+        RETURN type(r) as rel_type, labels(source) as target_labels, "incoming" as direction
+        """
+        relationships = nb.get_data(query, {"neuro_id": neuro_id})
+
+        for rel in relationships:
+            rel_type = rel["rel_type"]
+            direction = rel["direction"]
+            key = f"{rel_type}:{direction}"
+            if key not in self.data:
+                violations.undefined_relationships.append(
+                    (rel_type, direction, rel["target_labels"])
+                )
+            else:
+                mr = self.data[key]
+                expected_label = mr.target if direction == "outgoing" else mr.source
+                if expected_label not in rel["target_labels"]:
+                    violations.invalid_relationships.append(
+                        (rel_type, direction, rel["target_labels"], expected_label)
+                    )
+
+        return violations
 
 
 class OntologyNodeInfo:
@@ -261,11 +303,14 @@ class Violations:
         self.undefined_properties: list = []
         self.missing_properties: list = []
         self.invalid_properties: list = []
+        self.undefined_relationships: list = []
+        self.invalid_relationships: list = []
 
     def __bool__(self):
         return any([
             self.undefined_labels, self.undefined_properties,
             self.missing_properties, self.invalid_properties,
+            self.undefined_relationships, self.invalid_relationships,
         ])
 
     def __repr__(self):
@@ -280,6 +325,12 @@ class Violations:
         if self.invalid_properties:
             for p, reason in self.invalid_properties:
                 lines.append(f"  invalid value: {B}{p}{RST} ({reason})")
+        if self.undefined_relationships:
+            for rel_type, direction, labels in self.undefined_relationships:
+                lines.append(f"  undefined relationship: {B}{rel_type}{RST} ({direction}, {labels})")
+        if self.invalid_relationships:
+            for rel_type, direction, actual, expected in self.invalid_relationships:
+                lines.append(f"  invalid relationship target: {B}{rel_type}{RST} ({direction}, expected {expected}, got {actual})")
         return "\n".join(lines) if lines else "Violations(none)"
 
     def __str__(self):
