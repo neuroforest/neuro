@@ -32,7 +32,7 @@ class NodeAccessor(Accessor):
         """
         self._nb.objects.put(node, identifier_key="neuro.id")
 
-    def import_nfx(self, path, dependency_nids=None):
+    def import_nfx(self, path, dependency_nids=None, validate=True):
         """
         Import nodes and relationships from an NFX file.
         Nodes are merged on neuro.id; relationships are merged between them.
@@ -40,16 +40,17 @@ class NodeAccessor(Accessor):
         """
         data = nfx.read(path)
 
-        violations = nfx.validate(data, dependency_nids)
-        if violations["unresolved"] or violations["foreign"]:
-            msgs = []
-            for rel in violations["unresolved"]:
-                msgs.append(f"  unresolved: {rel['from']} -> {rel['to']} ({rel['type']})")
-            for rel in violations["foreign"]:
-                msgs.append(f"  foreign: {rel['from']} -> {rel['to']} ({rel['type']})")
-            raise exceptions.NfxViolation(
-                f"NFX validation failed for {path}:\n" + "\n".join(msgs)
-            )
+        if validate:
+            violations = nfx.validate(data, dependency_nids)
+            if violations["unresolved"] or violations["foreign"]:
+                msgs = []
+                for rel in violations["unresolved"]:
+                    msgs.append(f"  unresolved: {rel['from']} -> {rel['to']} ({rel['type']})")
+                for rel in violations["foreign"]:
+                    msgs.append(f"  foreign: {rel['from']} -> {rel['to']} ({rel['type']})")
+                raise exceptions.NfxViolation(
+                    f"NFX validation failed for {path}:\n" + "\n".join(msgs)
+                )
 
         for entry in data.get("nodes", []):
             properties = entry.get("properties", {})
@@ -58,47 +59,55 @@ class NodeAccessor(Accessor):
                 labels=entry["labels"],
                 properties=properties,
             )
-            self.put(node)
+            if validate:
+                self.put(node)
+            else:
+                self._nb.objects.put(node, identifier_key="neuro.id", validate=False)
 
-        # Build label lookup from imported nodes for relationship validation
-        nid_labels = {}
-        for entry in data.get("nodes", []):
-            nid_labels[entry["nid"]] = entry["labels"]
+        if validate:
+            # Build label lookup from imported nodes for relationship validation
+            nid_labels = {}
+            for entry in data.get("nodes", []):
+                nid_labels[entry["nid"]] = entry["labels"]
 
-        violations = Violations()
-        for rel in data.get("relationships", []):
-            rel_type = rel["type"]
-            from_labels = nid_labels.get(rel["from"], [])
-            to_labels = nid_labels.get(rel["to"], [])
+            violations = Violations()
+            for rel in data.get("relationships", []):
+                rel_type = rel["type"]
+                from_labels = nid_labels.get(rel["from"], [])
+                to_labels = nid_labels.get(rel["to"], [])
 
-            # Validate against the source node's metarelationships
-            validated = False
-            for label in from_labels:
-                mrs = Metarelationships.from_ontology(self._nb, label)
-                key = f"{rel_type}:outgoing"
-                if key in mrs:
-                    mr = mrs[key]
-                    if mr.target not in to_labels:
-                        violations.invalid_relationships.append(
-                            (rel_type, "outgoing", to_labels, mr.target)
-                        )
-                    validated = True
-                    break
-            if not validated:
-                violations.undefined_relationships.append(
-                    (rel_type, "outgoing", to_labels)
+                # Validate against the source node's metarelationships
+                validated = False
+                for label in from_labels:
+                    mrs = Metarelationships.from_ontology(self._nb, label)
+                    key = f"{rel_type}:outgoing"
+                    if key in mrs:
+                        mr = mrs[key]
+                        if mr.target not in to_labels:
+                            violations.invalid_relationships.append(
+                                (rel_type, "outgoing", to_labels, mr.target)
+                            )
+                        validated = True
+                        break
+                if not validated:
+                    violations.undefined_relationships.append(
+                        (rel_type, "outgoing", to_labels)
+                    )
+
+            if violations:
+                raise exceptions.NfxViolation(
+                    f"Relationship validation failed for {path}:\n{violations}"
                 )
 
-        if violations:
-            raise exceptions.NfxViolation(
-                f"Relationship validation failed for {path}:\n{violations}"
-            )
+        nids = {entry["nid"] for entry in data.get("nodes", [])}
 
         for rel in data.get("relationships", []):
             rel_type = rel["type"]
+            match_a = "MERGE" if rel["from"] not in nids else "MATCH"
+            match_b = "MERGE" if rel["to"] not in nids else "MATCH"
             query = f"""
-            MATCH (a {{`neuro.id`: $from_id}})
-            MATCH (b {{`neuro.id`: $to_id}})
+            {match_a} (a {{`neuro.id`: $from_id}})
+            {match_b} (b {{`neuro.id`: $to_id}})
             MERGE (a)-[r:{rel_type}]->(b)
             SET r += $properties
             """
