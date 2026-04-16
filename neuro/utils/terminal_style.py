@@ -21,6 +21,7 @@ GREEN = "\33[0;32m"
 RED = "\033[0;31m"
 YELLOW = "\033[0;33m"
 
+DIM = "\033[2m"
 RESET = "\033[0m"
 
 SUCCESS = GREEN + "✔" + RESET
