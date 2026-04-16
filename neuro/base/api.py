@@ -1,8 +1,10 @@
 import os
+import sys
 import logging
 
 import neo4j
 
+from neuro.utils import terminal_style
 from neuro.base.accessors.nodes import NodeAccessor
 from neuro.base.accessors.objects import ObjectAccessor
 from neuro.base.accessors.tiddlers import TiddlerAccessor
@@ -41,19 +43,27 @@ class NeuroBase:
         """
         Run a Cypher query and return the result.
         """
-        with self.driver.session() as session:
-            result = session.run(query, parameters or {})
-            return result
+        try:
+            with self.driver.session() as session:
+                result = session.run(query, parameters or {})
+                return result
+        except neo4j.exceptions.ServiceUnavailable:
+            print(f"{terminal_style.FAIL} Neo4j unavailable at {self.driver._pool.address}")
+            sys.exit(1)
 
     def get_data(self, query, parameters=None):
         """
         Run a Cypher query and return the data as a list of records.
         """
         logging.debug(f"NeuroBase.get_data query: {query}")
-        with self.driver.session() as session:
-            result = session.run(query, parameters or {})
-            records = [record.data() for record in result]
-            return records
+        try:
+            with self.driver.session() as session:
+                result = session.run(query, parameters or {})
+                records = [record.data() for record in result]
+                return records
+        except neo4j.exceptions.ServiceUnavailable:
+            print(f"{terminal_style.FAIL} Neo4j unavailable at {self.driver._pool.address}")
+            sys.exit(1)
 
     def count(self, label=None, **properties):
         """
