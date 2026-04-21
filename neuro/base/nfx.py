@@ -1,5 +1,9 @@
 """
-NFX format I/O — pure read/write, no database, no validation.
+NFX format helpers — pure functions over NFX-shaped dicts.
+
+Covers read/write, referential-integrity validation, and dependency-graph
+traversal. No filesystem discovery and no database access; callers supply
+any required resolution (e.g. via `OntologyIndex` or a DB query).
 """
 
 import json
@@ -12,7 +16,7 @@ def validate(data, dependency_nids=None):
     """Validate NFX referential integrity and jurisdiction.
 
     `dependency_nids` should include nids reachable through direct AND transitive
-    dependencies — see `dependency_nids()` for a helper that walks the graph.
+    dependencies — see `dependency_node_nids()` for a helper that walks the graph.
 
     Returns dict with 'unresolved' (endpoints not in local or dependency nodes),
     'foreign' (both endpoints are non-local), and 'invalid_nids' (not valid UUID v4).
@@ -37,7 +41,7 @@ def validate(data, dependency_nids=None):
     return {"unresolved": unresolved, "foreign": foreign, "invalid_nids": invalid_nids}
 
 
-def dependency_nids(data, resolve):
+def dependency_node_nids(data, resolve):
     """Collect nids of all nodes defined by direct and transitive dependencies.
 
     `resolve(nid)` returns the NFX data dict for a dependency, or None if the

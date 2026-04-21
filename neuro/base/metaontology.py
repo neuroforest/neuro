@@ -186,8 +186,8 @@ class Metaontology:
             if on_import:
                 on_import(dep_name, imported=True)
 
-    def _dependency_nids(self, data, index=None):
-        """Collect nids of all nodes defined by direct and transitive dependencies."""
+    def _resolver(self, index=None):
+        """Return a dep-resolver for `nfx.dependency_node_nids`: index file, fallback to DB."""
         def resolve(dep_nid):
             if index:
                 dep_path = index.resolve(dep_nid)
@@ -209,7 +209,7 @@ class Metaontology:
                 "nodes": [{"nid": x} for x in rows[0]["nids"] if x],
                 "dependencies": [x for x in rows[0]["dep_nids"] if x],
             }
-        return nfx.dependency_nids(data, resolve)
+        return resolve
 
     def import_nfx(self, path, index=None, on_import=None):
         """Import an ontology from an NFX file.
@@ -229,7 +229,7 @@ class Metaontology:
 
         # Validate referential integrity.
         try:
-            dependency_nids = self._dependency_nids(data, index)
+            dependency_nids = nfx.dependency_node_nids(data, self._resolver(index))
         except exceptions.NfxCycle as e:
             raise exceptions.NfxViolation(
                 f"Dependency cycle for {path}: {' -> '.join(e.args[0])}"
