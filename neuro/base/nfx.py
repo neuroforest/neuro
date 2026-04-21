@@ -5,10 +5,14 @@ NFX format I/O — pure read/write, no database, no validation.
 import json
 
 from neuro.core.data.str import Uuid
+from neuro.utils.exceptions import NfxCycle
 
 
 def validate(data, dependency_nids=None):
     """Validate NFX referential integrity and jurisdiction.
+
+    `dependency_nids` should include nids reachable through direct AND transitive
+    dependencies — see `dependency_nids()` for a helper that walks the graph.
 
     Returns dict with 'unresolved' (endpoints not in local or dependency nodes),
     'foreign' (both endpoints are non-local), and 'invalid_nids' (not valid UUID v4).
@@ -31,6 +35,38 @@ def validate(data, dependency_nids=None):
         elif from_nid not in local_nids and to_nid not in local_nids:
             foreign.append(rel)
     return {"unresolved": unresolved, "foreign": foreign, "invalid_nids": invalid_nids}
+
+
+def dependency_nids(data, resolve):
+    """Collect nids of all nodes defined by direct and transitive dependencies.
+
+    `resolve(nid)` returns the NFX data dict for a dependency, or None if the
+    dependency is unavailable (its nodes are then simply absent from the result).
+
+    Raises `NfxCycle(cycle_path)` if the dependency graph contains a cycle,
+    where `cycle_path` is the list of dep nids traversed (e.g. [A, B, A]).
+    """
+    collected = set()
+    DONE, IN_PATH = 1, 2
+    state: dict[str, int] = {}
+
+    def walk(nid, path):
+        marker = state.get(nid)
+        if marker == IN_PATH:
+            raise NfxCycle(path[path.index(nid):] + [nid])
+        if marker == DONE:
+            return
+        state[nid] = IN_PATH
+        dep_data = resolve(nid)
+        if dep_data is not None:
+            collected.update(n["nid"] for n in dep_data.get("nodes", []))
+            for dep in dep_data.get("dependencies", []):
+                walk(dep.partition("@")[0], path + [nid])
+        state[nid] = DONE
+
+    for dep in data.get("dependencies", []):
+        walk(dep.partition("@")[0], [])
+    return collected
 
 
 def read(path):
