@@ -186,26 +186,30 @@ class Metaontology:
             if on_import:
                 on_import(dep_name, imported=True)
 
-    def _dependency_nids(self, dependencies, index=None):
-        """Collect nids of all nodes defined by dependencies."""
-        result = set()
-        for dep in dependencies:
-            dep_nid = dep.split("@")[0]
+    def _dependency_nids(self, data, index=None):
+        """Collect nids of all nodes defined by direct and transitive dependencies."""
+        def resolve(dep_nid):
             if index:
                 dep_path = index.resolve(dep_nid)
                 if dep_path:
-                    dep_data = nfx.read(dep_path)
-                    result.update(e["nid"] for e in dep_data.get("nodes", []))
-                    continue
-            data = self._nb.get_data(
+                    return nfx.read(dep_path)
+            rows = self._nb.get_data(
                 """
-                MATCH (m:OntologyMetadata {`neuro.id`: $nid})-[:DEFINES]->(n)
-                RETURN n.`neuro.id` as nid
+                MATCH (m:OntologyMetadata {`neuro.id`: $nid})
+                OPTIONAL MATCH (m)-[:DEFINES]->(n)
+                OPTIONAL MATCH (m)-[:DEPENDS_ON]->(d:OntologyMetadata)
+                RETURN collect(DISTINCT n.`neuro.id`) as nids,
+                       collect(DISTINCT d.`neuro.id`) as dep_nids
                 """,
                 {"nid": dep_nid},
             )
-            result.update(r["nid"] for r in data)
-        return result
+            if not rows:
+                return None
+            return {
+                "nodes": [{"nid": x} for x in rows[0]["nids"] if x],
+                "dependencies": [x for x in rows[0]["dep_nids"] if x],
+            }
+        return nfx.dependency_nids(data, resolve)
 
     def import_nfx(self, path, index=None, on_import=None):
         """Import an ontology from an NFX file.
@@ -224,7 +228,12 @@ class Metaontology:
         self._import_dependencies(dependencies, index, on_import)
 
         # Validate referential integrity.
-        dependency_nids = self._dependency_nids(dependencies, index)
+        try:
+            dependency_nids = self._dependency_nids(data, index)
+        except exceptions.NfxCycle as e:
+            raise exceptions.NfxViolation(
+                f"Dependency cycle for {path}: {' -> '.join(e.args[0])}"
+            )
         violations = nfx.validate(data, dependency_nids)
         if violations["unresolved"] or violations["foreign"]:
             msgs = []

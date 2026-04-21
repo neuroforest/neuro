@@ -43,5 +43,9 @@ class NfxViolation(BaseException):
     pass
 
 
+class NfxCycle(BaseException):
+    pass
+
+
 class NoOntology(BaseException):
     pass
