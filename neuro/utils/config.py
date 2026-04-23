@@ -94,7 +94,7 @@ def resolve_user_paths():
             logging.debug(f"Remapped {env_var}={os.environ[env_var]}")
 
 
-def load_env_files(app_dir):
+def load_env_files():
     """Loads environment variables from .env files.
 
     Loading order:
@@ -104,8 +104,7 @@ def load_env_files(app_dir):
         4. env.{env}      — environment-specific overrides from $NF_CONFIG/.
         5. (system mode)  — remap relative user paths to XDG locations.
     """
-    if not app_dir:
-        app_dir = os.getenv("APP_DIR", os.getcwd())
+    app_dir = os.getenv("APP_DIR", os.getcwd())
 
     mode = detect_mode()
     os.environ["NF_MODE"] = mode
@@ -166,9 +165,11 @@ def main(app_dir=None, environment=None):
     global CONFIG_INITIALIZED
     if environment:
         os.environ["ENVIRONMENT"] = environment
+    if app_dir and os.path.isdir(app_dir):
+        os.environ["APP_DIR"] = app_dir
     env = os.getenv("ENVIRONMENT")
     if CONFIG_INITIALIZED and CONFIG_INITIALIZED == env:
         return
-    load_env_files(app_dir)
+    load_env_files()
     config_logging()
     CONFIG_INITIALIZED = os.getenv("ENVIRONMENT")
