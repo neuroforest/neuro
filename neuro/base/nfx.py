@@ -7,9 +7,27 @@ any required resolution (e.g. via `OntologyIndex` or a DB query).
 """
 
 import json
+import re
 
 from neuro.core.data.str import Uuid
 from neuro.utils.exceptions import NfxCycle
+
+
+def dumps(data: dict) -> str:
+    """Serialize NFX data to the canonical on-disk format.
+
+    4-space indentation with `"labels"` arrays re-inlined to one line,
+    matching the repo convention and the pre-commit lint rule.
+    """
+    text = json.dumps(data, indent=4, default=str)
+    text = re.sub(
+        r'"labels":\s*\[\s*\n([^\]]*?)\n\s*\]',
+        lambda m: '"labels": ['
+        + ", ".join(part.strip().rstrip(",") for part in m.group(1).splitlines())
+        + "]",
+        text,
+    )
+    return text + "\n"
 
 
 def validate(data, dependency_nids=None):
