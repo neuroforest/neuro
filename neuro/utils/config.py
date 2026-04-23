@@ -94,7 +94,7 @@ def resolve_user_paths():
             logging.debug(f"Remapped {env_var}={os.environ[env_var]}")
 
 
-def load_env_files(env_path):
+def load_env_files(app_dir):
     """Loads environment variables from .env files.
 
     Loading order:
@@ -104,14 +104,14 @@ def load_env_files(env_path):
         4. env.{env}      — environment-specific overrides from $NF_CONFIG/.
         5. (system mode)  — remap relative user paths to XDG locations.
     """
-    if not env_path:
-        env_path = os.getenv("APP_DIR", os.getcwd())
+    if not app_dir:
+        app_dir = os.getenv("APP_DIR", os.getcwd())
 
     mode = detect_mode()
     os.environ["NF_MODE"] = mode
     logging.debug(f"Config mode: {mode}")
 
-    with build_utils.chdir(env_path):
+    with build_utils.chdir(app_dir):
         # 1. Repo defaults
         default_env_path = os.path.abspath(".env")
         dotenv.load_dotenv(default_env_path)
@@ -162,13 +162,13 @@ def config_logging():
     logger.info(f"CLI Logging initialized with level {logger.getEffectiveLevel()}")
 
 
-def main(env_path=None, environment=None):
+def main(app_dir=None, environment=None):
     global CONFIG_INITIALIZED
     if environment:
         os.environ["ENVIRONMENT"] = environment
     env = os.getenv("ENVIRONMENT")
     if CONFIG_INITIALIZED and CONFIG_INITIALIZED == env:
         return
-    load_env_files(env_path)
+    load_env_files(app_dir)
     config_logging()
     CONFIG_INITIALIZED = os.getenv("ENVIRONMENT")
