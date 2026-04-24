@@ -1,16 +1,13 @@
 import json
 import os
 
-import neo4j
-
 from collections import UserDict
 
-from neuro.core import Tiddler
+from neuro.base import plugins
 from neuro.core.data.list import ListUtils
 from neuro.core.data.dict import DictUtils
 from neuro.core.data.str import Uuid
 from neuro.utils import terminal_style
-
 
 
 class Metaproperty:
@@ -41,25 +38,29 @@ class Metaproperty:
             "property_type": self.property_type,
         })
 
-    def check(self, property_value):
-        """Check if property value is valid. Returns True if valid, False otherwise."""
-        check_map = {
-            "DateTime": self.check_datetime,
-            "Label": self.check_label,
-            "OntologyProperty": self.check_ontology_property,
+    def validate(self, property_value):
+        """Check if property value is valid. Returns True if valid, False otherwise.
+
+        Metaontology core types (`String`, `Uuid`, `Label`, `OntologyProperty`)
+        are hardcoded here — they bootstrap all other validation. Non-core types
+        fall back to the plugin registry (`validators.py` next to each ontology);
+        unregistered types fail closed.
+        """
+        hardcoded = {
             "String": lambda v: isinstance(v, str),
-            "Title": Tiddler.is_valid_title,
             "Uuid": Uuid.is_valid_uuid_v4,
+            "OntologyProperty": lambda v: False,
+            "Label": self._check_label,
         }
-        handler = check_map.get(self.property_type)
-        if not handler:
+        handler = hardcoded.get(self.property_type)
+        if handler is not None:
+            return bool(handler(property_value))
+        fn = plugins.lookup(self.property_type)
+        if fn is None:
             return False
-        return bool(handler(property_value))
+        return bool(fn(property_value, self))
 
-    def check_datetime(self, property_value):
-        return isinstance(property_value, neo4j.time.DateTime)
-
-    def check_label(self, property_value):
+    def _check_label(self, property_value):
         import re
         if not isinstance(property_value, str):
             return False
@@ -72,9 +73,6 @@ class Metaproperty:
         if not pattern:
             raise ValueError(f"invalid deep_node: {self.deep_node}")
         return bool(re.match(pattern, property_value))
-
-    def check_ontology_property(self, property_value):
-        return False
 
 
 class Metaproperties(UserDict):
@@ -140,7 +138,7 @@ class Metaproperties(UserDict):
                 violations.undefined_properties.append(property_key)
             else:
                 mp = self.data[property_key]
-                if not mp.check(property_value):
+                if not mp.validate(property_value):
                     reason = f"expected {mp.property_type}, got {property_value}"
                     violations.invalid_properties.append((property_key, reason))
 
