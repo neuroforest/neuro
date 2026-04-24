@@ -99,6 +99,68 @@ def test_dependency_node_nids_missing_resolve():
     assert dependency_node_nids(data, lambda _nid: None) == set()
 
 
+def test_validate_key_order_top_level():
+    from neuro.base.nfx import validate
+    data = {"nid": LOCAL_1, "nodes": [], "version": "1.0", "relationships": []}
+    result = validate(data)
+    assert len(result["key_order"]) == 1
+    assert result["key_order"][0]["where"] == "top-level"
+    assert result["unknown_keys"] == []
+
+
+def test_validate_key_order_node():
+    from neuro.base.nfx import validate
+    data = {
+        "nodes": [{"labels": ["X"], "nid": LOCAL_1}],
+        "relationships": [],
+    }
+    result = validate(data)
+    assert len(result["key_order"]) == 1
+    assert result["key_order"][0]["where"] == "nodes[0]"
+
+
+def test_validate_key_order_relationship():
+    from neuro.base.nfx import validate
+    data = {
+        "nodes": [{"nid": LOCAL_1}, {"nid": LOCAL_2}],
+        "relationships": [{"to": LOCAL_2, "from": LOCAL_1, "type": "USES"}],
+    }
+    result = validate(data)
+    assert len(result["key_order"]) == 1
+    assert result["key_order"][0]["where"] == "relationships[0]"
+
+
+def test_validate_unknown_key_top_level():
+    from neuro.base.nfx import validate
+    data = {"nid": LOCAL_1, "bogus": 1, "nodes": [], "relationships": []}
+    result = validate(data)
+    assert result["unknown_keys"] == [{"where": "top-level", "keys": ["bogus"]}]
+
+
+def test_validate_unknown_key_node():
+    from neuro.base.nfx import validate
+    data = {
+        "nodes": [{"nid": LOCAL_1, "labels": ["X"], "extra": 1}],
+        "relationships": [],
+    }
+    result = validate(data)
+    assert result["unknown_keys"] == [{"where": "nodes[0]", "keys": ["extra"]}]
+
+
+def test_validate_accepts_canonical_key_order():
+    from neuro.base.nfx import validate
+    data = {
+        "nid": LOCAL_1,
+        "name": "X",
+        "version": "1.0",
+        "nodes": [{"nid": LOCAL_2, "labels": ["L"], "properties": {"a": 1}}],
+        "relationships": [{"from": LOCAL_2, "to": LOCAL_2, "type": "SELF"}],
+    }
+    result = validate(data)
+    assert result["key_order"] == []
+    assert result["unknown_keys"] == []
+
+
 def test_validate_accepts_transitive_endpoint():
     """A relationship from a local node to a transitive-dep node validates."""
     from neuro.base.nfx import dependency_node_nids, validate

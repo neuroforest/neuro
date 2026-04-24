@@ -14,6 +14,8 @@ from neuro.utils.exceptions import NfxCycle
 
 
 _KEY_ORDER = ("nid", "name", "description", "version", "dependencies", "hash", "nodes", "relationships")
+_NODE_KEY_ORDER = ("nid", "labels", "properties")
+_REL_KEY_ORDER = ("from", "to", "type", "properties")
 
 
 def _reorder(data: dict) -> dict:
@@ -23,6 +25,20 @@ def _reorder(data: dict) -> dict:
         if k not in out:
             out[k] = v
     return out
+
+
+def _check_keys(keys, canonical):
+    """Return (unknown, out_of_order) given actual `keys` vs `canonical` tuple.
+
+    - `unknown` is the list of keys not in `canonical` (preserving encounter order).
+    - `out_of_order` is True if the known keys do not appear in canonical order.
+    Not every canonical key must be present.
+    """
+    canonical_set = set(canonical)
+    unknown = [k for k in keys if k not in canonical_set]
+    known = [k for k in keys if k in canonical_set]
+    expected = [k for k in canonical if k in set(known)]
+    return unknown, known != expected
 
 
 def dumps(data: dict) -> str:
@@ -49,7 +65,9 @@ def validate(data, dependency_nids=None):
     dependencies — see `dependency_node_nids()` for a helper that walks the graph.
 
     Returns dict with 'unresolved' (endpoints not in local or dependency nodes),
-    'foreign' (both endpoints are non-local), and 'invalid_nids' (not valid UUID v4).
+    'foreign' (both endpoints are non-local), 'invalid_nids' (not valid UUID v4),
+    'unknown_keys' (keys not in the canonical schema), and 'key_order' (places
+    where present keys are not in canonical order).
     """
     local_nids = {n["nid"] for n in data.get("nodes", [])}
     valid_nids = local_nids | (dependency_nids or set())
@@ -68,7 +86,29 @@ def validate(data, dependency_nids=None):
             unresolved.append(rel)
         elif from_nid not in local_nids and to_nid not in local_nids:
             foreign.append(rel)
-    return {"unresolved": unresolved, "foreign": foreign, "invalid_nids": invalid_nids}
+    unknown_keys: list[dict] = []
+    key_order: list[dict] = []
+
+    def _inspect(keys, canonical, where):
+        unknown, bad_order = _check_keys(keys, canonical)
+        if unknown:
+            unknown_keys.append({"where": where, "keys": unknown})
+        if bad_order:
+            key_order.append({"where": where, "keys": list(keys)})
+
+    _inspect(list(data.keys()), _KEY_ORDER, "top-level")
+    for i, n in enumerate(data.get("nodes", [])):
+        _inspect(list(n.keys()), _NODE_KEY_ORDER, f"nodes[{i}]")
+    for i, r in enumerate(data.get("relationships", [])):
+        _inspect(list(r.keys()), _REL_KEY_ORDER, f"relationships[{i}]")
+
+    return {
+        "unresolved": unresolved,
+        "foreign": foreign,
+        "invalid_nids": invalid_nids,
+        "unknown_keys": unknown_keys,
+        "key_order": key_order,
+    }
 
 
 def dependency_node_nids(data, resolve):
