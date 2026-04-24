@@ -29,7 +29,7 @@ class OntologyIndex:
     def __init__(self, *dirs):
         self._index: dict[str, Entry] = {}
         self._metaontology_path = (
-            internal_utils.get_path("assets") / "ontology" / "metaontology" / "metaontology.nfx"
+            internal_utils.get_path("assets") / "ontology" / "metaontology.nfx"
         )
         self._scan(dirs)
 
