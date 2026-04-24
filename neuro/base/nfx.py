@@ -13,13 +13,25 @@ from neuro.core.data.str import Uuid
 from neuro.utils.exceptions import NfxCycle
 
 
+_KEY_ORDER = ("nid", "name", "description", "version", "dependencies", "hash", "nodes", "relationships")
+
+
+def _reorder(data: dict) -> dict:
+    """Return a new dict with canonical top-level key ordering; unknown keys keep their original order at the end."""
+    out = {k: data[k] for k in _KEY_ORDER if k in data}
+    for k, v in data.items():
+        if k not in out:
+            out[k] = v
+    return out
+
+
 def dumps(data: dict) -> str:
     """Serialize NFX data to the canonical on-disk format.
 
     4-space indentation with `"labels"` arrays re-inlined to one line,
     matching the repo convention and the pre-commit lint rule.
     """
-    text = json.dumps(data, indent=4, default=str)
+    text = json.dumps(_reorder(data), indent=4, default=str)
     text = re.sub(
         r'"labels":\s*\[\s*\n([^\]]*?)\n\s*\]',
         lambda m: '"labels": ['
@@ -126,6 +138,7 @@ def write(path, nodes, relationships, nid="", name="", description="", version="
         data["dependencies"] = dependencies
     data["nodes"] = nodes
     data["relationships"] = relationships
+    data = _reorder(data)
     with open(path, "w") as f:
         json.dump(data, f, default=str)
 
