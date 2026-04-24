@@ -3,60 +3,96 @@ Ontology file discovery and indexing.
 """
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
-from neuro.base import nfx
-from neuro.utils import internal_utils
+from neuro.base import nfx, plugins
+from neuro.utils import exceptions, internal_utils
+
+
+@dataclass(frozen=True)
+class Entry:
+    path: Path
+    nid: str
+    name: str
+    version: str
 
 
 class OntologyIndex:
     """Index of .nfx ontology files discovered from directory search paths.
 
-    Pure file-level discovery — no database access.
+    Keyed canonically by `nid`. `resolve()` additionally accepts name, stem,
+    or filename via priority-ordered fallback. Pure file-level discovery —
+    no database access.
     """
 
     def __init__(self, *dirs):
-        self._index = {}
-        self._metaontology_path = internal_utils.get_path("assets") / "ontology" / "metaontology.nfx"
+        self._index: dict[str, Entry] = {}
+        self._metaontology_path = (
+            internal_utils.get_path("assets") / "ontology" / "metaontology" / "metaontology.nfx"
+        )
         self._scan(dirs)
 
+    def _register(self, path):
+        data = nfx.read(path)
+        nid = data.get("nid", "")
+        if not nid:
+            return
+        existing = self._index.get(nid)
+        if existing and existing.path != path:
+            raise exceptions.NfxViolation(
+                f"nid collision: {nid} claimed by {existing.path} and {path}"
+            )
+        self._index[nid] = Entry(
+            path=path,
+            nid=nid,
+            name=data.get("name", ""),
+            version=data.get("version", ""),
+        )
+
     def _scan(self, dirs):
-        # Pin metaontology to the canonical path.
-        data = nfx.read(self._metaontology_path)
-        for key in (data.get("nid", ""), data.get("name", ""), self._metaontology_path.stem, self._metaontology_path.name):
-            if key:
-                self._index[key] = self._metaontology_path
+        # Pin metaontology first so a stray copy in a search dir can't shadow it.
+        self._register(self._metaontology_path)
+        plugins.load_plugin_at(self._metaontology_path)
         for d in dirs:
             for root, _, files in os.walk(d, followlinks=True):
                 for fname in files:
                     if not fname.endswith(".nfx"):
                         continue
                     path = Path(root) / fname
-                    data = nfx.read(path)
-                    nid = data.get("nid", "")
-                    if nid:
-                        self._index.setdefault(nid, path)
-                    name = data.get("name", "")
-                    if name:
-                        self._index.setdefault(name, path)
-                    self._index.setdefault(path.stem, path)
-                    self._index.setdefault(path.name, path)
+                    if path != self._metaontology_path:
+                        self._register(path)
+                    plugins.load_plugin_at(path)
 
     def resolve(self, key):
-        """Resolve a name, nid, stem, filename, or file path to a Path."""
+        """Resolve a path, nid, name, stem, or filename to a Path.
+
+        Priority: existing filesystem path > nid > name > stem > filename.
+        """
         p = Path(key)
         if p.exists():
             return p
-        return self._index.get(key)
+        entry = self._index.get(key)
+        if entry:
+            return entry.path
+        entries = list(self._index.values())
+        for e in entries:
+            if e.name == key:
+                return e.path
+        for e in entries:
+            if e.path.stem == key:
+                return e.path
+        for e in entries:
+            if e.path.name == key:
+                return e.path
+        return None
 
     def all_targets(self, exclude_nid=None):
-        """Return deduplicated, sorted list of all indexed ontology paths."""
-        targets = sorted(
-            p for p in self._index.values()
-            if not exclude_nid or nfx.read(p).get("nid") != exclude_nid
+        """Return sorted list of all indexed ontology paths."""
+        return sorted(
+            e.path for e in self._index.values()
+            if not exclude_nid or e.nid != exclude_nid
         )
-        seen = set()
-        return [p for p in targets if str(p) not in seen and not seen.add(str(p))]
 
     def check_dependency_versions(self, path):
         """Check that all dependencies have exact version match. Returns list of error strings."""
@@ -64,17 +100,15 @@ class OntologyIndex:
         errors = []
         for dep in data.get("dependencies", []):
             dep_nid, _, required_version = dep.partition("@")
-            dep_path = self._index.get(dep_nid)
-            if not dep_path:
+            entry = self._index.get(dep_nid)
+            if not entry:
                 errors.append(f"dependency {dep_nid} not found in index")
                 continue
             if not required_version:
                 continue
-            dep_data = nfx.read(dep_path)
-            actual_version = dep_data.get("version", "")
-            if actual_version != required_version:
-                dep_name = dep_data.get("name", dep_path.stem)
-                errors.append(f"{dep_name} requires {required_version}, found {actual_version}")
+            if entry.version != required_version:
+                dep_name = entry.name or entry.path.stem
+                errors.append(f"{dep_name} requires {required_version}, found {entry.version}")
         return errors
 
     @property
