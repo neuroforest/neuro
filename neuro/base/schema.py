@@ -38,21 +38,29 @@ class Metaproperty:
             "property_type": self.property_type,
         })
 
+    def _hardcoded_validators(self):
+        return {
+            "String": lambda v: isinstance(v, str),
+            "Uuid": Uuid.is_valid_uuid_v4,
+            "OntologyProperty": lambda v: False,
+            "Label": self._check_label,
+        }
+
+    def has_validator(self):
+        """True if this property type has a hardcoded or plugin-registered validator."""
+        if self.property_type in self._hardcoded_validators():
+            return True
+        return plugins.lookup(self.property_type) is not None
+
     def validate(self, property_value):
         """Check if property value is valid. Returns True if valid, False otherwise.
 
         Metaontology core types (`String`, `Uuid`, `Label`, `OntologyProperty`)
         are hardcoded here — they bootstrap all other validation. Non-core types
         fall back to the plugin registry (`validators.py` next to each ontology);
-        unregistered types fail closed.
+        unregistered types fail closed (use `has_validator` to distinguish).
         """
-        hardcoded = {
-            "String": lambda v: isinstance(v, str),
-            "Uuid": Uuid.is_valid_uuid_v4,
-            "OntologyProperty": lambda v: False,
-            "Label": self._check_label,
-        }
-        handler = hardcoded.get(self.property_type)
+        handler = self._hardcoded_validators().get(self.property_type)
         if handler is not None:
             return bool(handler(property_value))
         fn = plugins.lookup(self.property_type)
@@ -124,12 +132,13 @@ class Metaproperties(UserDict):
     def display(self):
         return DictUtils.represent(self.data)
 
-    def validate_properties(self, properties: dict, violations=None):
+    def validate_properties(self, properties: dict, violations=None, strict=False):
         """
         Check if the node properties conform to the metaproperties.
-        :param properties: dict
-        :param violations: Violations
-        :return:
+
+        Unregistered (no validator) types: in non-strict mode, fall back to
+        String — pass with a warning if the value is a string, fail otherwise.
+        In strict mode, always fail.
         """
         if violations is None:
             violations = Violations()
@@ -138,7 +147,21 @@ class Metaproperties(UserDict):
                 violations.undefined_properties.append(property_key)
             else:
                 mp = self.data[property_key]
-                if not mp.validate(property_value):
+                if not mp.has_validator():
+                    if strict:
+                        reason = f"unvalidated data type: {mp.property_type}"
+                        violations.invalid_properties.append((property_key, reason))
+                    elif isinstance(property_value, str):
+                        violations.warnings.append(
+                            f"{property_key}: unvalidated data type {mp.property_type}, accepted as String"
+                        )
+                    else:
+                        reason = (
+                            f"unvalidated data type: {mp.property_type} "
+                            f"(and not String: got {property_value!r})"
+                        )
+                        violations.invalid_properties.append((property_key, reason))
+                elif not mp.validate(property_value):
                     reason = f"expected {mp.property_type}, got {property_value}"
                     violations.invalid_properties.append((property_key, reason))
 
@@ -330,6 +353,7 @@ class Violations:
         self.undefined_relationships: list = []
         self.missing_relationships: list = []
         self.invalid_relationships: list = []
+        self.warnings: list[str] = []
 
     def __bool__(self):
         return any([
@@ -359,6 +383,9 @@ class Violations:
         if self.invalid_relationships:
             for rel_type, direction, actual, expected in self.invalid_relationships:
                 lines.append(f"  invalid relationship target: {B}{rel_type}{RST} ({direction}, expected {expected}, got {actual})")
+        if self.warnings:
+            for w in self.warnings:
+                lines.append(f"  warning: {w}")
         return "\n".join(lines) if lines else "Violations(none)"
 
     def __str__(self):
