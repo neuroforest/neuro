@@ -82,7 +82,12 @@ class Ontology:
         """
         relationships = self._nb.get_data(rel_query, {"ids": ids})
 
-        return nfx.write(path, nodes, relationships, name=name, description=description, version=version)
+        doc = nfx.Nfx.from_dict({
+            "name": name, "description": description, "version": version,
+            "nodes": nodes, "relationships": relationships,
+        })
+        nfx.write(path, doc)
+        return doc
 
 
 class ObjectValidator:

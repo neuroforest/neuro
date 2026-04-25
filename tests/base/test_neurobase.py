@@ -48,8 +48,8 @@ class TestNodeAccessor:
         nb_meta.metaontology.export_nfx(export_path)
         exported = nfx.read(export_path)
 
-        node_diff = deepdiff.DeepDiff(original["nodes"], exported["nodes"], ignore_order=True)
+        node_diff = deepdiff.DeepDiff(list(original.nodes), list(exported.nodes), ignore_order=True)
         assert node_diff == {}, f"Nodes mismatch:\n{node_diff}"
 
-        rel_diff = deepdiff.DeepDiff(original["relationships"], exported["relationships"], ignore_order=True)
+        rel_diff = deepdiff.DeepDiff(list(original.relationships), list(exported.relationships), ignore_order=True)
         assert rel_diff == {}, f"Relationships mismatch:\n{rel_diff}"

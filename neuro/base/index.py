@@ -34,20 +34,19 @@ class OntologyIndex:
         self._scan(dirs)
 
     def _register(self, path):
-        data = nfx.read(path)
-        nid = data.get("nid", "")
-        if not nid:
+        doc = nfx.read(path)
+        if not doc.nid:
             return
-        existing = self._index.get(nid)
+        existing = self._index.get(doc.nid)
         if existing and existing.path != path:
             raise exceptions.NfxViolation(
-                f"nid collision: {nid} claimed by {existing.path} and {path}"
+                f"nid collision: {doc.nid} claimed by {existing.path} and {path}"
             )
-        self._index[nid] = Entry(
+        self._index[doc.nid] = Entry(
             path=path,
-            nid=nid,
-            name=data.get("name", ""),
-            version=data.get("version", ""),
+            nid=doc.nid,
+            name=doc.name,
+            version=doc.version,
         )
 
     def _scan(self, dirs):
@@ -96,15 +95,12 @@ class OntologyIndex:
 
     def check_dependency_versions(self, path):
         """Check that all dependencies have exact version match. Returns list of error strings."""
-        data = nfx.read(path)
+        doc = nfx.read(path)
         errors = []
-        for dep in data.get("dependencies", []):
-            dep_nid, _, required_version = dep.partition("@")
+        for dep_nid, required_version in doc.dependencies:
             entry = self._index.get(dep_nid)
             if not entry:
                 errors.append(f"dependency {dep_nid} not found in index")
-                continue
-            if not required_version:
                 continue
             if entry.version != required_version:
                 dep_name = entry.name or entry.path.stem
