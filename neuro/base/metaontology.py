@@ -153,7 +153,7 @@ class Metaontology:
         """Parse a version string like '2.1' into a comparable tuple (2, 1)."""
         return tuple(int(x) for x in version_str.split("."))
 
-    def _import_dependencies(self, dependencies, index=None, on_import=None):
+    def _import_dependencies(self, dependencies, index=None, on_import=None, _depth=1):
         """Ensure dependencies are in the DB. Import from index if missing or below minimum.
 
         Version pins are treated as minimum versions (Go-style): @2.1 means >=2.1.
@@ -161,8 +161,9 @@ class Metaontology:
 
         `dependencies` is an iterable of `(nid, version)` pairs (as on `Nfx.dependencies`).
 
-        on_import(name, imported): callback for each dependency.
+        on_import(name, imported, depth): callback for each dependency.
             imported=True if freshly imported, False if already loaded.
+            depth is the dependency depth (1 for direct, 2+ for transitive).
         """
         for dep_nid, dep_version in dependencies:
             data = self._nb.get_data(
@@ -175,17 +176,22 @@ class Metaontology:
             if data and (not dep_version or
                          self._version_tuple(data[0]["version"]) >= self._version_tuple(dep_version)):
                 if on_import:
-                    on_import(data[0]["name"], imported=False)
+                    on_import(data[0]["name"], imported=False, depth=_depth)
+                if index:
+                    dep_path = index.resolve(dep_nid)
+                    if dep_path:
+                        sub_deps = nfx.read(dep_path).dependencies
+                        self._import_dependencies(sub_deps, index, on_import, _depth=_depth + 1)
                 continue
             if not index:
                 raise exceptions.NfxViolation(f"Missing dependency: {dep_nid}@{dep_version}")
             dep_path = index.resolve(dep_nid)
             if not dep_path:
                 raise exceptions.NfxViolation(f"Dependency {dep_nid}@{dep_version} not found in index")
-            self.import_nfx(dep_path, index=index)
+            self.import_nfx(dep_path, index=index, on_import=on_import, _depth=_depth)
             dep_name = nfx.read(dep_path).name or dep_path.stem
             if on_import:
-                on_import(dep_name, imported=True)
+                on_import(dep_name, imported=True, depth=_depth)
 
     def _resolver(self, index=None):
         """Return a dep-resolver for `nfx.NfxTree`: index file, fallback to DB.
@@ -217,18 +223,18 @@ class Metaontology:
             )
         return resolve
 
-    def import_nfx(self, path, index=None, on_import=None):
+    def import_nfx(self, path, index=None, on_import=None, _depth=0):
         """Import an ontology from an NFX file.
 
         Clears and rewrites this ontology's nodes. Dependencies are checked
         in the DB; if missing or version mismatch, imported via the index.
 
-        on_import(name, imported): optional callback for dependency status.
+        on_import(name, imported, depth): optional callback for dependency status.
         """
         doc = nfx.read(path)
 
         # Ensure dependencies are present in the DB.
-        self._import_dependencies(doc.dependencies, index, on_import)
+        self._import_dependencies(doc.dependencies, index, on_import, _depth=_depth + 1)
 
         # Validate referential integrity.
         try:
