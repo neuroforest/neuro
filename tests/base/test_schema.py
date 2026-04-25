@@ -8,7 +8,7 @@ hardcoded in `Metaproperty.check` and tested here. Non-core validators
 
 import pytest
 
-from neuro.base.schema import Metaproperty, Metarelationship
+from neuro.base.schema import Metaproperties, Metaproperty, Metarelationship
 
 pytestmark = pytest.mark.unit
 
@@ -99,6 +99,44 @@ class TestOntologyProperty:
     def test_always_invalid(self):
         assert not self.mp.validate("anything")
         assert not self.mp.validate(42)
+
+
+class TestUnvalidatedFallback:
+    """Unregistered types: default falls back to String (warn on str, fail otherwise); strict always fails."""
+
+    def _metaprops(self, property_type):
+        mps = Metaproperties("Test")
+        mps["test"] = _make_metaproperty(property_type)
+        return mps
+
+    def test_string_value_warns(self):
+        mps = self._metaprops("BogusType")
+        v = mps.validate_properties({"test": "hello"})
+        assert not v
+        assert v.warnings
+        assert "BogusType" in v.warnings[0]
+        assert "String" in v.warnings[0]
+
+    def test_non_string_value_fails(self):
+        mps = self._metaprops("BogusType")
+        v = mps.validate_properties({"test": 42})
+        assert v
+        assert v.invalid_properties
+        reason = v.invalid_properties[0][1]
+        assert "BogusType" in reason and "not String" in reason
+
+    def test_strict_string_value_fails(self):
+        mps = self._metaprops("BogusType")
+        v = mps.validate_properties({"test": "hello"}, strict=True)
+        assert v
+        assert not v.warnings
+        assert v.invalid_properties[0][1] == "unvalidated data type: BogusType"
+
+    def test_strict_non_string_value_fails(self):
+        mps = self._metaprops("BogusType")
+        v = mps.validate_properties({"test": 42}, strict=True)
+        assert v
+        assert v.invalid_properties[0][1] == "unvalidated data type: BogusType"
 
 
 class TestMetarelationship:
