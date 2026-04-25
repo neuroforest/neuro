@@ -38,10 +38,10 @@ class NodeAccessor(Accessor):
         Nodes are merged on neuro.id; relationships are merged between them.
         Validates referential integrity and jurisdiction before import.
         """
-        data = nfx.read(path)
+        doc = nfx.read(path)
 
         if validate:
-            violations = nfx.validate(data, dependency_nids)
+            violations = nfx.validate(doc, dependency_nids)
             if violations["unresolved"] or violations["foreign"]:
                 msgs = []
                 for rel in violations["unresolved"]:
@@ -52,8 +52,8 @@ class NodeAccessor(Accessor):
                     f"NFX validation failed for {path}:\n" + "\n".join(msgs)
                 )
 
-        for entry in data.get("nodes", []):
-            properties = entry.get("properties", {})
+        for entry in doc.nodes:
+            properties = dict(entry.get("properties", {}))
             properties["neuro.id"] = entry["nid"]
             node = Node(
                 labels=entry["labels"],
@@ -66,12 +66,10 @@ class NodeAccessor(Accessor):
 
         if validate:
             # Build label lookup from imported nodes for relationship validation
-            nid_labels = {}
-            for entry in data.get("nodes", []):
-                nid_labels[entry["nid"]] = entry["labels"]
+            nid_labels = {entry["nid"]: entry["labels"] for entry in doc.nodes}
 
             violations = Violations()
-            for rel in data.get("relationships", []):
+            for rel in doc.relationships:
                 rel_type = rel["type"]
                 from_labels = nid_labels.get(rel["from"], [])
                 to_labels = nid_labels.get(rel["to"], [])
@@ -99,9 +97,9 @@ class NodeAccessor(Accessor):
                     f"Relationship validation failed for {path}:\n{violations}"
                 )
 
-        nids = {entry["nid"] for entry in data.get("nodes", [])}
+        nids = doc.node_nids
 
-        for rel in data.get("relationships", []):
+        for rel in doc.relationships:
             rel_type = rel["type"]
             match_a = "MERGE" if rel["from"] not in nids else "MATCH"
             match_b = "MERGE" if rel["to"] not in nids else "MATCH"
@@ -157,4 +155,9 @@ class NodeAccessor(Accessor):
         """
         relationships = self._nb.get_data(rel_query, {"ids": ids})
 
-        return nfx.write(path, nodes, relationships, name=name, description=description, version=version)
+        doc = nfx.Nfx.from_dict({
+            "name": name, "description": description, "version": version,
+            "nodes": nodes, "relationships": relationships,
+        })
+        nfx.write(path, doc)
+        return doc
