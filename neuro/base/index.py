@@ -94,7 +94,9 @@ class OntologyIndex:
         )
 
     def check_dependency_versions(self, path):
-        """Check that all dependencies have exact version match. Returns list of error strings."""
+        """Check that all dependencies have exact version match and that no
+        direct dependency is also reachable transitively. Returns list of
+        error strings."""
         doc = nfx.read(path)
         errors = []
         for dep_nid, required_version in doc.dependencies:
@@ -105,6 +107,18 @@ class OntologyIndex:
             if entry.version != required_version:
                 dep_name = entry.name or entry.path.stem
                 errors.append(f"{dep_name} requires {required_version}, found {entry.version}")
+
+        def _resolve(nid):
+            e = self._index.get(nid)
+            return nfx.read(e.path) if e else None
+        try:
+            tree = nfx.NfxTree(doc, _resolve)
+        except exceptions.NfxCycle:
+            return errors
+        for nid in tree.redundant_directs():
+            e = self._index.get(nid)
+            name = e.name or e.path.stem if e else nid.split("-", 1)[0]
+            errors.append(f"{name} is both a direct and a transitive dependency — drop the direct pin")
         return errors
 
     @property
