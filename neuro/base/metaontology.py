@@ -188,7 +188,7 @@ class Metaontology:
                 on_import(dep_name, imported=True)
 
     def _resolver(self, index=None):
-        """Return a dep-resolver for `nfx.dependency_node_nids`: index file, fallback to DB.
+        """Return a dep-resolver for `nfx.NfxTree`: index file, fallback to DB.
 
         Returns an `Nfx` (or None). The DB-fallback Nfx carries empty version
         strings on dependencies — only `node_nids`/`dep_nids` are consulted by
@@ -232,12 +232,12 @@ class Metaontology:
 
         # Validate referential integrity.
         try:
-            dependency_nids = nfx.dependency_node_nids(doc, self._resolver(index))
+            tree = nfx.NfxTree(doc, self._resolver(index))
         except exceptions.NfxCycle as e:
             raise exceptions.NfxViolation(
                 f"Dependency cycle for {path}: {' -> '.join(e.args[0])}"
             )
-        violations = nfx.validate(doc, dependency_nids)
+        violations = nfx.validate(doc, tree.all_node_nids(scope="dependencies"))
         if violations["unresolved"] or violations["foreign"]:
             msgs = []
             for rel in violations["unresolved"]:

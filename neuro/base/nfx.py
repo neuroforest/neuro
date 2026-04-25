@@ -171,7 +171,7 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
     """Validate referential integrity of an `Nfx`.
 
     `dependency_nids` should include nids reachable through direct AND transitive
-    dependencies — see `dependency_node_nids()` for a helper that walks the graph.
+    dependencies — see `NfxTree.all_node_nids()` for a helper that walks the graph.
 
     Returns dict with 'unresolved' (endpoints not in local or dependency nodes),
     'foreign' (both endpoints are non-local), and 'invalid_nids' (not valid UUID v4).
@@ -230,33 +230,121 @@ def lint_format(data: dict) -> dict:
     return {"unknown_keys": unknown_keys, "key_order": key_order}
 
 
-def dependency_node_nids(doc: Nfx, resolve) -> set[str]:
-    """Collect nids of all nodes defined by direct and transitive dependencies.
+class NfxTree:
+    """Eagerly-resolved dependency DAG rooted at an `Nfx`.
 
-    `resolve(nid)` returns the `Nfx` for a dependency, or None if the dependency
-    is unavailable (its nodes are then simply absent from the result).
+    Construction walks the graph via `resolve(nid) -> Nfx | None`. Cycles raise
+    `NfxCycle`. Unresolvable deps are recorded in `missing` and pruned from the
+    walk (they have no `edges` entry and are not in `modules`).
 
-    Raises `NfxCycle(cycle_path)` if the dependency graph contains a cycle,
-    where `cycle_path` is the list of dep nids traversed (e.g. [A, B, A]).
+    Attributes:
+        root: the source `Nfx`.
+        modules: nid → `Nfx` for every reachable resolved module (including
+            root if its nid is set).
+        edges: nid → direct dep nids, for every key in `modules`.
+        missing: dep nids that `resolve` returned None for.
     """
-    collected: set[str] = set()
-    DONE, IN_PATH = 1, 2
-    state: dict[str, int] = {}
 
-    def walk(nid, path):
-        marker = state.get(nid)
-        if marker == IN_PATH:
-            raise NfxCycle(path[path.index(nid):] + [nid])
-        if marker == DONE:
-            return
-        state[nid] = IN_PATH
-        dep_doc = resolve(nid)
-        if dep_doc is not None:
-            collected.update(dep_doc.node_nids)
-            for d_nid in dep_doc.dep_nids:
-                walk(d_nid, path + [nid])
-        state[nid] = DONE
+    __slots__ = ("root", "modules", "edges", "missing")
 
-    for d_nid in doc.dep_nids:
-        walk(d_nid, [])
-    return collected
+    def __init__(self, root: Nfx, resolve):
+        self.root = root
+        self.modules: dict[str, Nfx] = {}
+        self.edges: dict[str, list[str]] = {}
+        self.missing: set[str] = set()
+        if root.nid:
+            self.modules[root.nid] = root
+            self.edges[root.nid] = list(root.dep_nids)
+
+        DONE, IN_PATH = 1, 2
+        state: dict[str, int] = {}
+        if root.nid:
+            state[root.nid] = IN_PATH
+
+        def walk(doc: Nfx, path: list[str]) -> None:
+            for dep_nid in doc.dep_nids:
+                marker = state.get(dep_nid)
+                if marker == IN_PATH:
+                    raise NfxCycle(path[path.index(dep_nid):] + [dep_nid])
+                if marker == DONE:
+                    continue
+                state[dep_nid] = IN_PATH
+                dep_doc = resolve(dep_nid)
+                if dep_doc is None:
+                    self.missing.add(dep_nid)
+                else:
+                    self.modules[dep_nid] = dep_doc
+                    self.edges[dep_nid] = list(dep_doc.dep_nids)
+                    walk(dep_doc, path + [dep_nid])
+                state[dep_nid] = DONE
+
+        walk(root, [root.nid] if root.nid else [])
+
+    def __contains__(self, nid: str) -> bool:
+        return nid in self.modules
+
+    def __iter__(self):
+        return iter(self.modules)
+
+    @property
+    def directs(self) -> tuple[str, ...]:
+        return self.root.dep_nids
+
+    def transitive_deps(self) -> set[str]:
+        """Nids reachable through any direct dep's onward closure (excludes
+        the directs themselves only when they aren't also reached via another
+        direct — see `redundant_directs()` for the intersection)."""
+        seen: set[str] = set()
+        for d in self.root.dep_nids:
+            stack = list(self.edges.get(d, []))
+            while stack:
+                n = stack.pop()
+                if n in seen:
+                    continue
+                seen.add(n)
+                stack.extend(self.edges.get(n, []))
+        return seen
+
+    def redundant_directs(self) -> set[str]:
+        """Direct deps that are also reachable transitively through another direct."""
+        return set(self.root.dep_nids) & self.transitive_deps()
+
+    def all_node_nids(self, scope: str = "dependencies") -> set[str]:
+        """Union of node nids by scope.
+
+        scope:
+            "dependencies" — nids declared by every reachable dep (excludes root).
+            "root" — nids declared by root.
+            "all" — both.
+        """
+        if scope == "root":
+            return set(self.root.node_nids)
+        if scope not in ("dependencies", "all"):
+            raise ValueError(f"unknown scope {scope!r}")
+        nids: set[str] = set(self.root.node_nids) if scope == "all" else set()
+        for nid, doc in self.modules.items():
+            if nid != self.root.nid:
+                nids |= doc.node_nids
+        return nids
+
+    def topo_order(self) -> list[str]:
+        """Topological order of `modules`: deps before dependents."""
+        visited: set[str] = set()
+        order: list[str] = []
+
+        def visit(nid: str) -> None:
+            if nid in visited:
+                return
+            visited.add(nid)
+            for d in self.edges.get(nid, []):
+                if d in self.modules:
+                    visit(d)
+            order.append(nid)
+
+        for nid in list(self.modules):
+            visit(nid)
+        return order
+
+    def nids_by_module(self) -> dict[str, frozenset[str]]:
+        """Map of module nid → its declared node nids."""
+        return {nid: doc.node_nids for nid, doc in self.modules.items()}

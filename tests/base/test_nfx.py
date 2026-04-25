@@ -162,67 +162,132 @@ def test_validate_invalid_nid():
 
 def test_validate_accepts_transitive_endpoint():
     """A relationship from a local node to a transitive-dep node validates."""
-    from neuro.base.nfx import Nfx, dependency_node_nids, validate
+    from neuro.base.nfx import Nfx, NfxTree, validate
     registry = {
         DIRECT_NID: Nfx.from_dict({
+            "nid": DIRECT_NID,
             "nodes": [{"nid": DIRECT_NODE}],
             "dependencies": [f"{TRANSITIVE_NID}@1.0"],
         }),
         TRANSITIVE_NID: Nfx.from_dict({
+            "nid": TRANSITIVE_NID,
             "nodes": [{"nid": TRANSITIVE_NODE}],
             "dependencies": [],
         }),
     }
     doc = Nfx.from_dict({
+        "nid": LOCAL_1,
         "dependencies": [f"{DIRECT_NID}@1.0"],
-        "nodes": [{"nid": LOCAL_1}],
-        "relationships": [{"from": LOCAL_1, "to": TRANSITIVE_NODE, "type": "USES"}],
+        "nodes": [{"nid": LOCAL_2}],
+        "relationships": [{"from": LOCAL_2, "to": TRANSITIVE_NODE, "type": "USES"}],
     })
-    result = validate(doc, dependency_nids=dependency_node_nids(doc, registry.get))
+    tree = NfxTree(doc, registry.get)
+    result = validate(doc, dependency_nids=tree.all_node_nids(scope="dependencies"))
     assert result["unresolved"] == []
     assert result["foreign"] == []
 
 
-# --- dependency_node_nids (transitive walk) ---
+# --- NfxTree (eager DAG) ---
 
-def test_dependency_node_nids_transitive():
-    """dependency_node_nids walks direct + transitive deps."""
-    from neuro.base.nfx import Nfx, dependency_node_nids
+def test_nfx_tree_collects_transitive_node_nids():
+    from neuro.base.nfx import Nfx, NfxTree
     registry = {
         DIRECT_NID: Nfx.from_dict({
+            "nid": DIRECT_NID,
             "nodes": [{"nid": DIRECT_NODE}],
             "dependencies": [f"{TRANSITIVE_NID}@1.0"],
         }),
         TRANSITIVE_NID: Nfx.from_dict({
+            "nid": TRANSITIVE_NID,
             "nodes": [{"nid": TRANSITIVE_NODE}],
             "dependencies": [],
         }),
     }
-    doc = Nfx.from_dict({"dependencies": [f"{DIRECT_NID}@1.0"]})
-    nids = dependency_node_nids(doc, registry.get)
-    assert nids == {DIRECT_NODE, TRANSITIVE_NODE}
+    root = Nfx.from_dict({"nid": LOCAL_1, "dependencies": [f"{DIRECT_NID}@1.0"]})
+    tree = NfxTree(root, registry.get)
+    assert tree.all_node_nids(scope="dependencies") == {DIRECT_NODE, TRANSITIVE_NODE}
+    assert tree.all_node_nids(scope="root") == set()
+    assert tree.all_node_nids(scope="all") == {DIRECT_NODE, TRANSITIVE_NODE}
 
 
-def test_dependency_node_nids_rejects_cycle():
-    """Cyclic dependency graphs are rejected with a cycle path."""
-    from neuro.base.nfx import Nfx, dependency_node_nids
+def test_nfx_tree_rejects_cycle():
+    from neuro.base.nfx import Nfx, NfxTree
     from neuro.utils.exceptions import NfxCycle
     a, b = str(uuid.uuid4()), str(uuid.uuid4())
     registry = {
-        a: Nfx.from_dict({"nodes": [], "dependencies": [f"{b}@1.0"]}),
-        b: Nfx.from_dict({"nodes": [], "dependencies": [f"{a}@1.0"]}),
+        a: Nfx.from_dict({"nid": a, "dependencies": [f"{b}@1.0"]}),
+        b: Nfx.from_dict({"nid": b, "dependencies": [f"{a}@1.0"]}),
     }
-    doc = Nfx.from_dict({"dependencies": [f"{a}@1.0"]})
+    root = Nfx.from_dict({"nid": LOCAL_1, "dependencies": [f"{a}@1.0"]})
     with pytest.raises(NfxCycle) as exc:
-        dependency_node_nids(doc, registry.get)
+        NfxTree(root, registry.get)
     assert exc.value.args[0][0] == exc.value.args[0][-1]
 
 
-def test_dependency_node_nids_missing_resolve():
-    """Unresolvable deps are silently skipped (validate() will flag unresolved rels)."""
-    from neuro.base.nfx import Nfx, dependency_node_nids
-    doc = Nfx.from_dict({"dependencies": [f"{DEP_1}@1.0"]})
-    assert dependency_node_nids(doc, lambda _nid: None) == set()
+def test_nfx_tree_records_missing():
+    from neuro.base.nfx import Nfx, NfxTree
+    root = Nfx.from_dict({"nid": LOCAL_1, "dependencies": [f"{DEP_1}@1.0"]})
+    tree = NfxTree(root, lambda _nid: None)
+    assert tree.missing == {DEP_1}
+    assert set(tree.modules) == {LOCAL_1}
+    assert tree.all_node_nids() == set()
+
+
+def test_nfx_tree_redundant_directs_flags_indirect_overlap():
+    """A direct dep that's also reachable via another direct is redundant.
+
+    Mirrors the IMI scenario: IMI declares Biology, Time, metaontology directly,
+    but Biology→Time→metaontology already covers the latter two."""
+    from neuro.base.nfx import Nfx, NfxTree
+    META = str(uuid.uuid4())
+    TIME = str(uuid.uuid4())
+    BIO = str(uuid.uuid4())
+    registry = {
+        META: Nfx.from_dict({"nid": META, "dependencies": []}),
+        TIME: Nfx.from_dict({"nid": TIME, "dependencies": [f"{META}@1.0"]}),
+        BIO: Nfx.from_dict({"nid": BIO, "dependencies": [f"{TIME}@1.0", f"{META}@1.0"]}),
+    }
+    root = Nfx.from_dict({
+        "nid": LOCAL_1,
+        "dependencies": [f"{BIO}@1.0", f"{TIME}@1.0", f"{META}@1.0"],
+    })
+    tree = NfxTree(root, registry.get)
+    assert tree.redundant_directs() == {TIME, META}
+
+
+def test_nfx_tree_no_redundancy_for_independent_directs():
+    from neuro.base.nfx import Nfx, NfxTree
+    a, b = str(uuid.uuid4()), str(uuid.uuid4())
+    registry = {
+        a: Nfx.from_dict({"nid": a, "dependencies": []}),
+        b: Nfx.from_dict({"nid": b, "dependencies": []}),
+    }
+    root = Nfx.from_dict({"nid": LOCAL_1, "dependencies": [f"{a}@1.0", f"{b}@1.0"]})
+    tree = NfxTree(root, registry.get)
+    assert tree.redundant_directs() == set()
+
+
+def test_nfx_tree_topo_order():
+    from neuro.base.nfx import Nfx, NfxTree
+    a, b = str(uuid.uuid4()), str(uuid.uuid4())
+    registry = {
+        a: Nfx.from_dict({"nid": a, "dependencies": []}),
+        b: Nfx.from_dict({"nid": b, "dependencies": [f"{a}@1.0"]}),
+    }
+    root = Nfx.from_dict({"nid": LOCAL_1, "dependencies": [f"{b}@1.0"]})
+    order = NfxTree(root, registry.get).topo_order()
+    assert order.index(a) < order.index(b) < order.index(LOCAL_1)
+
+
+def test_nfx_tree_contains_and_iter():
+    from neuro.base.nfx import Nfx, NfxTree
+    a = str(uuid.uuid4())
+    registry = {a: Nfx.from_dict({"nid": a, "dependencies": []})}
+    root = Nfx.from_dict({"nid": LOCAL_1, "dependencies": [f"{a}@1.0"]})
+    tree = NfxTree(root, registry.get)
+    assert a in tree
+    assert LOCAL_1 in tree
+    assert set(tree) == {a, LOCAL_1}
 
 
 # --- lint_format (raw-dict format checks) ---
