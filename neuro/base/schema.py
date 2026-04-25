@@ -131,7 +131,7 @@ class Metaproperties(UserDict):
         :param violations: Violations
         :return:
         """
-        if not violations:
+        if violations is None:
             violations = Violations()
         for property_key, property_value in properties.items():
             if property_key not in self.data:
