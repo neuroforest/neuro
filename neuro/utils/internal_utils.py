@@ -12,16 +12,16 @@ from neuro.utils import exceptions
 
 
 BASE_PATHS = {
-    "build": "BUILD",
+    "app": "APP_DIR",
     "archive": "ARCHIVE",
+    "assets": "ASSETS",
+    "build": "BUILD",
     "cache": "NF_CACHE",
     "design": "DESIGN",
     "desktop": "DESKTOP",
     "logs": "LOGS",
     "neuro": "NEURO",
-    "app": "APP_DIR",
     "pkg": "PKG",
-    "assets": "ASSETS",
     "storage": "STORAGE",
     "tw5": "TW5",
 }
