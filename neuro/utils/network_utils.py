@@ -29,11 +29,12 @@ def get_free_ports(count, host="127.0.0.1"):
     return ports
 
 
-def is_port_in_use(port, host="127.0.0.1"):
+def is_port_in_use(port, host="127.0.0.1", timeout=1.0):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
         try:
             return s.connect_ex((host, int(port))) == 0
-        except socket.gaierror:
+        except (socket.gaierror, socket.timeout):
             return False
 
 
