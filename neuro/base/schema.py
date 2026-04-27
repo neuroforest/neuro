@@ -187,12 +187,18 @@ class Metarelationship:
         self.source = record["source"]
         self.target = record["target"]
         self.relationship_type = record["relationship_type"]
+        self.target_link_type = record["target_link_type"]
 
     def __repr__(self):
         return f"<Metarelationship ({self.source})-[:{self.label}]->({self.target})>"
 
-    def is_required(self):
+    def is_source_required(self):
+        """Source must emit this relationship (REQUIRE_RELATIONSHIP)."""
         return self.relationship_type == "REQUIRE_RELATIONSHIP"
+
+    def is_target_required(self):
+        """Target must receive this relationship (REQUIRE_TARGET)."""
+        return self.target_link_type == "REQUIRE_TARGET"
 
     def direction(self, node_label):
         """Return 'outgoing' or 'incoming' relative to node_label."""
@@ -218,18 +224,22 @@ class Metarelationships(UserDict):
         MATCH (ion:OntologyNode {{label: "{node_label}"}})
         MATCH (ion)-[:SUBCLASS_OF*0..]->(osource)
 
-        // Outgoing: this node has a relationship to a target
         // Collect link types (HAS_RELATIONSHIP and its subclasses)
         MATCH (linktype:OntologyRelationship)-[:SUBCLASS_OF*0..]->
             (:OntologyRelationship {{label: "HAS_RELATIONSHIP"}})
+        // Collect target-link types (HAS_TARGET and its subclasses)
+        MATCH (tlinktype:OntologyRelationship)-[:SUBCLASS_OF*0..]->
+            (:OntologyRelationship {{label: "HAS_TARGET"}})
 
         // Outgoing: this node has a relationship to a target
         OPTIONAL MATCH (osource)-[olink]->(orel:OntologyRelationship)
         WHERE type(olink) = linktype.label
-        OPTIONAL MATCH (orel)-[:HAS_TARGET]->(otarget:OntologyNode)
+        OPTIONAL MATCH (orel)-[otlink]->(otarget:OntologyNode)
+        WHERE type(otlink) = tlinktype.label
         WITH ion, collect(DISTINCT {{
             source: osource.label, relationship: orel.label,
             target: otarget.label, relationship_type: type(olink),
+            target_link_type: type(otlink),
             direction: "outgoing"
         }}) as outgoing
 
@@ -237,11 +247,14 @@ class Metarelationships(UserDict):
         MATCH (ion)-[:SUBCLASS_OF*0..]->(itarget)
         MATCH (ilinktype:OntologyRelationship)-[:SUBCLASS_OF*0..]->
             (:OntologyRelationship {{label: "HAS_RELATIONSHIP"}})
-        OPTIONAL MATCH (isource:OntologyNode)-[ilink]->(irel:OntologyRelationship)
-        WHERE type(ilink) = ilinktype.label AND (irel)-[:HAS_TARGET]->(itarget)
+        MATCH (itlinktype:OntologyRelationship)-[:SUBCLASS_OF*0..]->
+            (:OntologyRelationship {{label: "HAS_TARGET"}})
+        OPTIONAL MATCH (isource:OntologyNode)-[ilink]->(irel:OntologyRelationship)-[itlink]->(itarget)
+        WHERE type(ilink) = ilinktype.label AND type(itlink) = itlinktype.label
         WITH outgoing, collect(DISTINCT {{
             source: isource.label, relationship: irel.label,
             target: itarget.label, relationship_type: type(ilink),
+            target_link_type: type(itlink),
             direction: "incoming"
         }}) as incoming
 
@@ -249,6 +262,7 @@ class Metarelationships(UserDict):
         WITH r WHERE r.relationship IS NOT NULL
         RETURN DISTINCT r.source as source, r.relationship as relationship,
                r.target as target, r.relationship_type as relationship_type,
+               r.target_link_type as target_link_type,
                r.direction as direction
         """
         data = nb.get_data(query)
@@ -296,7 +310,12 @@ class Metarelationships(UserDict):
                     )
 
         for key, mr in self.data.items():
-            if mr.is_required() and key not in present_keys:
+            if key in present_keys:
+                continue
+            direction = key.rsplit(":", 1)[-1]
+            if direction == "outgoing" and mr.is_source_required():
+                violations.missing_relationships.append(mr)
+            elif direction == "incoming" and mr.is_target_required():
                 violations.missing_relationships.append(mr)
 
         return violations

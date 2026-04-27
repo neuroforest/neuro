@@ -141,7 +141,8 @@ class TestUnvalidatedFallback:
 
 class TestMetarelationship:
     mr = Metarelationship({"relationship": "PARENT_OF", "source": "Taxon", "target": "Taxon",
-                           "relationship_type": "HAS_RELATIONSHIP"})
+                           "relationship_type": "HAS_RELATIONSHIP",
+                           "target_link_type": "HAS_TARGET"})
 
     def test_repr(self):
         assert repr(self.mr) == "<Metarelationship (Taxon)-[:PARENT_OF]->(Taxon)>"
@@ -154,12 +155,23 @@ class TestMetarelationship:
 
     def test_direction_asymmetric(self):
         mr = Metarelationship({"relationship": "HAS_GENE", "source": "Genome", "target": "Gene",
-                               "relationship_type": "HAS_RELATIONSHIP"})
+                               "relationship_type": "HAS_RELATIONSHIP",
+                               "target_link_type": "HAS_TARGET"})
         assert mr.direction("Genome") == "outgoing"
         assert mr.direction("Gene") == "incoming"
 
-    def test_is_required(self):
+    def test_is_source_required(self):
         mr = Metarelationship({"relationship": "HAS_GENE", "source": "Genome", "target": "Gene",
-                               "relationship_type": "REQUIRE_RELATIONSHIP"})
-        assert mr.is_required()
-        assert not self.mr.is_required()
+                               "relationship_type": "REQUIRE_RELATIONSHIP",
+                               "target_link_type": "HAS_TARGET"})
+        assert mr.is_source_required()
+        assert not mr.is_target_required()
+        assert not self.mr.is_source_required()
+
+    def test_is_target_required(self):
+        mr = Metarelationship({"relationship": "HAS_GENE", "source": "Genome", "target": "Gene",
+                               "relationship_type": "HAS_RELATIONSHIP",
+                               "target_link_type": "REQUIRE_TARGET"})
+        assert mr.is_target_required()
+        assert not mr.is_source_required()
+        assert not self.mr.is_target_required()
