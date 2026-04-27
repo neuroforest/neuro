@@ -1,8 +1,7 @@
 import json
 import os
 
-from neuro.base import nfx
-from neuro.base.schema import Metaproperties, Violations
+from neuro.base import nfx, schema
 from neuro.utils import exceptions, terminal_style
 
 
@@ -49,7 +48,7 @@ class OntologyValidator:
         data = self._nb.get_data(query)
         return data[0]["connected"]
 
-    def validate(self):
+    def validate(self, strict=False):
         """Run all validation checks. Returns an OntologyViolations instance."""
         ontology_violations = OntologyViolations()
 
@@ -59,7 +58,7 @@ class OntologyValidator:
                 ontology_object_type = instance["ontology_object_type"]
                 props = instance["properties"]
 
-                metaproperties = Metaproperties.from_ontology(self._nb, ontology_object_type)
+                metaproperties = schema.Metaproperties.from_ontology(self._nb, ontology_object_type)
                 v = metaproperties.validate_properties(props)
 
                 if v:
@@ -74,6 +73,15 @@ class OntologyValidator:
                 - specific
             )
 
+            if strict:
+                missing = {}
+                for i in self.instances["OntologyProperty"]:
+                    pt = i["ontology_object_type"]
+                    if pt == "OntologyProperty" or pt in missing or schema.has_validator(pt):
+                        continue
+                    missing[pt] = i["label"]
+                ontology_violations.unvalidated_property_types = sorted(missing.items())
+
         ontology_violations.disconnected = not self._is_connected()
 
         return ontology_violations
@@ -83,17 +91,19 @@ class OntologyViolations:
     """Ontology-level violations: collects per-instance Violations and structural issues."""
 
     def __init__(self):
-        self.violations: list[tuple[str, str, Violations]] = []
+        self.violations: list[tuple[str, str, schema.Violations]] = []
         self.disconnected: bool = False
         self.redundant_labels: list[str] = []
         self.redundant_relationships: list[str] = []
         self.redundant_properties: list[str] = []
         self.generic_properties: list[str] = []
+        self.unvalidated_property_types: list[tuple[str, str]] = []
 
     def __bool__(self):
         return any([
             self.violations, self.disconnected, self.redundant_labels,
             self.redundant_relationships, self.redundant_properties,
+            self.unvalidated_property_types,
         ])
 
     def __iter__(self):
@@ -107,6 +117,8 @@ class OntologyViolations:
             yield f"redundant relationship: {rr}"
         for rp in self.redundant_properties:
             yield f"redundant property: {rp}"
+        for ptype, example in self.unvalidated_property_types:
+            yield f"unvalidated property type: {ptype} (e.g. {example})"
 
     @property
     def warnings(self):
@@ -133,6 +145,8 @@ class OntologyViolations:
             lines.append(f"Redundant relationships: {self.redundant_relationships}")
         if self.redundant_properties:
             lines.append(f"Redundant properties: {self.redundant_properties}")
+        for ptype, example in self.unvalidated_property_types:
+            lines.append(f"{FAIL} unvalidated property type: {B}{ptype}{RST} (e.g. {example})")
 
         for w in self.warnings:
             lines.append(f"  {w}")
@@ -308,14 +322,14 @@ class Metaontology:
                  "props": rel.get("properties", {})},
             )
 
-    def is_ontology_valid(self):
+    def is_ontology_valid(self, strict=False):
         """Validate metaontology structure. Returns True if valid, False otherwise."""
         count = self._nb.count("Metaontology")
         if not count:
             raise exceptions.NoOntology
 
         validator = OntologyValidator(self._nb)
-        self.violations = validator.validate()
+        self.violations = validator.validate(strict=strict)
         return not bool(self.violations)
 
     def export_nfx(self, path=None):

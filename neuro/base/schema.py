@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 from collections import UserDict
 
@@ -8,6 +9,35 @@ from neuro.core.data.list import ListUtils
 from neuro.core.data.dict import DictUtils
 from neuro.core.data.str import Uuid
 from neuro.utils import terminal_style
+
+
+def _check_label(value, mp):
+    patterns = {
+        "OntologyNode": r"^[A-Z][a-zA-Z]*$",
+        "OntologyRelationship": r"^[A-Z][A-Z_]*$",
+        "OntologyProperty": r"^[a-z][a-z._-]*$",
+    }
+    if not isinstance(value, str):
+        return False
+    pattern = patterns.get(mp.deep_node)
+    if not pattern:
+        raise ValueError(f"invalid deep_node: {mp.deep_node}")
+    return bool(re.match(pattern, value))
+
+
+HARDCODED_VALIDATORS = {
+    "String": lambda v, _mp: isinstance(v, str),
+    "Uuid": lambda v, _mp: Uuid.is_valid_uuid_v4(v),
+    "OntologyProperty": lambda _v, _mp: False,
+    "Label": _check_label,
+}
+
+
+def has_validator(property_type):
+    """True if this property type has a hardcoded or plugin-registered validator."""
+    if property_type in HARDCODED_VALIDATORS:
+        return True
+    return plugins.lookup(property_type) is not None
 
 
 class Metaproperty:
@@ -38,49 +68,22 @@ class Metaproperty:
             "property_type": self.property_type,
         })
 
-    def _hardcoded_validators(self):
-        return {
-            "String": lambda v: isinstance(v, str),
-            "Uuid": Uuid.is_valid_uuid_v4,
-            "OntologyProperty": lambda v: False,
-            "Label": self._check_label,
-        }
-
     def has_validator(self):
         """True if this property type has a hardcoded or plugin-registered validator."""
-        if self.property_type in self._hardcoded_validators():
-            return True
-        return plugins.lookup(self.property_type) is not None
+        return has_validator(self.property_type)
 
     def validate(self, property_value):
         """Check if property value is valid. Returns True if valid, False otherwise.
 
         Metaontology core types (`String`, `Uuid`, `Label`, `OntologyProperty`)
-        are hardcoded here — they bootstrap all other validation. Non-core types
+        are hardcoded — they bootstrap all other validation. Non-core types
         fall back to the plugin registry (`validators.py` next to each ontology);
         unregistered types fail closed (use `has_validator` to distinguish).
         """
-        handler = self._hardcoded_validators().get(self.property_type)
-        if handler is not None:
-            return bool(handler(property_value))
-        fn = plugins.lookup(self.property_type)
+        fn = HARDCODED_VALIDATORS.get(self.property_type) or plugins.lookup(self.property_type)
         if fn is None:
             return False
         return bool(fn(property_value, self))
-
-    def _check_label(self, property_value):
-        import re
-        if not isinstance(property_value, str):
-            return False
-        patterns = {
-            "OntologyNode": r"^[A-Z][a-zA-Z]*$",
-            "OntologyRelationship": r"^[A-Z][A-Z_]*$",
-            "OntologyProperty": r"^[a-z][a-z._-]*$",
-        }
-        pattern = patterns.get(self.deep_node)
-        if not pattern:
-            raise ValueError(f"invalid deep_node: {self.deep_node}")
-        return bool(re.match(pattern, property_value))
 
 
 class Metaproperties(UserDict):
