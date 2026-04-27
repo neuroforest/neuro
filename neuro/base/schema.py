@@ -374,7 +374,9 @@ class Violations:
         if self.undefined_properties:
             lines.append(f"  undefined: {self.undefined_properties}")
         if self.undefined_labels:
-            lines.append(f"  undefined labels: {self.undefined_labels}")
+            quoted = ", ".join(f"'{lb}'" for lb in self.undefined_labels)
+            noun = "label" if len(self.undefined_labels) == 1 else "labels"
+            lines.append(f"  undefined {noun}: {quoted}")
         if self.invalid_properties:
             for p, reason in self.invalid_properties:
                 lines.append(f"  invalid value: {B}{p}{RST} ({reason})")
