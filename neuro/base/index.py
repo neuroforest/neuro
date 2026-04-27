@@ -67,6 +67,7 @@ class OntologyIndex:
         """Resolve a path, nid, name, stem, or filename to a Path.
 
         Priority: existing filesystem path > nid > name > stem > filename.
+        Nid/name/stem/filename matching is case-insensitive.
         """
         p = Path(key)
         if p.exists():
@@ -74,15 +75,19 @@ class OntologyIndex:
         entry = self._index.get(key)
         if entry:
             return entry.path
+        key_lower = key.lower()
         entries = list(self._index.values())
         for e in entries:
-            if e.name == key:
+            if e.nid.lower() == key_lower:
                 return e.path
         for e in entries:
-            if e.path.stem == key:
+            if (e.name or "").lower() == key_lower:
                 return e.path
         for e in entries:
-            if e.path.name == key:
+            if e.path.stem.lower() == key_lower:
+                return e.path
+        for e in entries:
+            if e.path.name.lower() == key_lower:
                 return e.path
         return None
 
