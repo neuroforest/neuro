@@ -51,6 +51,22 @@ class TestTextCsv:
         text.TextJson.merge_files(file_paths, merged_path)
         assert deepdiff.DeepDiff(json.load(open(merged_path)), json.load(open(result_path)), ignore_order=True) == {}
 
+    def test_contains(self, tmp_path):
+        from neuro.core.file import text
+        big = tmp_path / "big.csv"
+        sub = tmp_path / "sub.csv"
+        miss = tmp_path / "miss.csv"
+        big.write_text("name,val\na,1\nb,2\nc,3\n")
+        sub.write_text("name,val\na,1\nc,3\n")
+        miss.write_text("name,val\na,1\nd,4\n")
+
+        with text.TextCsv(str(big)) as t:
+            assert t.contains(str(sub))["is_contained"] is True
+            r = t.contains(str(miss))
+            assert r["is_contained"] is False
+            assert r["missing"] == [["d", "4"]]
+            assert t.contains(str(miss), key="name")["missing"] == ["d"]
+
     def test_insert_layer(self, test_file):
         from neuro.core.file import text
         file_path = test_file.get("input/files/text_json_insert.json")

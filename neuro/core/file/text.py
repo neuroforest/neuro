@@ -148,6 +148,35 @@ class TextCsv(Text):
         writer = csv.writer(file_object)
         return writer
 
+    def contains(self, other, key=None):
+        """
+        Check if another CSV's data rows are a subset of this one.
+
+        :param other: TextCsv instance or path
+        :param key: optional header name to compare by; if None, compare full rows
+        :return: dict with is_contained, self_count, other_count, shared, missing
+        :rtype: dict
+        """
+        if isinstance(other, str):
+            other = TextCsv(other)
+
+        if key is None:
+            self_set = {tuple(row) for row in self.get_rows()}
+            other_set = {tuple(row) for row in other.get_rows()}
+            missing = [list(row) for row in other_set - self_set]
+        else:
+            self_set = set(self.get_column(key))
+            other_set = set(other.get_column(key))
+            missing = list(other_set - self_set)
+
+        return {
+            "is_contained": not missing,
+            "self_count": len(self_set),
+            "other_count": len(other_set),
+            "shared": len(self_set & other_set),
+            "missing": missing,
+        }
+
     def extract_headers(self, headers, output_path=""):
         """
         Extract certain headers from csv file.
