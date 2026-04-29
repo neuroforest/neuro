@@ -217,6 +217,12 @@ class Metarelationships(UserDict):
     def __repr__(self):
         return f"<Metarelationships node={self.node_label} len={len(self.data)}>"
 
+    def __setitem__(self, key, value: "Metarelationship"):
+        existing = self.data.get(key)
+        if existing is not None and existing.target is not None and value.target is None:
+            return
+        super().__setitem__(key, value)
+
     @classmethod
     def from_ontology(cls, nb, node_label):
         """Query the ontology and return Metarelationships for a given node label."""
