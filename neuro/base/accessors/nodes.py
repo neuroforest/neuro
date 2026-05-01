@@ -105,6 +105,7 @@ class NodeAccessor(Accessor):
             match_b = "MERGE" if rel["to"] not in nids else "MATCH"
             query = f"""
             {match_a} (a {{`neuro.id`: $from_id}})
+            WITH a
             {match_b} (b {{`neuro.id`: $to_id}})
             MERGE (a)-[r:{rel_type}]->(b)
             SET r += $properties
