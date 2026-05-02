@@ -58,7 +58,10 @@ class Metaproperty:
                 f"r={self.relationship_type} node={self.node}>")
 
     def is_required(self):
-        return self.relationship_type == "REQUIRE_PROPERTY"
+        return self.relationship_type in ("REQUIRE_PROPERTY", "HAS_KEY")
+
+    def is_key(self):
+        return self.relationship_type == "HAS_KEY"
 
     def display(self):
         return DictUtils.represent({
@@ -169,7 +172,7 @@ class Metaproperties(UserDict):
                     violations.invalid_properties.append((property_key, reason))
 
         for p in self.data.values():
-            if p.relationship_type == "REQUIRE_PROPERTY" and p.label not in properties:
+            if p.is_required() and p.label not in properties:
                 violations.missing_properties.append(p)
 
         return violations
