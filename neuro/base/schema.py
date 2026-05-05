@@ -51,6 +51,7 @@ class Metaproperty:
         self.property = metaproperty_dict["property_object"]
         self.property_type = metaproperty_dict["property_type"]
         self.relationship_type = metaproperty_dict["relationship_type"]
+        self.relationship_lineage = metaproperty_dict["relationship_lineage"]
         self.deep_node = metaproperty_dict["deep_node"]
 
     def __repr__(self):
@@ -58,10 +59,7 @@ class Metaproperty:
                 f"r={self.relationship_type} node={self.node}>")
 
     def is_required(self):
-        return self.relationship_type in ("REQUIRE_PROPERTY", "HAS_KEY")
-
-    def is_key(self):
-        return self.relationship_type == "HAS_KEY"
+        return "REQUIRE_PROPERTY" in self.relationship_lineage
 
     def display(self):
         return DictUtils.represent({
@@ -120,11 +118,13 @@ class Metaproperties(UserDict):
 
         MATCH (on)-[r]-(p)
         WHERE type(r) = or.label AND op.label IN labels(p)
+        OPTIONAL MATCH (or)-[:SUBCLASS_OF*0..]->(or_ancestor:OntologyRelationship)
         RETURN
             on as node_object,
             on.label as node,
             p as property_object,
             type(r) as relationship_type,
+            collect(DISTINCT or_ancestor.label) as relationship_lineage,
             op.label as property_type,
             p.label as property,
             root.label as deep_node
