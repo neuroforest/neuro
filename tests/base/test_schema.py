@@ -21,6 +21,7 @@ def _make_metaproperty(property_type, deep_node="OntologyNode"):
         "property_object": None,
         "property_type": property_type,
         "relationship_type": "HAS_PROPERTY",
+        "relationship_lineage": ["HAS_PROPERTY"],
         "deep_node": deep_node,
     })
 
