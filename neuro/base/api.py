@@ -16,12 +16,12 @@ class NeuroBase:
     """
     Simple, reusable Neo4j client wrapper.
     """
-    def __init__(self, neo4j_uri=None, neo4j_user=None, neo4j_password=None):
+    def __init__(self, neo4j_uri=None, neo4j_user=None, neo4j_password=None, **driver_kwargs):
         uri = neo4j_uri or os.getenv("NEO4J_URI")
         user = neo4j_user or os.getenv("NEO4J_USER")
         password = neo4j_password or os.getenv("NEO4J_PASSWORD")
         try:
-            self.driver = neo4j.GraphDatabase.driver(uri, auth=(user, password))
+            self.driver = neo4j.GraphDatabase.driver(uri, auth=(user, password), **driver_kwargs)
         except neo4j.exceptions.ConfigurationError:
             logging.error(f"Incorrect Neo4j parameters: {uri}")
             return
