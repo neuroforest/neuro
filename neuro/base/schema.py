@@ -5,10 +5,9 @@ import re
 from collections import UserDict
 
 from neuro.base import plugins
-from neuro.core.data.list import ListUtils
 from neuro.core.data.dict import DictUtils
 from neuro.core.data.str import Uuid
-from neuro.utils import terminal_style
+from neuro.utils import terminal_components, terminal_style
 
 
 def _check_label(value, mp):
@@ -337,7 +336,11 @@ class OntologyNodeInfo:
         self.lineage: list
         self.metaproperties: Metaproperties
         self.metarelationships: Metarelationships
+        self.source_ontology = None
+        self.source_version = None
+        self.nid = None
         self.get_lineage()
+        self.get_source()
         self.get_metaproperties()
         self.get_relationships()
 
@@ -352,6 +355,23 @@ class OntologyNodeInfo:
             raise ValueError(f"No ontology node found with label: {self.label}")
         self.lineage = [next(iter(record.values())) for record in data]
 
+    def get_source(self):
+        query = """
+        UNWIND $labels as lbl
+        MATCH (n:OntologyNode {label: lbl})
+        OPTIONAL MATCH (m:OntologyMetadata)-[:DEFINES]->(n)
+        RETURN lbl as label, m.name as name, m.version as version, n.`neuro.id` as nid
+        """
+        data = self.nb.get_data(query, parameters={"labels": self.lineage})
+        self.origin_ontology = {}
+        for r in data:
+            ont = f"{r['name']} v{r['version']}" if r["name"] else ""
+            self.origin_ontology[r["label"]] = ont
+            if r["label"] == self.label:
+                self.source_ontology = r["name"]
+                self.source_version = r["version"]
+                self.nid = r["nid"]
+
     def get_metaproperties(self):
         self.metaproperties = Metaproperties.from_ontology(self.nb, self.label)
 
@@ -359,18 +379,37 @@ class OntologyNodeInfo:
         self.metarelationships = Metarelationships.from_ontology(self.nb, self.label)
 
     def display(self):
-        print(f"Type info for {terminal_style.BOLD}{self.label}{terminal_style.RESET}")
-        print("-" * 50)
-        print("Lineage:")
-        print("   ", " ➜  ".join(self.lineage))
-        print("\nProperties:")
-        sorted_metaproperties = sorted(self.metaproperties.values(), key=lambda x: x.label)
-        list_represent = ListUtils.represent(sorted_metaproperties, display=False)
-        print(list_represent[2:-3])
-        print("\nRelationships:")
-        sorted_metarelationships = sorted(self.metarelationships.values(), key=lambda x: x.label)
-        list_represent = ListUtils.represent(sorted_metarelationships, level=0, display=False)
-        print(list_represent[2:-3])
+        B, DIM, RST = terminal_style.BOLD, terminal_style.DIM, terminal_style.RESET
+        print(f"{B}{self.label}{RST}")
+        print("─" * 50)
+        if self.nid:
+            print(f"  {DIM}{self.nid}{RST}")
+        if self.source_ontology:
+            print(f"  {self.source_ontology} v{self.source_version}")
+        print()
+        print(f"{B}Lineage{RST}")
+        print(f"   {' ➜  '.join(self.lineage)}")
+
+        print(f"\n{B}Properties{RST}")
+        mps = sorted(self.metaproperties.values(), key=lambda x: x.label)
+        rows = [
+            ("*" if mp.is_required() else " ", mp.label, mp.property_type, mp.relationship_type,
+             mp.node, self.origin_ontology.get(mp.node, ""))
+            for mp in mps
+        ]
+        terminal_components.table(rows, header=(" ", "PROPERTY", "TYPE", "REL", "ORIGIN", "ONTOLOGY"), indent=0)
+
+        print(f"\n{B}Relationships{RST}")
+        mrs = sorted(self.metarelationships.values(), key=lambda x: x.label)
+        rows = []
+        for mr in mrs:
+            if mr.target in self.lineage:
+                arrow, peer, via, required = "←", mr.source, mr.target, mr.is_target_required()
+            else:
+                arrow, peer, via, required = "→", mr.target, mr.source, mr.is_source_required()
+            rows.append(("*" if required else " ", arrow, mr.label, peer, via,
+                         self.origin_ontology.get(via, "")))
+        terminal_components.table(rows, header=(" ", "DIR", "REL", "PEER", "ORIGIN", "ONTOLOGY"), indent=0)
 
 
 class Violations:
