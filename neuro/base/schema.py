@@ -277,10 +277,14 @@ class Metarelationships(UserDict):
         metarelationships = cls(node_label)
         for record in data:
             mr = Metarelationship(record)
-            key = record["relationship"] + ":" + record["direction"]
+            direction = record["direction"]
+            peer = mr.target if direction == "outgoing" else mr.source
+            if peer is None:
+                continue
+            key = f"{mr.label}:{peer}:{direction}"
             # Skip duplicate incoming entry for self-referential relationships
-            if record["direction"] == "incoming" and mr.source == mr.target:
-                outgoing_key = record["relationship"] + ":outgoing"
+            if direction == "incoming" and mr.source == mr.target:
+                outgoing_key = f"{mr.label}:{mr.target}:outgoing"
                 if outgoing_key in metarelationships:
                     continue
             metarelationships[key] = mr
@@ -299,26 +303,39 @@ class Metarelationships(UserDict):
         """
         relationships = nb.get_data(query, {"neuro_id": neuro_id})
 
-        present_keys = set()
+        matched_keys = set()
         for rel in relationships:
             rel_type = rel["rel_type"]
             direction = rel["direction"]
-            key = f"{rel_type}:{direction}"
-            present_keys.add(key)
-            if key not in self.data:
+            target_labels = rel["target_labels"]
+            candidate_keys = [
+                k for k, m in self.data.items()
+                if m.label == rel_type and k.endswith(f":{direction}")
+            ]
+            if not candidate_keys:
                 violations.undefined_relationships.append(
-                    (rel_type, direction, rel["target_labels"])
+                    (rel_type, direction, target_labels)
                 )
+                continue
+            peer_match = None
+            for k in candidate_keys:
+                m = self.data[k]
+                expected = m.target if direction == "outgoing" else m.source
+                if expected in target_labels:
+                    peer_match = k
+                    break
+            if peer_match is not None:
+                matched_keys.add(peer_match)
             else:
-                mr = self.data[key]
-                expected_label = mr.target if direction == "outgoing" else mr.source
-                if expected_label not in rel["target_labels"]:
-                    violations.invalid_relationships.append(
-                        (rel_type, direction, rel["target_labels"], expected_label)
-                    )
+                m = self.data[candidate_keys[0]]
+                expected = m.target if direction == "outgoing" else m.source
+                violations.invalid_relationships.append(
+                    (rel_type, direction, target_labels, expected)
+                )
+                matched_keys.update(candidate_keys)
 
         for key, mr in self.data.items():
-            if key in present_keys:
+            if key in matched_keys:
                 continue
             direction = key.rsplit(":", 1)[-1]
             if direction == "outgoing" and mr.is_source_required():
