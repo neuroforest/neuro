@@ -52,6 +52,7 @@ class Metaproperty:
         self.relationship_type = metaproperty_dict["relationship_type"]
         self.relationship_lineage = metaproperty_dict["relationship_lineage"]
         self.deep_node = metaproperty_dict["deep_node"]
+        self.distance = metaproperty_dict["distance"]
 
     def __repr__(self):
         return (f"<Metaproperty \"{self.label}\" type={self.property_type} "
@@ -92,10 +93,10 @@ class Metaproperties(UserDict):
         self.node_label = node_label
 
     def __setitem__(self, property_label, metaproperty_object: Metaproperty):
-        if property_label in self:
+        existing = self.data.get(property_label)
+        if existing is not None and existing.distance <= metaproperty_object.distance:
             return
-        else:
-            super().__setitem__(property_label, metaproperty_object)
+        super().__setitem__(property_label, metaproperty_object)
 
     def __repr__(self):
         return f"<Metaproperties node={self.node_label} len={len(self.data)}>"
@@ -106,7 +107,7 @@ class Metaproperties(UserDict):
         ontology_objects = tuple(json.loads(os.environ["ONTOLOGY_OBJECTS"]))
         query = f"""
         MATCH (ion:OntologyNode {{label: "{node_label}"}})
-        MATCH (ion)-[:SUBCLASS_OF*0..]->(on)
+        MATCH lineage_path = (ion)-[:SUBCLASS_OF*0..]->(on)
         MATCH (or:OntologyRelationship)-[:SUBCLASS_OF*0..]->
             (:OntologyRelationship {{label: "HAS_PROPERTY"}})
         MATCH (iop:OntologyNode {{label: "OntologyProperty"}})
@@ -126,7 +127,8 @@ class Metaproperties(UserDict):
             collect(DISTINCT or_ancestor.label) as relationship_lineage,
             op.label as property_type,
             p.label as property,
-            root.label as deep_node
+            root.label as deep_node,
+            length(lineage_path) as distance
         """
         data = nb.get_data(query)
         metaproperties = cls(node_label)
