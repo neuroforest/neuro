@@ -84,7 +84,84 @@ class OntologyValidator:
 
         ontology_violations.disconnected = not self._is_connected()
 
+        for record in self._find_property_overrides():
+            verdict = self._classify_override(record)
+            if verdict == "violation":
+                ontology_violations.override_violations.append(record)
+            elif verdict == "warning":
+                ontology_violations.override_warnings.append(record)
+
         return ontology_violations
+
+    def _find_property_overrides(self):
+        """Property-name collisions in the SUBCLASS_OF hierarchy. For each
+        (class, property name) attached on a class, return the closest strict
+        ancestor that also attaches the same name, with both sides' relationship
+        type and property type plus their SUBCLASS_OF position."""
+        query = """
+        MATCH (hp:OntologyRelationship {label: "HAS_PROPERTY"})
+        MATCH (op:OntologyNode {label: "OntologyProperty"})
+
+        MATCH (rel1:OntologyRelationship)-[:SUBCLASS_OF*0..]->(hp)
+        MATCH (rel2:OntologyRelationship)-[:SUBCLASS_OF*0..]->(hp)
+
+        MATCH (cls:OntologyNode)-[r1]->(p1)
+        WHERE type(r1) = rel1.label AND NOT cls:Metaontology
+        MATCH (op1:OntologyNode)-[:SUBCLASS_OF*0..]->(op)
+        WHERE op1.label IN labels(p1)
+
+        MATCH path = (cls)-[:SUBCLASS_OF*1..]->(anc:OntologyNode)
+        WHERE NOT anc:Metaontology
+
+        MATCH (anc)-[r2]->(p2)
+        WHERE type(r2) = rel2.label AND p1.label = p2.label
+        MATCH (op2:OntologyNode)-[:SUBCLASS_OF*0..]->(op)
+        WHERE op2.label IN labels(p2)
+
+        WITH cls, anc, p1.label AS prop_name, rel1, rel2, op1, op2, length(path) AS depth,
+             CASE WHEN rel1 = rel2 THEN "same"
+                  WHEN exists((rel1)-[:SUBCLASS_OF*1..]->(rel2)) THEN "narrower"
+                  WHEN exists((rel2)-[:SUBCLASS_OF*1..]->(rel1)) THEN "wider"
+                  ELSE "unrelated" END AS rel_relation,
+             CASE WHEN op1 = op2 THEN "same"
+                  WHEN exists((op1)-[:SUBCLASS_OF*1..]->(op2)) THEN "narrower"
+                  WHEN exists((op2)-[:SUBCLASS_OF*1..]->(op1)) THEN "wider"
+                  ELSE "unrelated" END AS type_relation
+        ORDER BY depth
+        WITH cls.label AS class_label, prop_name,
+             collect({
+                 ancestor_label: anc.label,
+                 class_rel: rel1.label, ancestor_rel: rel2.label,
+                 class_type: op1.label, ancestor_type: op2.label,
+                 rel_relation: rel_relation, type_relation: type_relation
+             })[0] AS closest
+        RETURN class_label, prop_name,
+               closest.ancestor_label AS ancestor_label,
+               closest.class_rel AS class_rel,
+               closest.ancestor_rel AS ancestor_rel,
+               closest.class_type AS class_type,
+               closest.ancestor_type AS ancestor_type,
+               closest.rel_relation AS rel_relation,
+               closest.type_relation AS type_relation
+        ORDER BY class_label, prop_name
+        """
+        return [dict(r) for r in self._nb.get_data(query)]
+
+    @staticmethod
+    def _classify_override(record):
+        """Bucket an override record per the covariance matrix.
+
+        - Either dimension widens or is unrelated → violation (LSP-breaking).
+        - Both dimensions equal → warning (pure redeclaration, no narrowing).
+        - At least one dimension narrows, neither widens → covariant override, OK.
+        """
+        rel_rel = record["rel_relation"]
+        type_rel = record["type_relation"]
+        if rel_rel in ("wider", "unrelated") or type_rel in ("wider", "unrelated"):
+            return "violation"
+        if rel_rel == "same" and type_rel == "same":
+            return "warning"
+        return "ok"
 
 
 class OntologyViolations:
@@ -98,12 +175,14 @@ class OntologyViolations:
         self.redundant_properties: list[str] = []
         self.generic_properties: list[str] = []
         self.unvalidated_property_types: list[tuple[str, str]] = []
+        self.override_violations: list[dict] = []
+        self.override_warnings: list[dict] = []
 
     def __bool__(self):
         return any([
             self.violations, self.disconnected, self.redundant_labels,
             self.redundant_relationships, self.redundant_properties,
-            self.unvalidated_property_types,
+            self.unvalidated_property_types, self.override_violations,
         ])
 
     def __iter__(self):
@@ -119,12 +198,26 @@ class OntologyViolations:
             yield f"redundant property: {rp}"
         for ptype, example in self.unvalidated_property_types:
             yield f"unvalidated property type: {ptype} (e.g. {example})"
+        for r in self.override_violations:
+            yield self._format_override(r, kind="violation")
+
+    @staticmethod
+    def _format_override(r, kind):
+        prefix = "override violation" if kind == "violation" else "redeclaration"
+        rel = (f"rel: {r['class_rel']} {r['rel_relation']} vs {r['ancestor_rel']}"
+               if r["rel_relation"] != "same" else f"rel: {r['class_rel']}")
+        typ = (f"type: {r['class_type']} {r['type_relation']} vs {r['ancestor_type']}"
+               if r["type_relation"] != "same" else f"type: {r['class_type']}")
+        return (f"{prefix}: {r['class_label']}.{r['prop_name']} "
+                f"vs {r['ancestor_label']}.{r['prop_name']} ({rel}; {typ})")
 
     @property
     def warnings(self):
         B, Y, RST = terminal_style.BOLD, terminal_style.YELLOW, terminal_style.RESET
         for prop in self.generic_properties:
             yield f"{Y}warning: {B}{prop}{RST}{Y} uses generic OntologyProperty{RST}"
+        for r in self.override_warnings:
+            yield f"{Y}warning: {self._format_override(r, kind='warning')}{RST}"
 
     def __repr__(self):
         B, SUCCESS, FAIL, Y, RST = (
@@ -147,6 +240,8 @@ class OntologyViolations:
             lines.append(f"Redundant properties: {self.redundant_properties}")
         for ptype, example in self.unvalidated_property_types:
             lines.append(f"{FAIL} unvalidated property type: {B}{ptype}{RST} (e.g. {example})")
+        for r in self.override_violations:
+            lines.append(f"{FAIL} {self._format_override(r, kind='violation')}")
 
         for w in self.warnings:
             lines.append(f"  {w}")
