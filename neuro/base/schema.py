@@ -426,9 +426,9 @@ class OntologyNodeInfo:
                 arrow, peer, via, required = "←", mr.source, mr.target, mr.is_target_required()
             else:
                 arrow, peer, via, required = "→", mr.target, mr.source, mr.is_source_required()
-            rows.append(("*" if required else " ", arrow, mr.label, peer, via,
+            rows.append(("*" if required else " ", via, arrow, mr.label, peer,
                          self.origin_ontology.get(via, "")))
-        terminal_components.table(rows, header=(" ", "DIR", "REL", "PEER", "ORIGIN", "ONTOLOGY"), indent=0)
+        terminal_components.table(rows, header=(" ", "ORIGIN", "DIR", "REL", "PEER", "ONTOLOGY"), indent=0)
 
 
 class Violations:
