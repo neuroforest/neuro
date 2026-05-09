@@ -37,6 +37,7 @@ def _make_metaproperty(property_type):
         "relationship_type": "HAS_PROPERTY",
         "relationship_lineage": ["HAS_PROPERTY"],
         "deep_node": "OntologyNode",
+        "distance": 0,
     })
 
 
