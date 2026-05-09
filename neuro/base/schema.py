@@ -14,7 +14,7 @@ def _check_label(value, mp):
     patterns = {
         "OntologyNode": r"^[A-Z][a-zA-Z]*$",
         "OntologyRelationship": r"^[A-Z][A-Z_]*$",
-        "OntologyProperty": r"^[a-z][a-z._-]*$",
+        "OntologyProperty": r"^[a-z][a-z0-9._-]*$",
     }
     if not isinstance(value, str):
         return False
