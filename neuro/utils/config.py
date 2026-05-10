@@ -51,7 +51,7 @@ def resolve_xdg_paths():
     """
     home = Path.home()
     app_name = os.environ["APP_NAME"].lower()
-    env_name = os.environ["ENVIRONMENT"].lower()
+    env_name = os.environ["ENV"].lower()
 
     # Config is shared (holds env, env.{name} overrides)
     if "NF_CONFIG" not in os.environ:
@@ -116,8 +116,8 @@ def load_env_files():
         dotenv.load_dotenv(default_env_path)
         logging.debug(f"Setting env {default_env_path}")
 
-        if not os.getenv("ENVIRONMENT"):
-            os.environ["ENVIRONMENT"] = "DEVELOP"
+        if not os.getenv("ENV"):
+            os.environ["ENV"] = "DEVELOP"
 
         # 2. XDG paths (always, not just system mode)
         resolve_xdg_paths()
@@ -130,7 +130,7 @@ def load_env_files():
             logging.debug(f"Setting env {common_env_file}")
 
         # 4. Environment-specific overrides from XDG
-        env_name = os.environ["ENVIRONMENT"]
+        env_name = os.environ["ENV"]
         env_file = os.path.join(nf_config, f"env.{env_name.lower()}")
         if os.path.exists(env_file):
             dotenv.load_dotenv(env_file, override=True)
@@ -148,7 +148,7 @@ def config_logging():
     log_level = getattr(logging, log_level, logging.WARNING)
     handlers = []
 
-    if os.getenv("ENVIRONMENT") == "PRODUCTION":
+    if os.getenv("ENV") == "PRODUCTION":
         nf_state = os.getenv("NF_STATE", "")
         if nf_state:
             log_dir = os.path.join(nf_state, "logs")
@@ -164,12 +164,12 @@ def config_logging():
 def main(app_dir=None, environment=None):
     global CONFIG_INITIALIZED
     if environment:
-        os.environ["ENVIRONMENT"] = environment
+        os.environ["ENV"] = environment
     if app_dir and os.path.isdir(app_dir):
         os.environ["APP_DIR"] = app_dir
-    env = os.getenv("ENVIRONMENT")
+    env = os.getenv("ENV")
     if CONFIG_INITIALIZED and CONFIG_INITIALIZED == env:
         return
     load_env_files()
     config_logging()
-    CONFIG_INITIALIZED = os.getenv("ENVIRONMENT")
+    CONFIG_INITIALIZED = os.getenv("ENV")
