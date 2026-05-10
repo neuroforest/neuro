@@ -39,4 +39,4 @@ jobs:
           source venv/bin/activate
           venv/bin/pytest tests -m "not integration and not e2e"
         env:
-          ENVIRONMENT: TESTING
+          ENV: TESTING
