@@ -97,10 +97,10 @@ def test_nfx_to_dict_omits_empty_optionals_and_roundtrips():
     assert Nfx.from_dict(out).to_dict() == out
 
 
-def test_nfx_to_dict_includes_nodes_and_relationships_even_when_empty():
+def test_nfx_to_dict_omits_empty_nodes_and_relationships():
     from neuro.base.nfx import Nfx
     out = Nfx(nid=LOCAL_1).to_dict()
-    assert out == {"nid": LOCAL_1, "nodes": [], "relationships": []}
+    assert out == {"nid": LOCAL_1}
 
 
 def test_nfx_is_frozen():
@@ -158,6 +158,17 @@ def test_validate_invalid_nid():
     })
     result = validate(doc)
     assert result["invalid_nids"] == ["not-a-uuid"]
+
+
+def test_lint_format_flags_empty_arrays():
+    from neuro.base.nfx import lint_format
+    assert lint_format({"nodes": [], "relationships": []})["empty"] == ["nodes", "relationships"]
+    assert lint_format({"nodes": [{"nid": LOCAL_1}], "relationships": []})["empty"] == ["relationships"]
+    assert lint_format({})["empty"] == []
+    assert lint_format({
+        "nodes": [{"nid": LOCAL_1}],
+        "relationships": [{"from": LOCAL_1, "to": LOCAL_1, "type": "SELF"}],
+    })["empty"] == []
 
 
 def test_validate_accepts_transitive_endpoint():
@@ -343,9 +354,10 @@ def test_lint_format_unknown_key_node():
 def test_lint_format_accepts_canonical_key_order():
     from neuro.base.nfx import lint_format
     data = {
+        "type": "ontology",
         "nid": LOCAL_1,
-        "name": "X",
         "version": "1.0",
+        "name": "X",
         "nodes": [{"nid": LOCAL_2, "labels": ["L"], "properties": {"a": 1}}],
         "relationships": [{"from": LOCAL_2, "to": LOCAL_2, "type": "SELF"}],
     }

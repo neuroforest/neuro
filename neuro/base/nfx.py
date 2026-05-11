@@ -15,9 +15,14 @@ from neuro.core.data.str import Uuid
 from neuro.utils.exceptions import NfxCycle, NfxViolation
 
 
-_KEY_ORDER = ("nid", "name", "description", "version", "dependencies", "hash", "nodes", "relationships")
+# Public format spec — surfaced in callers' error messages.
+ALLOWED_TYPES = ("metaontology", "ontology", "knowledge")
+
+# Internal canonical layout — callers consume validation/lint results, not these.
+_KEY_ORDER = ("type", "nid", "version", "name", "description", "dependencies", "hash", "nodes", "relationships")
 _NODE_KEY_ORDER = ("nid", "labels", "properties")
 _REL_KEY_ORDER = ("from", "to", "type", "properties")
+_REQUIRED_FIELDS = ("type", "nid", "version")
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +39,7 @@ class Nfx:
     """
 
     nid: str = ""
+    type: str = ""
     name: str = ""
     description: str = ""
     version: str = ""
@@ -81,6 +87,7 @@ class Nfx:
             relationships.append(r)
         return cls(
             nid=nid,
+            type=data.get("type", "") or "",
             name=data.get("name", "") or "",
             description=data.get("description", "") or "",
             version=data.get("version", "") or "",
@@ -92,25 +99,28 @@ class Nfx:
 
     def to_dict(self) -> dict:
         """Serialize to a canonical NFX dict in `_KEY_ORDER`. Empty optional
-        fields (`name`, `description`, `version`, `dependencies`, `hash`, and
-        `nid` if blank) are omitted; `nodes` and `relationships` are always
-        present (even if empty) to match historical writer behavior.
+        fields are omitted, including `nodes`/`relationships` — a bundle-only
+        ontology that declares no schema of its own simply omits those keys.
         """
         out: dict = {}
+        if self.type:
+            out["type"] = self.type
         if self.nid:
             out["nid"] = self.nid
+        if self.version:
+            out["version"] = self.version
         if self.name:
             out["name"] = self.name
         if self.description:
             out["description"] = self.description
-        if self.version:
-            out["version"] = self.version
         if self.dependencies:
             out["dependencies"] = [f"{n}@{v}" for n, v in self.dependencies]
         if self.hash:
             out["hash"] = self.hash
-        out["nodes"] = [dict(n) for n in self.nodes]
-        out["relationships"] = [dict(r) for r in self.relationships]
+        if self.nodes:
+            out["nodes"] = [dict(n) for n in self.nodes]
+        if self.relationships:
+            out["relationships"] = [dict(r) for r in self.relationships]
         return out
 
     @property
@@ -174,9 +184,12 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
     dependencies — see `NfxTree.all_node_nids()` for a helper that walks the graph.
 
     Returns dict with 'unresolved' (endpoints not in local or dependency nodes),
-    'foreign' (both endpoints are non-local), and 'invalid_nids' (not valid UUID v4).
-    Format-level checks (key order / unknown keys on the raw on-disk dict) live
-    in `lint_format()`.
+    'foreign' (both endpoints are non-local), 'invalid_nids' (not valid UUID v4),
+    'missing_required' (required top-level fields absent or empty), and
+    'invalid_type' (the `type` value when set to something outside
+    `ALLOWED_TYPES`, else None).
+    Format-level checks (key order / unknown keys / empty arrays on the raw
+    on-disk dict) live in `lint_format()`.
     """
     local_nids = doc.node_nids
     valid_nids = set(local_nids) | (dependency_nids or set())
@@ -196,10 +209,15 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
         elif from_nid not in local_nids and to_nid not in local_nids:
             foreign.append(rel)
 
+    missing_required = [f for f in _REQUIRED_FIELDS if not getattr(doc, f, "")]
+    invalid_type = doc.type if doc.type and doc.type not in ALLOWED_TYPES else None
+
     return {
         "unresolved": unresolved,
         "foreign": foreign,
         "invalid_nids": invalid_nids,
+        "missing_required": missing_required,
+        "invalid_type": invalid_type,
     }
 
 
@@ -207,9 +225,10 @@ def lint_format(data: dict) -> dict:
     """Inspect a raw NFX dict for format-level issues.
 
     Operates on the unparsed dict (pre-`Nfx.from_dict`) because once parsed,
-    unknown keys and key-order information are lost. Returns 'unknown_keys'
-    (keys outside the canonical schema) and 'key_order' (places where present
-    keys are not in canonical order).
+    unknown keys, key-order, and present-but-empty arrays are indistinguishable
+    from defaults. Returns 'unknown_keys', 'key_order', and 'empty' (names of
+    `nodes`/`relationships` keys that are declared with an empty array — a
+    bundle-only ontology should omit them entirely instead).
     """
     unknown_keys: list[dict] = []
     key_order: list[dict] = []
@@ -227,7 +246,9 @@ def lint_format(data: dict) -> dict:
     for i, r in enumerate(data.get("relationships", [])):
         _inspect(list(r.keys()), _REL_KEY_ORDER, f"relationships[{i}]")
 
-    return {"unknown_keys": unknown_keys, "key_order": key_order}
+    empty = [f for f in ("nodes", "relationships") if f in data and not data[f]]
+
+    return {"unknown_keys": unknown_keys, "key_order": key_order, "empty": empty}
 
 
 class NfxTree:
