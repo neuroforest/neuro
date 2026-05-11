@@ -1,8 +1,36 @@
+from neuro.core import Node
 from neuro.base.accessors import Accessor
 from neuro.base.ontology import ObjectValidator
 
 
 class ObjectAccessor(Accessor):
+
+    def illuminate(self, query, query_params=None, dry_run=False):
+        """
+        Stamp `neuro.id` on nodes returned by `query`.
+        Without an id a node is invisible to ontology validation; illuminating
+        brings it into the validator's view.
+
+        :param query: Cypher returning an `eid` column (elementId of nodes to stamp).
+            Caller owns the filter — typically `WHERE n.\`neuro.id\` IS NULL`.
+        :param query_params: optional dict of parameters for `query`.
+        :param dry_run: if True, return elementIds that would be stamped without writing.
+        :return: count of stamped nodes (or list of elementIds when dry_run).
+        """
+        rows = self._nb.get_data(query, query_params or {})
+        eids = [r["eid"] for r in rows]
+        if dry_run:
+            return eids
+        stamp_query = """
+        MATCH (n) WHERE elementId(n) = $eid
+        SET n.`neuro.id` = $new_id
+        """
+        for eid in eids:
+            self._nb.run_query(stamp_query, {
+                "eid": eid,
+                "new_id": Node.generate_neuro_id(),
+            })
+        return len(eids)
 
     def put(self, obj, identifier_key=None, validate=True):
         """
