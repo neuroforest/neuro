@@ -20,8 +20,8 @@ class OntologyValidator:
         MATCH (type)-[:SUBCLASS_OF*0..]->(root)
         MATCH (n)
         WHERE type.label IN labels(n)
-        RETURN n.label as label, type.label as ontology_object_type, labels(n) as labels,
-               properties(n) as properties
+        RETURN coalesce(n.label, n.name, n.`neuro.id`) as label, type.label as ontology_object_type,
+               labels(n) as labels, properties(n) as properties
         """
         data = self._nb.get_data(query, {"kind": kind})
         return [dict(record) for record in data]
@@ -374,6 +374,7 @@ class Metaontology:
             )
             properties = {k: v for k, v in (
                 ("name", doc.name), ("version", doc.version), ("description", doc.description),
+                ("type", doc.type),
             ) if v}
             self._nb.run_query(
                 "MERGE (m:OntologyMetadata {`neuro.id`: $nid}) SET m += $props",
