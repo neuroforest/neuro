@@ -268,14 +268,29 @@ class NfxTree:
 
     __slots__ = ("root", "modules", "edges", "missing")
 
-    def __init__(self, root: Nfx, resolve):
+    def __init__(self, root: Nfx, resolve, extra_deps=None):
+        """`extra_deps`, if provided, is `nid -> Iterable[str]` and contributes
+        additional dependency edges on top of each module's declared
+        `dep_nids`. Used by the plugin index to inject implicit parent-plugin
+        dependencies without rewriting `.nfx` files."""
         self.root = root
         self.modules: dict[str, Nfx] = {}
         self.edges: dict[str, list[str]] = {}
         self.missing: set[str] = set()
+
+        def _deps_for(doc: Nfx) -> list[str]:
+            extra = list(extra_deps(doc.nid)) if (extra_deps and doc.nid) else []
+            seen: set[str] = set()
+            out: list[str] = []
+            for d in (*doc.dep_nids, *extra):
+                if d and d not in seen:
+                    seen.add(d)
+                    out.append(d)
+            return out
+
         if root.nid:
             self.modules[root.nid] = root
-            self.edges[root.nid] = list(root.dep_nids)
+            self.edges[root.nid] = _deps_for(root)
 
         DONE, IN_PATH = 1, 2
         state: dict[str, int] = {}
@@ -283,7 +298,7 @@ class NfxTree:
             state[root.nid] = IN_PATH
 
         def walk(doc: Nfx, path: list[str]) -> None:
-            for dep_nid in doc.dep_nids:
+            for dep_nid in _deps_for(doc):
                 marker = state.get(dep_nid)
                 if marker == IN_PATH:
                     raise NfxCycle(path[path.index(dep_nid):] + [dep_nid])
@@ -295,7 +310,7 @@ class NfxTree:
                     self.missing.add(dep_nid)
                 else:
                     self.modules[dep_nid] = dep_doc
-                    self.edges[dep_nid] = list(dep_doc.dep_nids)
+                    self.edges[dep_nid] = _deps_for(dep_doc)
                     walk(dep_doc, path + [dep_nid])
                 state[dep_nid] = DONE
 

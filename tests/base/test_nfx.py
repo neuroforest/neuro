@@ -301,6 +301,29 @@ def test_nfx_tree_contains_and_iter():
     assert set(tree) == {a, LOCAL_1}
 
 
+def test_nfx_tree_extra_deps_inject_implicit_edge():
+    from neuro.base.nfx import Nfx, NfxTree
+    parent = str(uuid.uuid4())
+    registry = {parent: Nfx.from_dict({"nid": parent, "dependencies": []})}
+    root = Nfx.from_dict({"nid": LOCAL_1, "dependencies": []})
+    extra = {LOCAL_1: [parent]}
+    tree = NfxTree(root, registry.get, extra_deps=lambda nid: extra.get(nid, []))
+    # Parent appears in modules and in root's edges, even though dep_nids is empty.
+    assert parent in tree
+    assert parent in tree.edges[LOCAL_1]
+    assert tree.topo_order().index(parent) < tree.topo_order().index(LOCAL_1)
+
+
+def test_nfx_tree_extra_deps_dedupes_with_explicit():
+    from neuro.base.nfx import Nfx, NfxTree
+    parent = str(uuid.uuid4())
+    registry = {parent: Nfx.from_dict({"nid": parent, "dependencies": []})}
+    root = Nfx.from_dict({"nid": LOCAL_1, "dependencies": [f"{parent}@1.0"]})
+    extra = {LOCAL_1: [parent]}
+    tree = NfxTree(root, registry.get, extra_deps=lambda nid: extra.get(nid, []))
+    assert tree.edges[LOCAL_1].count(parent) == 1
+
+
 # --- lint_format (raw-dict format checks) ---
 
 def test_lint_format_key_order_top_level():
