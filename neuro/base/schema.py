@@ -39,6 +39,56 @@ def has_validator(property_type):
     return plugins.lookup(property_type) is not None
 
 
+class TypeRegistry:
+    """Snapshot of the currently loaded ontology's label and meta-relationship
+    sets. Shared by ontology-graph validation and knowledge-doc validation
+    to classify unknown labels as undefined property / relationship / node
+    types."""
+
+    def __init__(self, nb):
+        self.known = self._known_labels(nb)
+        self.property_rel_types = self._meta_rel_descendants(nb, "HAS_PROPERTY")
+        self.relationship_rel_types = self._meta_rel_descendants(nb, "HAS_RELATIONSHIP")
+
+    @staticmethod
+    def _known_labels(nb):
+        roots = json.loads(os.environ["ONTOLOGY_OBJECTS"])
+        rows = nb.get_data(
+            """
+            UNWIND $roots AS root
+            MATCH (r:OntologyNode {label: root})
+            MATCH (sub)-[:SUBCLASS_OF*0..]->(r)
+            RETURN DISTINCT sub.label AS label
+            """,
+            {"roots": roots},
+        )
+        return {r["label"] for r in rows}
+
+    @staticmethod
+    def _meta_rel_descendants(nb, root_label):
+        rows = nb.get_data(
+            """
+            MATCH (root:OntologyRelationship {label: $root})
+            MATCH (sub)-[:SUBCLASS_OF*0..]->(root)
+            RETURN DISTINCT sub.label AS label
+            """,
+            {"root": root_label},
+        )
+        return {r["label"] for r in rows}
+
+    def classify_undefined(self, labels, in_rel_types):
+        """Return 'property' / 'relationship' / 'node' if the node's labels
+        don't resolve to any known ontology-object subclass. Returns None
+        for recognised labels."""
+        if any(lbl in self.known for lbl in labels):
+            return None
+        if any(rt in self.property_rel_types for rt in in_rel_types):
+            return "property"
+        if any(rt in self.relationship_rel_types for rt in in_rel_types):
+            return "relationship"
+        return "node"
+
+
 class Metaproperty:
     """
     Metaproperty is an object that defines a property of any node in NeuroBase.
