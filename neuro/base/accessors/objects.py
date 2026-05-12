@@ -12,7 +12,7 @@ class ObjectAccessor(Accessor):
         brings it into the validator's view.
 
         :param query: Cypher returning an `eid` column (elementId of nodes to stamp).
-            Caller owns the filter — typically `WHERE n.\`neuro.id\` IS NULL`.
+            Caller owns the filter — typically ``WHERE n.`neuro.id` IS NULL``.
         :param query_params: optional dict of parameters for `query`.
         :param dry_run: if True, return elementIds that would be stamped without writing.
         :return: count of stamped nodes (or list of elementIds when dry_run).
