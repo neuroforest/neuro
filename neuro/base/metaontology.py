@@ -48,9 +48,10 @@ class OntologyValidator:
         data = self._nb.get_data(query)
         return data[0]["connected"]
 
-    def validate(self, strict=False):
+    def validate(self):
         """Run all validation checks. Returns an OntologyViolations instance."""
         ontology_violations = OntologyViolations()
+        registry = schema.TypeRegistry(self._nb)
 
         for kind in json.loads(os.environ["ONTOLOGY_OBJECTS"]):
             for instance in self.instances[kind]:
@@ -73,14 +74,13 @@ class OntologyValidator:
                 - specific
             )
 
-            if strict:
-                missing = {}
-                for i in self.instances["OntologyProperty"]:
-                    pt = i["ontology_object_type"]
-                    if pt == "OntologyProperty" or pt in missing or schema.has_validator(pt):
-                        continue
-                    missing[pt] = i["label"]
-                ontology_violations.unvalidated_property_types = sorted(missing.items())
+            missing = {}
+            for i in self.instances["OntologyProperty"]:
+                pt = i["ontology_object_type"]
+                if pt == "OntologyProperty" or pt in missing or schema.has_validator(pt):
+                    continue
+                missing[pt] = i["label"]
+            ontology_violations.unvalidated_property_types = sorted(missing.items())
 
         ontology_violations.disconnected = not self._is_connected()
 
@@ -91,7 +91,35 @@ class OntologyValidator:
             elif verdict == "warning":
                 ontology_violations.override_warnings.append(record)
 
+        undefined = self._find_undefined(registry)
+        ontology_violations.undefined_property_types = undefined["property"]
+        ontology_violations.undefined_relationship_types = undefined["relationship"]
+        ontology_violations.undefined_node_types = undefined["node"]
+
         return ontology_violations
+
+    def _find_undefined(self, registry):
+        """Aggregate nodes whose labels don't resolve to any known ontology
+        subclass, classified by incident meta-edges. Returns
+        ``{"property": [(type_label, example)], "relationship": [...], "node": [...]}``."""
+        rows = self._nb.get_data(
+            """
+            MATCH (n)
+            WHERE n.`neuro.id` IS NOT NULL AND NOT n:OntologyMetadata
+            OPTIONAL MATCH (n)<-[r]-()
+            RETURN labels(n) AS labels,
+                   coalesce(n.label, n.name, n.`neuro.id`) AS identifier,
+                   collect(DISTINCT type(r)) AS in_rel_types
+            """
+        )
+        by_kind = {"property": {}, "relationship": {}, "node": {}}
+        for row in rows:
+            kind = registry.classify_undefined(row["labels"], row["in_rel_types"])
+            if kind is None:
+                continue
+            type_label = row["labels"][0] if row["labels"] else "?"
+            by_kind[kind].setdefault(type_label, row["identifier"])
+        return {k: sorted(d.items()) for k, d in by_kind.items()}
 
     def _find_property_overrides(self):
         """Property-name collisions in the SUBCLASS_OF hierarchy. For each
@@ -175,6 +203,9 @@ class OntologyViolations:
         self.redundant_properties: list[str] = []
         self.generic_properties: list[str] = []
         self.unvalidated_property_types: list[tuple[str, str]] = []
+        self.undefined_property_types: list[tuple[str, str]] = []
+        self.undefined_relationship_types: list[tuple[str, str]] = []
+        self.undefined_node_types: list[tuple[str, str]] = []
         self.override_violations: list[dict] = []
         self.override_warnings: list[dict] = []
 
@@ -182,7 +213,8 @@ class OntologyViolations:
         return any([
             self.violations, self.disconnected, self.redundant_labels,
             self.redundant_relationships, self.redundant_properties,
-            self.unvalidated_property_types, self.override_violations,
+            self.undefined_property_types, self.undefined_relationship_types,
+            self.undefined_node_types, self.override_violations,
         ])
 
     def __iter__(self):
@@ -196,8 +228,12 @@ class OntologyViolations:
             yield f"redundant relationship: {rr}"
         for rp in self.redundant_properties:
             yield f"redundant property: {rp}"
-        for ptype, example in self.unvalidated_property_types:
-            yield f"unvalidated property type: {ptype} (e.g. {example})"
+        for ptype, example in self.undefined_property_types:
+            yield f"undefined property type: {ptype} (e.g. {example})"
+        for rtype, example in self.undefined_relationship_types:
+            yield f"undefined relationship type: {rtype} (e.g. {example})"
+        for ntype, example in self.undefined_node_types:
+            yield f"undefined node type: {ntype} (e.g. {example})"
         for r in self.override_violations:
             yield self._format_override(r, kind="violation")
 
@@ -216,6 +252,8 @@ class OntologyViolations:
         B, Y, RST = terminal_style.BOLD, terminal_style.YELLOW, terminal_style.RESET
         for prop in self.generic_properties:
             yield f"{Y}warning: {B}{prop}{RST}{Y} uses generic OntologyProperty{RST}"
+        for ptype, example in self.unvalidated_property_types:
+            yield f"{Y}warning: unvalidated property type: {B}{ptype}{RST}{Y} (e.g. {example}){RST}"
         for r in self.override_warnings:
             yield f"{Y}warning: {self._format_override(r, kind='warning')}{RST}"
 
@@ -238,8 +276,12 @@ class OntologyViolations:
             lines.append(f"Redundant relationships: {self.redundant_relationships}")
         if self.redundant_properties:
             lines.append(f"Redundant properties: {self.redundant_properties}")
-        for ptype, example in self.unvalidated_property_types:
-            lines.append(f"{FAIL} unvalidated property type: {B}{ptype}{RST} (e.g. {example})")
+        for ptype, example in self.undefined_property_types:
+            lines.append(f"{FAIL} undefined property type: {B}{ptype}{RST} (e.g. {example})")
+        for rtype, example in self.undefined_relationship_types:
+            lines.append(f"{FAIL} undefined relationship type: {B}{rtype}{RST} (e.g. {example})")
+        for ntype, example in self.undefined_node_types:
+            lines.append(f"{FAIL} undefined node type: {B}{ntype}{RST} (e.g. {example})")
         for r in self.override_violations:
             lines.append(f"{FAIL} {self._format_override(r, kind='violation')}")
 
@@ -418,14 +460,14 @@ class Metaontology:
                  "props": rel.get("properties", {})},
             )
 
-    def is_ontology_valid(self, strict=False):
+    def is_ontology_valid(self):
         """Validate metaontology structure. Returns True if valid, False otherwise."""
         count = self._nb.count("Metaontology")
         if not count:
             raise exceptions.NoOntology
 
         validator = OntologyValidator(self._nb)
-        self.violations = validator.validate(strict=strict)
+        self.violations = validator.validate()
         return not bool(self.violations)
 
     def export_nfx(self, path=None):
