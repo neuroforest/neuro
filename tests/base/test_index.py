@@ -1,14 +1,14 @@
 """
-Unit tests for neuro.base.index — PluginIndex / OntologyIndex / KnowledgeIndex.
+Unit tests for neuro.base.index — PluginIndex / OntologyIndex / KnowledgeIndex
+/ NfxIndex.
 """
 
 import json
 import uuid
-from unittest.mock import patch
 
 import pytest
 
-from neuro.base.index import KnowledgeIndex, OntologyIndex, PluginIndex
+from neuro.base.index import KnowledgeIndex, NfxIndex, OntologyIndex, PluginIndex
 
 pytestmark = pytest.mark.unit
 
@@ -28,25 +28,6 @@ def _write_nfx(path, *, kind, name, version="1.0", dependencies=()):
     return nid
 
 
-@pytest.fixture(autouse=True)
-def _stub_metaontology(tmp_path):
-    """OntologyIndex pins `assets/ontology/metaontology.nfx`; tests provide a
-    minimal fake at a temp path and patch the lookup."""
-    meta_path = tmp_path / "_meta_assets" / "ontology" / "metaontology.nfx"
-    meta_path.parent.mkdir(parents=True)
-    meta_path.write_text(json.dumps({
-        "type": "metaontology",
-        "nid": str(uuid.uuid4()),
-        "version": "1.0",
-        "name": "Metaontology",
-    }))
-    with patch(
-        "neuro.base.index.internal_utils.get_path",
-        return_value=tmp_path / "_meta_assets",
-    ):
-        yield meta_path
-
-
 class TestPluginIndexKindFilter:
     def test_only_matching_kind_registered(self, tmp_path):
         root = tmp_path / "plugins"
@@ -54,7 +35,7 @@ class TestPluginIndexKindFilter:
         _write_nfx(root / "b.nfx", kind="knowledge", name="B")
 
         class _Idx(PluginIndex):
-            KIND = "ontology"
+            KIND = ("ontology",)
 
         idx = _Idx(root)
         assert {e.name for e in idx.entries()} == {"A"}
@@ -66,6 +47,15 @@ class TestPluginIndexKindFilter:
         idx = KnowledgeIndex(root)
         assert {e.name for e in idx.entries()} == {"B"}
 
+    def test_nfx_index_accepts_all_types(self, tmp_path):
+        root = tmp_path / "plugins"
+        _write_nfx(root / "a.nfx", kind="ontology", name="A")
+        _write_nfx(root / "b.nfx", kind="knowledge", name="B")
+        _write_nfx(root / "m.nfx", kind="metaontology", name="M")
+        idx = NfxIndex(root)
+        assert {e.name for e in idx.entries()} == {"A", "B", "M"}
+        assert {e.type for e in idx.entries()} == {"ontology", "knowledge", "metaontology"}
+
     def test_resolve_by_name(self, tmp_path):
         root = tmp_path / "plugins"
         path = root / "a.nfx"
@@ -76,12 +66,27 @@ class TestPluginIndexKindFilter:
 
 
 class TestOntologyIndexMetaontology:
-    def test_metaontology_pinned(self, tmp_path, _stub_metaontology):
-        root = tmp_path / "plugins"
-        root.mkdir()
-        idx = OntologyIndex(root)
-        assert idx.metaontology_path == _stub_metaontology
+    def test_metaontology_discovered_via_roots(self, tmp_path):
+        """OntologyIndex accepts metaontology via the standard scan — its
+        directory just needs to be one of the registry roots."""
+        plugins_root = tmp_path / "plugins"
+        plugins_root.mkdir()
+        meta_dir = tmp_path / "assets" / "ontology"
+        meta_path = meta_dir / "metaontology.nfx"
+        meta_path.parent.mkdir(parents=True)
+        meta_path.write_text(json.dumps({
+            "type": "metaontology",
+            "nid": str(uuid.uuid4()),
+            "version": "1.0",
+            "name": "Metaontology",
+        }))
+        idx = OntologyIndex(meta_dir, plugins_root)
+        assert idx.metaontology_path == meta_path
         assert "Metaontology" in {e.name for e in idx.entries()}
+
+    def test_metaontology_path_none_when_absent(self, tmp_path):
+        idx = OntologyIndex(tmp_path)
+        assert idx.metaontology_path is None
 
 
 class TestImplicitParent:

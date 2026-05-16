@@ -1,9 +1,11 @@
 """
 Plugin file discovery and indexing.
 
-`PluginIndex` is the generic base; subclasses fix a `KIND` filter so the index
-only registers `.nfx` whose own `type` field matches. `OntologyIndex` and
-`KnowledgeIndex` are the two concrete views over the same PLUGINS roots.
+`PluginIndex` is the generic base; subclasses set a `KIND` tuple to restrict
+the view to one or more `type` values from the on-disk `.nfx`. With `KIND = ()`
+the index accepts every type — `NfxIndex` is that unrestricted view.
+`OntologyIndex` accepts ontology + metaontology; `KnowledgeIndex` accepts
+knowledge.
 
 Discovery is delegated to `neuro.base.plugins.walk_plugins`. Validators are
 loaded once per plugin root via `plugins.load_validators_at`. Implicit parent
@@ -16,13 +18,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from neuro.base import nfx, plugins
-from neuro.utils import exceptions, internal_utils
+from neuro.utils import exceptions
 
 
 @dataclass(frozen=True)
 class Entry:
     path: Path
     nid: str
+    type: str
     name: str
     version: str
     plugin_root: Path | None = None
@@ -31,31 +34,22 @@ class Entry:
 
 
 class PluginIndex:
-    """Index of `.nfx` files of one `KIND` discovered from PLUGINS registry roots.
+    """Index of `.nfx` files discovered from PLUGINS registry roots, filtered
+    by the subclass's `KIND` tuple (empty = accept all types).
 
     Keyed canonically by `nid`. `resolve()` additionally accepts name, stem,
     or filename via priority-ordered fallback. Pure file-level discovery —
     no database access.
-
-    Subclasses set `KIND` to one of `("ontology", "knowledge", "metaontology")`
-    and may pin extra paths that bypass the kind filter (used by
-    `OntologyIndex` to anchor the metaontology).
     """
 
-    KIND: str = ""
+    KIND: tuple[str, ...] = ()
 
     def __init__(self, *roots):
         self._index: dict[str, Entry] = {}
         self._by_plugin_root: dict[Path, Entry] = {}
         self._roots = tuple(Path(r).resolve() for r in roots)
-        self._pin_paths()
         self._scan()
         self._resolve_implicit_parents()
-
-    # ---- hooks for subclasses --------------------------------------------------
-
-    def _pin_paths(self) -> None:
-        """Subclass hook: pre-register paths regardless of kind filter."""
 
     # ---- registration ----------------------------------------------------------
 
@@ -64,13 +58,11 @@ class PluginIndex:
         path: Path,
         plugin_root: Path | None = None,
         parent_plugin_root: Path | None = None,
-        *,
-        force: bool = False,
     ) -> Entry | None:
         doc = nfx.read(path)
         if not doc.nid:
             return None
-        if not force and self.KIND and doc.type != self.KIND:
+        if self.KIND and doc.type not in self.KIND:
             return None
         existing = self._index.get(doc.nid)
         if existing and existing.path != path:
@@ -80,6 +72,7 @@ class PluginIndex:
         entry = Entry(
             path=path,
             nid=doc.nid,
+            type=doc.type,
             name=doc.name,
             version=doc.version,
             plugin_root=plugin_root,
@@ -92,9 +85,6 @@ class PluginIndex:
 
     def _scan(self) -> None:
         for pf in plugins.walk_plugins(self._roots):
-            # Skip paths that subclass hooks have already pinned.
-            if any(e.path == pf.nfx_path for e in self._index.values()):
-                continue
             self._register(pf.nfx_path, pf.plugin_root, pf.parent_plugin_root)
             plugins.load_validators_at(pf.plugin_root)
 
@@ -112,6 +102,7 @@ class PluginIndex:
             updates[nid] = Entry(
                 path=entry.path,
                 nid=entry.nid,
+                type=entry.type,
                 name=entry.name,
                 version=entry.version,
                 plugin_root=entry.plugin_root,
@@ -204,31 +195,29 @@ class PluginIndex:
         return errors
 
 
+class NfxIndex(PluginIndex):
+    """Type-agnostic view: registers every `.nfx` reachable from the roots."""
+
+    KIND = ()
+
+
 class OntologyIndex(PluginIndex):
-    """Ontology view: registers `.nfx` files whose `type == "ontology"`, plus
-    a pinned metaontology entry that bypasses the kind filter."""
+    """Ontology view: registers `.nfx` whose `type` is `ontology` or
+    `metaontology`. The metaontology is discovered through the standard scan
+    (its directory must be one of the PLUGINS roots, which is the default)."""
 
-    KIND = "ontology"
-
-    def __init__(self, *roots):
-        self._metaontology_path = (
-            internal_utils.get_path("assets") / "ontology" / "metaontology.nfx"
-        )
-        super().__init__(*roots)
-
-    def _pin_paths(self):
-        # Pin metaontology first so a stray copy in a search dir can't shadow it.
-        self._register(self._metaontology_path, force=True)
-        plugins.load_validators_at(
-            plugins.plugin_root_for(self._metaontology_path, self._roots)
-        )
+    KIND = ("ontology", "metaontology")
 
     @property
     def metaontology_path(self):
-        return self._metaontology_path
+        """Path of the discovered metaontology entry, or `None` if absent."""
+        for entry in self._index.values():
+            if entry.type == "metaontology":
+                return entry.path
+        return None
 
 
 class KnowledgeIndex(PluginIndex):
-    """Knowledge view: registers `.nfx` files whose `type == "knowledge"`."""
+    """Knowledge view: registers `.nfx` whose `type == "knowledge"`."""
 
-    KIND = "knowledge"
+    KIND = ("knowledge",)
