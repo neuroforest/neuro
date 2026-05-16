@@ -32,7 +32,7 @@ class ObjectAccessor(Accessor):
             })
         return len(eids)
 
-    def put(self, obj, identifier_key=None, validate=True):
+    def put(self, obj, identifier_key=None, validate=True, replace=False):
         """
         Save an Object to the database. Validates against the ontology before insertion.
 
@@ -40,6 +40,11 @@ class ObjectAccessor(Accessor):
         :param identifier_key: property key used as MERGE key (e.g. "neuro.id").
             If provided, MERGE on that property; otherwise CREATE.
         :param validate: if False, skip ontology validation.
+        :param replace: if True, replace the node's full property map (`SET n = $properties`)
+            instead of merging it (`SET n += $properties`). Properties absent
+            from `obj.properties` are removed from the existing node. Requires
+            `identifier_key`. Use for authoritative file→DB sync; default
+            `False` preserves the original additive behavior.
         """
         if validate:
             validator = ObjectValidator(self._nb, obj)
@@ -48,18 +53,21 @@ class ObjectAccessor(Accessor):
                 raise ValueError(f"Object validation failed: {violations}")
 
         labels_str = ":".join(obj.labels)
+        set_op = "=" if replace else "+="
 
         if identifier_key:
             param_name = identifier_key.replace(".", "_")
             query = f"""
             MERGE (n:{labels_str} {{`{identifier_key}`: ${param_name}}})
-            SET n += $properties
+            SET n {set_op} $properties
             RETURN n
             """
             parameters = {
                 param_name: obj.properties[identifier_key],
                 "properties": obj.properties,
             }
+        elif replace:
+            raise ValueError("replace=True requires identifier_key")
         else:
             query = f"""
             CREATE (n:{labels_str})
