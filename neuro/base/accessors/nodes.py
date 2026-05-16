@@ -47,25 +47,71 @@ class NodeAccessor(Accessor):
         data = self._nb.get_data(query, {"labels": list(labels)})
         return {r["label"] for r in data}
 
+    def _validate_structure(self, doc, path, dependency_nids=None):
+        """Referential-integrity check on the NFX document itself (no DB writes)."""
+        violations = nfx.validate(doc, dependency_nids)
+        if violations["unresolved"] or violations["foreign"]:
+            msgs = []
+            for rel in violations["unresolved"]:
+                msgs.append(f"  unresolved: {rel['from']} -> {rel['to']} ({rel['type']})")
+            for rel in violations["foreign"]:
+                msgs.append(f"  foreign: {rel['from']} -> {rel['to']} ({rel['type']})")
+            raise exceptions.NfxViolation(
+                f"NFX validation failed for {path}:\n" + "\n".join(msgs)
+            )
+
+    def _validate_relationship_shapes(self, doc, path):
+        """Validate each relationship in `doc` against the loaded ontology.
+
+        Source-side lineage is walked inside `Metarelationships.from_ontology`;
+        target-side lineage is expanded here, so e.g. `RELATED_TO` declared on
+        `Object` accepts a `Standard` target."""
+        nid_labels = {entry["nid"]: entry["labels"] for entry in doc.nodes}
+        violations = Violations()
+        for rel in doc.relationships:
+            rel_type = rel["type"]
+            from_labels = nid_labels.get(rel["from"], [])
+            to_labels = nid_labels.get(rel["to"], [])
+            to_ancestors = self._label_ancestors(to_labels)
+
+            candidates = []
+            for label in from_labels:
+                mrs = Metarelationships.from_ontology(self._nb, label)
+                candidates.extend(
+                    m for k, m in mrs.items()
+                    if m.label == rel_type and k.endswith(":outgoing") and m.target
+                )
+                if candidates:
+                    break
+
+            if not candidates:
+                violations.undefined_relationships.append(
+                    (rel_type, "outgoing", to_labels)
+                )
+            elif not any(m.target in to_ancestors for m in candidates):
+                expected = sorted({m.target for m in candidates})
+                violations.invalid_relationships.append(
+                    (rel_type, "outgoing", to_labels,
+                     expected[0] if len(expected) == 1 else expected)
+                )
+
+        if violations:
+            raise exceptions.NfxViolation(
+                f"Relationship validation failed for {path}:\n{violations}"
+            )
+
     def import_nfx(self, path, dependency_nids=None, validate=True):
         """
-        Import nodes and relationships from an NFX file.
-        Nodes are merged on neuro.id; relationships are merged between them.
-        Validates referential integrity and jurisdiction before import.
+        Import nodes and relationships from an NFX file additively.
+        Nodes are merged on neuro.id (properties `+=`); relationships are
+        merged between them. Pre-existing properties and nodes not mentioned
+        in the file are left untouched. For authoritative file→DB sync, use
+        `sync_nfx`.
         """
         doc = nfx.read(path)
 
         if validate:
-            violations = nfx.validate(doc, dependency_nids)
-            if violations["unresolved"] or violations["foreign"]:
-                msgs = []
-                for rel in violations["unresolved"]:
-                    msgs.append(f"  unresolved: {rel['from']} -> {rel['to']} ({rel['type']})")
-                for rel in violations["foreign"]:
-                    msgs.append(f"  foreign: {rel['from']} -> {rel['to']} ({rel['type']})")
-                raise exceptions.NfxViolation(
-                    f"NFX validation failed for {path}:\n" + "\n".join(msgs)
-                )
+            self._validate_structure(doc, path, dependency_nids)
 
         for entry in doc.nodes:
             properties = dict(entry.get("properties", {}))
@@ -80,46 +126,7 @@ class NodeAccessor(Accessor):
                 self._nb.objects.put(node, identifier_key="neuro.id", validate=False)
 
         if validate:
-            # Build label lookup from imported nodes for relationship validation
-            nid_labels = {entry["nid"]: entry["labels"] for entry in doc.nodes}
-
-            violations = Violations()
-            for rel in doc.relationships:
-                rel_type = rel["type"]
-                from_labels = nid_labels.get(rel["from"], [])
-                to_labels = nid_labels.get(rel["to"], [])
-                to_ancestors = self._label_ancestors(to_labels)
-
-                # Validate against the source node's metarelationships.
-                # `Metarelationships.from_ontology` already follows SUBCLASS_OF
-                # on the source side; we expand `to_labels` here to mirror that
-                # on the target side, so e.g. `RELATED_TO` declared on `Object`
-                # accepts a `Standard` target.
-                candidates = []
-                for label in from_labels:
-                    mrs = Metarelationships.from_ontology(self._nb, label)
-                    candidates.extend(
-                        m for k, m in mrs.items()
-                        if m.label == rel_type and k.endswith(":outgoing") and m.target
-                    )
-                    if candidates:
-                        break
-
-                if not candidates:
-                    violations.undefined_relationships.append(
-                        (rel_type, "outgoing", to_labels)
-                    )
-                elif not any(m.target in to_ancestors for m in candidates):
-                    expected = sorted({m.target for m in candidates})
-                    violations.invalid_relationships.append(
-                        (rel_type, "outgoing", to_labels,
-                         expected[0] if len(expected) == 1 else expected)
-                    )
-
-            if violations:
-                raise exceptions.NfxViolation(
-                    f"Relationship validation failed for {path}:\n{violations}"
-                )
+            self._validate_relationship_shapes(doc, path)
 
         nids = doc.node_nids
 
@@ -140,6 +147,122 @@ class NodeAccessor(Accessor):
                 "properties": rel.get("properties", {}),
             }
             self._nb.run_query(query, params)
+
+    def sync_nfx(self, path, dependency_nids=None):
+        """Reconcile an NFX file into NeuroBase authoritatively.
+
+        Anchors the file to a `KnowledgeMetadata` node (via its top-level `nid`)
+        and uses `(meta)-[:DEFINES]->(node)` edges to track membership. On each
+        call:
+
+        - **Add**: nodes new in the file are created.
+        - **Update**: nodes still in the file have their properties **replaced**
+          (not merged) — keys absent from the file are removed.
+        - **Delete**: nodes previously DEFINES-linked from this metadata that
+          are absent from the file are `DETACH DELETE`d.
+        - **Relationships**: edges with both endpoints in the file are
+          reconciled — those not in the file are deleted, those in the file
+          are upserted with property replacement. Edges with one foot outside
+          the file are left alone.
+
+        Extra labels added to retained nodes by curation are preserved.
+        """
+        doc = nfx.read(path)
+        if not (doc.nid and doc.name):
+            raise exceptions.NfxViolation(
+                f"sync_nfx requires top-level nid and name "
+                f"(got nid={doc.nid!r}, name={doc.name!r})"
+            )
+
+        self._validate_structure(doc, path, dependency_nids)
+        self._validate_relationship_shapes(doc, path)
+
+        metadata_props = {k: v for k, v in (
+            ("name", doc.name), ("version", doc.version),
+            ("description", doc.description), ("type", doc.type),
+        ) if v}
+        self._nb.run_query(
+            "MERGE (m:KnowledgeMetadata {`neuro.id`: $nid}) SET m += $props",
+            {"nid": doc.nid, "props": metadata_props},
+        )
+
+        self._nb.run_query(
+            """
+            MATCH (m:KnowledgeMetadata {`neuro.id`: $nid})-[r:DEPENDS_ON]->()
+            DELETE r
+            """,
+            {"nid": doc.nid},
+        )
+        for dep_nid, _ in doc.dependencies:
+            self._nb.run_query(
+                """
+                MATCH (m:KnowledgeMetadata {`neuro.id`: $nid})
+                MATCH (d {`neuro.id`: $dep_nid})
+                MERGE (m)-[:DEPENDS_ON]->(d)
+                """,
+                {"nid": doc.nid, "dep_nid": dep_nid},
+            )
+
+        nfx_nids = list(doc.node_nids)
+        self._nb.run_query(
+            """
+            MATCH (m:KnowledgeMetadata {`neuro.id`: $meta_nid})-[:DEFINES]->(n)
+            WHERE NOT n.`neuro.id` IN $nids
+            DETACH DELETE n
+            """,
+            {"meta_nid": doc.nid, "nids": nfx_nids},
+        )
+
+        for entry in doc.nodes:
+            properties = dict(entry.get("properties", {}))
+            properties["neuro.id"] = entry["nid"]
+            # Validate via the standard put path (additive merge under the hood).
+            self.put(Node(labels=entry["labels"], properties=properties))
+            # Full property replacement: clear keys not in the NFX. neuro.id
+            # is included in $props so the identifier is preserved.
+            labels_str = ":".join(entry["labels"])
+            self._nb.run_query(
+                f"""
+                MATCH (n:{labels_str} {{`neuro.id`: $nid}})
+                SET n = $props
+                """,
+                {"nid": entry["nid"], "props": properties},
+            )
+            self._nb.run_query(
+                """
+                MATCH (m:KnowledgeMetadata {`neuro.id`: $meta_nid})
+                MATCH (n {`neuro.id`: $node_nid})
+                MERGE (m)-[:DEFINES]->(n)
+                """,
+                {"meta_nid": doc.nid, "node_nid": entry["nid"]},
+            )
+
+        keep = [[r["from"], r["to"], r["type"]] for r in doc.relationships]
+        self._nb.run_query(
+            """
+            MATCH (a)-[r]->(b)
+            WHERE a.`neuro.id` IN $nids
+              AND b.`neuro.id` IN $nids
+            WITH r, [a.`neuro.id`, b.`neuro.id`, type(r)] as triple
+            WHERE NOT triple IN $keep
+            DELETE r
+            """,
+            {"nids": nfx_nids, "keep": keep},
+        )
+        for rel in doc.relationships:
+            self._nb.run_query(
+                f"""
+                MATCH (a {{`neuro.id`: $from_id}})
+                MATCH (b {{`neuro.id`: $to_id}})
+                MERGE (a)-[r:{rel["type"]}]->(b)
+                SET r = $properties
+                """,
+                {
+                    "from_id": rel["from"],
+                    "to_id": rel["to"],
+                    "properties": rel.get("properties", {}),
+                },
+            )
 
     def export_nfx(self, path, label=None, name="", description="", version="",
                    query=None, query_params=None, **properties):
