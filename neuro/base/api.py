@@ -5,6 +5,7 @@ import logging
 import neo4j
 
 from neuro.utils import terminal_style
+from neuro.base.accessors.metadata import MetadataAccessor
 from neuro.base.accessors.nodes import NodeAccessor
 from neuro.base.accessors.objects import ObjectAccessor
 from neuro.base.accessors.tiddlers import TiddlerAccessor
@@ -31,6 +32,7 @@ class NeuroBase:
         self.ontology = Ontology(self)
         self.objects = ObjectAccessor(self)
         self.nodes = NodeAccessor(self)
+        self.metadata = MetadataAccessor(self)
         self.tiddlers = TiddlerAccessor(self)
 
     def __enter__(self):

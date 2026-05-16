@@ -148,7 +148,7 @@ class NodeAccessor(Accessor):
             }
             self._nb.run_query(query, params)
 
-    def sync_nfx(self, path, dependency_nids=None):
+    def sync_nfx(self, path, dependency_nids=None, metadata_label="KnowledgeMetadata"):
         """Reconcile an NFX file into NeuroBase authoritatively.
 
         Anchors the file to a `KnowledgeMetadata` node (via its top-level `nid`)
@@ -166,6 +166,8 @@ class NodeAccessor(Accessor):
           the file are left alone.
 
         Extra labels added to retained nodes by curation are preserved.
+        `metadata_label` lets the same machinery anchor different metadata
+        kinds (e.g. `OntologyMetadata`).
         """
         doc = nfx.read(path)
         if not (doc.nid and doc.name):
@@ -177,77 +179,29 @@ class NodeAccessor(Accessor):
         self._validate_structure(doc, path, dependency_nids)
         self._validate_relationship_shapes(doc, path)
 
-        metadata_props = {k: v for k, v in (
+        meta = self._nb.metadata
+        meta_props = {k: v for k, v in (
             ("name", doc.name), ("version", doc.version),
             ("description", doc.description), ("type", doc.type),
         ) if v}
-        self._nb.run_query(
-            "MERGE (m:KnowledgeMetadata {`neuro.id`: $nid}) SET m += $props",
-            {"nid": doc.nid, "props": metadata_props},
+        meta.upsert(
+            metadata_label, doc.nid, meta_props,
+            dependency_nids=[dep_nid for dep_nid, _ in doc.dependencies],
         )
-
-        self._nb.run_query(
-            """
-            MATCH (m:KnowledgeMetadata {`neuro.id`: $nid})-[r:DEPENDS_ON]->()
-            DELETE r
-            """,
-            {"nid": doc.nid},
-        )
-        for dep_nid, _ in doc.dependencies:
-            self._nb.run_query(
-                """
-                MATCH (m:KnowledgeMetadata {`neuro.id`: $nid})
-                MATCH (d {`neuro.id`: $dep_nid})
-                MERGE (m)-[:DEPENDS_ON]->(d)
-                """,
-                {"nid": doc.nid, "dep_nid": dep_nid},
-            )
 
         nfx_nids = list(doc.node_nids)
-        self._nb.run_query(
-            """
-            MATCH (m:KnowledgeMetadata {`neuro.id`: $meta_nid})-[:DEFINES]->(n)
-            WHERE NOT n.`neuro.id` IN $nids
-            DETACH DELETE n
-            """,
-            {"meta_nid": doc.nid, "nids": nfx_nids},
-        )
+        meta.prune(metadata_label, doc.nid, nfx_nids)
 
         for entry in doc.nodes:
             properties = dict(entry.get("properties", {}))
             properties["neuro.id"] = entry["nid"]
-            # Validate via the standard put path (additive merge under the hood).
-            self.put(Node(labels=entry["labels"], properties=properties))
-            # Full property replacement: clear keys not in the NFX. neuro.id
-            # is included in $props so the identifier is preserved.
-            labels_str = ":".join(entry["labels"])
-            self._nb.run_query(
-                f"""
-                MATCH (n:{labels_str} {{`neuro.id`: $nid}})
-                SET n = $props
-                """,
-                {"nid": entry["nid"], "props": properties},
-            )
-            self._nb.run_query(
-                """
-                MATCH (m:KnowledgeMetadata {`neuro.id`: $meta_nid})
-                MATCH (n {`neuro.id`: $node_nid})
-                MERGE (m)-[:DEFINES]->(n)
-                """,
-                {"meta_nid": doc.nid, "node_nid": entry["nid"]},
-            )
+            node = Node(labels=entry["labels"], properties=properties)
+            self._nb.objects.put(node, identifier_key="neuro.id", replace=True)
+            meta.link_defines(metadata_label, doc.nid, entry["nid"])
 
-        keep = [[r["from"], r["to"], r["type"]] for r in doc.relationships]
-        self._nb.run_query(
-            """
-            MATCH (a)-[r]->(b)
-            WHERE a.`neuro.id` IN $nids
-              AND b.`neuro.id` IN $nids
-            WITH r, [a.`neuro.id`, b.`neuro.id`, type(r)] as triple
-            WHERE NOT triple IN $keep
-            DELETE r
-            """,
-            {"nids": nfx_nids, "keep": keep},
+        self._reconcile_internal_edges(
+            nfx_nids,
+            [(r["from"], r["to"], r["type"]) for r in doc.relationships],
         )
         for rel in doc.relationships:
             self._nb.run_query(
@@ -263,6 +217,22 @@ class NodeAccessor(Accessor):
                     "properties": rel.get("properties", {}),
                 },
             )
+
+    def _reconcile_internal_edges(self, nids, keep_triples):
+        """Delete every edge `(a)-[r]->(b)` where both endpoints have a
+        `neuro.id` in `nids` and the `(from, to, type)` triple is not in
+        `keep_triples`. Edges with one foot outside `nids` are left alone."""
+        self._nb.run_query(
+            """
+            MATCH (a)-[r]->(b)
+            WHERE a.`neuro.id` IN $nids
+              AND b.`neuro.id` IN $nids
+            WITH r, [a.`neuro.id`, b.`neuro.id`, type(r)] as triple
+            WHERE NOT triple IN $keep
+            DELETE r
+            """,
+            {"nids": list(nids), "keep": [list(t) for t in keep_triples]},
+        )
 
     def export_nfx(self, path, label=None, name="", description="", version="",
                    query=None, query_params=None, **properties):
