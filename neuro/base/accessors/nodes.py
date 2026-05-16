@@ -32,6 +32,21 @@ class NodeAccessor(Accessor):
         """
         self._nb.objects.put(node, identifier_key="neuro.id")
 
+    def _label_ancestors(self, labels):
+        """Expand a list of node labels to the union of themselves and all
+        SUBCLASS_OF ancestors. Used to match a metarelationship's target
+        against an instance node whose declared labels don't include lineage."""
+        if not labels:
+            return set()
+        query = """
+        UNWIND $labels as lbl
+        MATCH (n:OntologyNode {label: lbl})
+        MATCH (n)-[:SUBCLASS_OF*0..]->(a:OntologyNode)
+        RETURN DISTINCT a.label as label
+        """
+        data = self._nb.get_data(query, {"labels": list(labels)})
+        return {r["label"] for r in data}
+
     def import_nfx(self, path, dependency_nids=None, validate=True):
         """
         Import nodes and relationships from an NFX file.
@@ -73,23 +88,32 @@ class NodeAccessor(Accessor):
                 rel_type = rel["type"]
                 from_labels = nid_labels.get(rel["from"], [])
                 to_labels = nid_labels.get(rel["to"], [])
+                to_ancestors = self._label_ancestors(to_labels)
 
-                # Validate against the source node's metarelationships
-                validated = False
+                # Validate against the source node's metarelationships.
+                # `Metarelationships.from_ontology` already follows SUBCLASS_OF
+                # on the source side; we expand `to_labels` here to mirror that
+                # on the target side, so e.g. `RELATED_TO` declared on `Object`
+                # accepts a `Standard` target.
+                candidates = []
                 for label in from_labels:
                     mrs = Metarelationships.from_ontology(self._nb, label)
-                    key = f"{rel_type}:outgoing"
-                    if key in mrs:
-                        mr = mrs[key]
-                        if mr.target not in to_labels:
-                            violations.invalid_relationships.append(
-                                (rel_type, "outgoing", to_labels, mr.target)
-                            )
-                        validated = True
+                    candidates.extend(
+                        m for k, m in mrs.items()
+                        if m.label == rel_type and k.endswith(":outgoing") and m.target
+                    )
+                    if candidates:
                         break
-                if not validated:
+
+                if not candidates:
                     violations.undefined_relationships.append(
                         (rel_type, "outgoing", to_labels)
+                    )
+                elif not any(m.target in to_ancestors for m in candidates):
+                    expected = sorted({m.target for m in candidates})
+                    violations.invalid_relationships.append(
+                        (rel_type, "outgoing", to_labels,
+                         expected[0] if len(expected) == 1 else expected)
                     )
 
             if violations:
