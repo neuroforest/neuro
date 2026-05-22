@@ -281,3 +281,11 @@ def container_running(container_name):
         text=True,
     )
     return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def network_exists(network_name):
+    result = subprocess.run(
+        ["docker", "network", "inspect", network_name],
+        capture_output=True,
+    )
+    return result.returncode == 0
