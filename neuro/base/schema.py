@@ -12,7 +12,7 @@ from neuro.utils import terminal_components, terminal_style
 
 def _check_label(value, mp):
     patterns = {
-        "OntologyNode": r"^[A-Z][a-zA-Z]*$",
+        "OntologyNode": r"^[A-Z][a-zA-Z0-9]*$",
         "OntologyRelationship": r"^[A-Z][A-Z_]*$",
         "OntologyProperty": r"^[a-z][a-z0-9._-]*$",
     }
