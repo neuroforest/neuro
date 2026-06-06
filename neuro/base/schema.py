@@ -342,18 +342,18 @@ class Metarelationships(UserDict):
             metarelationships[key] = mr
         return metarelationships
 
-    def validate_relationships(self, nb, neuro_id, violations):
+    def validate_relationships(self, nb, nid, violations):
         """Validate that all relationships on a node comply with the ontology."""
         query = """
-        MATCH (n {`neuro.id`: $neuro_id})-[r]->(target)
-        WHERE target.`neuro.id` IS NOT NULL
+        MATCH (n {nid: $nid})-[r]->(target)
+        WHERE target.nid IS NOT NULL
         RETURN type(r) as rel_type, labels(target) as target_labels, "outgoing" as direction
         UNION
-        MATCH (source)-[r]->(n {`neuro.id`: $neuro_id})
-        WHERE source.`neuro.id` IS NOT NULL
+        MATCH (source)-[r]->(n {nid: $nid})
+        WHERE source.nid IS NOT NULL
         RETURN type(r) as rel_type, labels(source) as target_labels, "incoming" as direction
         """
-        relationships = nb.get_data(query, {"neuro_id": neuro_id})
+        relationships = nb.get_data(query, {"nid": nid})
 
         matched_keys = set()
         for rel in relationships:
@@ -429,7 +429,7 @@ class OntologyNodeInfo:
         UNWIND $labels as lbl
         MATCH (n:OntologyNode {label: lbl})
         OPTIONAL MATCH (m:OntologyMetadata)-[:DEFINES]->(n)
-        RETURN lbl as label, m.name as name, m.version as version, n.`neuro.id` as nid
+        RETURN lbl as label, m.name as name, m.version as version, n.nid as nid
         """
         data = self.nb.get_data(query, parameters={"labels": self.lineage})
         self.origin_ontology = {}

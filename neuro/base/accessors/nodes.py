@@ -7,30 +7,30 @@ from neuro.utils import exceptions
 
 class NodeAccessor(Accessor):
 
-    def get(self, neuro_id):
+    def get(self, nid):
         query = """
         MATCH (ion:OntologyNode {label:"Node"})
         MATCH (on)-[:SUBCLASS_OF*0..]->(ion)
         WITH on.label as node_label
 
         MATCH (n)
-        WHERE node_label in labels(n) AND n.`neuro.id` = $neuro_id
+        WHERE node_label in labels(n) AND n.nid = $nid
         RETURN properties(n) as properties, labels(n) as labels;
         """
-        data = self._nb.get_data(query, {"neuro_id": neuro_id})
+        data = self._nb.get_data(query, {"nid": nid})
         if not data:
-            raise ValueError(f"No node found with neuro.id: {neuro_id}")
+            raise ValueError(f"No node found with nid: {nid}")
         if len(data) > 1:
-            raise ValueError(f"Multiple nodes found with neuro.id: {neuro_id}")
+            raise ValueError(f"Multiple nodes found with nid: {nid}")
         return Node(labels=data[0]["labels"], properties=data[0]["properties"])
 
     def put(self, node):
         """
-        Save a Node to the database. Merges on neuro.id, sets labels and properties.
+        Save a Node to the database. Merges on nid, sets labels and properties.
         Validates the node against the ontology before insertion.
         :param node: Node
         """
-        self._nb.objects.put(node, identifier_key="neuro.id")
+        self._nb.objects.put(node, identifier_key="nid")
 
     def _label_ancestors(self, labels):
         """Expand a list of node labels to the union of themselves and all
@@ -103,7 +103,7 @@ class NodeAccessor(Accessor):
     def import_nfx(self, path, dependency_nids=None, validate=True):
         """
         Import nodes and relationships from an NFX file additively.
-        Nodes are merged on neuro.id (properties `+=`); relationships are
+        Nodes are merged on nid (properties `+=`); relationships are
         merged between them. Pre-existing properties and nodes not mentioned
         in the file are left untouched. For authoritative file→DB sync, use
         `sync_nfx`.
@@ -115,7 +115,7 @@ class NodeAccessor(Accessor):
 
         for entry in doc.nodes:
             properties = dict(entry.get("properties", {}))
-            properties["neuro.id"] = entry["nid"]
+            properties["nid"] = entry["nid"]
             node = Node(
                 labels=entry["labels"],
                 properties=properties,
@@ -123,7 +123,7 @@ class NodeAccessor(Accessor):
             if validate:
                 self.put(node)
             else:
-                self._nb.objects.put(node, identifier_key="neuro.id", validate=False)
+                self._nb.objects.put(node, identifier_key="nid", validate=False)
 
         if validate:
             self._validate_relationship_shapes(doc, path)
@@ -135,9 +135,9 @@ class NodeAccessor(Accessor):
             match_a = "MERGE" if rel["from"] not in nids else "MATCH"
             match_b = "MERGE" if rel["to"] not in nids else "MATCH"
             query = f"""
-            {match_a} (a {{`neuro.id`: $from_id}})
+            {match_a} (a {{nid: $from_id}})
             WITH a
-            {match_b} (b {{`neuro.id`: $to_id}})
+            {match_b} (b {{nid: $to_id}})
             MERGE (a)-[r:{rel_type}]->(b)
             SET r += $properties
             """
@@ -194,9 +194,9 @@ class NodeAccessor(Accessor):
 
         for entry in doc.nodes:
             properties = dict(entry.get("properties", {}))
-            properties["neuro.id"] = entry["nid"]
+            properties["nid"] = entry["nid"]
             node = Node(labels=entry["labels"], properties=properties)
-            self._nb.objects.put(node, identifier_key="neuro.id", replace=True)
+            self._nb.objects.put(node, identifier_key="nid", replace=True)
             meta.link_defines(metadata_label, doc.nid, entry["nid"])
 
         self._reconcile_internal_edges(
@@ -206,8 +206,8 @@ class NodeAccessor(Accessor):
         for rel in doc.relationships:
             self._nb.run_query(
                 f"""
-                MATCH (a {{`neuro.id`: $from_id}})
-                MATCH (b {{`neuro.id`: $to_id}})
+                MATCH (a {{nid: $from_id}})
+                MATCH (b {{nid: $to_id}})
                 MERGE (a)-[r:{rel["type"]}]->(b)
                 SET r = $properties
                 """,
@@ -220,14 +220,14 @@ class NodeAccessor(Accessor):
 
     def _reconcile_internal_edges(self, nids, keep_triples):
         """Delete every edge `(a)-[r]->(b)` where both endpoints have a
-        `neuro.id` in `nids` and the `(from, to, type)` triple is not in
+        `nid` in `nids` and the `(from, to, type)` triple is not in
         `keep_triples`. Edges with one foot outside `nids` are left alone."""
         self._nb.run_query(
             """
             MATCH (a)-[r]->(b)
-            WHERE a.`neuro.id` IN $nids
-              AND b.`neuro.id` IN $nids
-            WITH r, [a.`neuro.id`, b.`neuro.id`, type(r)] as triple
+            WHERE a.nid IN $nids
+              AND b.nid IN $nids
+            WITH r, [a.nid, b.nid, type(r)] as triple
             WHERE NOT triple IN $keep
             DELETE r
             """,
@@ -251,7 +251,7 @@ class NodeAccessor(Accessor):
             params = query_params or {}
         else:
             node = f"(n:{label})" if label else "(n)"
-            conditions = ["n.`neuro.id` IS NOT NULL"]
+            conditions = ["n.nid IS NOT NULL"]
             for key, value in properties.items():
                 param_name = key.replace(".", "_")
                 conditions.append(f"n.`{key}` = ${param_name}")
@@ -259,7 +259,7 @@ class NodeAccessor(Accessor):
             where = " WHERE " + " AND ".join(conditions)
             node_query = f"""
             MATCH {node}{where}
-            RETURN n.`neuro.id` as nid, labels(n) as labels, properties(n) as properties
+            RETURN n.nid as nid, labels(n) as labels, properties(n) as properties
             """
 
         nodes = self._nb.get_data(node_query, params)
@@ -267,8 +267,8 @@ class NodeAccessor(Accessor):
 
         rel_query = """
         MATCH (a)-[r]->(b)
-        WHERE a.`neuro.id` IN $ids AND b.`neuro.id` IN $ids
-        RETURN a.`neuro.id` as from, b.`neuro.id` as to,
+        WHERE a.nid IN $ids AND b.nid IN $ids
+        RETURN a.nid as from, b.nid as to,
                type(r) as type, properties(r) as properties
         """
         relationships = self._nb.get_data(rel_query, {"ids": ids})

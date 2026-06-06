@@ -30,7 +30,7 @@ class Nfx:
     """In-memory representation of an NFX module.
 
     Frozen value object: construct via `from_dict` or directly; serialize via
-    `to_dict`. Normalization (deep-copying nodes/rels, stripping `neuro.id`,
+    `to_dict`. Normalization (deep-copying nodes/rels, stripping `nid`,
     dropping empty `properties`) happens at construction so the on-disk form
     is canonical without mutating caller inputs.
 
@@ -73,7 +73,7 @@ class Nfx:
         for n in data.get("nodes", []) or []:
             n = dict(n)
             props = dict(n.get("properties", {}) or {})
-            props.pop("neuro.id", None)
+            props.pop("nid", None)
             if props:
                 n["properties"] = props
             else:

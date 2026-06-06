@@ -64,13 +64,13 @@ def migrate_wf_to_neo4j(wf_path, port=8222, **kwargs):
         wf = WikiFolder(wf_path, tw5=tw_path, silent=True, **kwargs)
         with wf:
             tid_titles = tw_get.tid_titles(
-                "[all[tiddlers]!is[system]] [is[system]has[neuro.id]]",
+                "[all[tiddlers]!is[system]] [is[system]has[nid]]",
                 port=port, **kwargs
             )
             for tid_title in tqdm.tqdm(tid_titles):
                 fields = tw_get.fields(tid_title, port=port, **kwargs)
                 del fields["revision"]
-                node = Node(labels=["Tiddler"], uuid=fields["neuro.id"], properties=fields)
+                node = Node(labels=["Tiddler"], uuid=fields["nid"], properties=fields)
                 nb.nodes.put(node)
             print(f"Finished importing {len(tid_titles)} tiddlers")
 

@@ -19,12 +19,12 @@ class MetadataAccessor(Accessor):
         always matches the caller's input."""
         properties = properties or {}
         self._nb.run_query(
-            f"MERGE (m:{label} {{`neuro.id`: $nid}}) SET m += $props",
+            f"MERGE (m:{label} {{nid: $nid}}) SET m += $props",
             {"nid": nid, "props": properties},
         )
         self._nb.run_query(
             f"""
-            MATCH (m:{label} {{`neuro.id`: $nid}})-[r:DEPENDS_ON]->()
+            MATCH (m:{label} {{nid: $nid}})-[r:DEPENDS_ON]->()
             DELETE r
             """,
             {"nid": nid},
@@ -32,19 +32,19 @@ class MetadataAccessor(Accessor):
         for dep_nid in dependency_nids:
             self._nb.run_query(
                 f"""
-                MATCH (m:{label} {{`neuro.id`: $nid}})
-                MATCH (d {{`neuro.id`: $dep_nid}})
+                MATCH (m:{label} {{nid: $nid}})
+                MATCH (d {{nid: $dep_nid}})
                 MERGE (m)-[:DEPENDS_ON]->(d)
                 """,
                 {"nid": nid, "dep_nid": dep_nid},
             )
 
     def link_defines(self, label, meta_nid, node_nid):
-        """MERGE `(meta)-[:DEFINES]->(node)` by neuro.id."""
+        """MERGE `(meta)-[:DEFINES]->(node)` by nid."""
         self._nb.run_query(
             f"""
-            MATCH (m:{label} {{`neuro.id`: $meta_nid}})
-            MATCH (n {{`neuro.id`: $node_nid}})
+            MATCH (m:{label} {{nid: $meta_nid}})
+            MATCH (n {{nid: $node_nid}})
             MERGE (m)-[:DEFINES]->(n)
             """,
             {"meta_nid": meta_nid, "node_nid": node_nid},
@@ -52,12 +52,12 @@ class MetadataAccessor(Accessor):
 
     def prune(self, label, meta_nid, keep_nids):
         """`DETACH DELETE` every node DEFINES-linked from this anchor whose
-        neuro.id is not in `keep_nids`. Used to drop nodes that were imported
+        nid is not in `keep_nids`. Used to drop nodes that were imported
         previously but are absent from the current NFX."""
         self._nb.run_query(
             f"""
-            MATCH (m:{label} {{`neuro.id`: $meta_nid}})-[:DEFINES]->(n)
-            WHERE NOT n.`neuro.id` IN $nids
+            MATCH (m:{label} {{nid: $meta_nid}})-[:DEFINES]->(n)
+            WHERE NOT n.nid IN $nids
             DETACH DELETE n
             """,
             {"meta_nid": meta_nid, "nids": list(keep_nids)},

@@ -54,17 +54,17 @@ def test_nfx_from_dict_rejects_malformed_dep():
 
 
 def test_nfx_from_dict_normalizes_nodes():
-    """neuro.id stripped from properties; empty properties dropped; caller's input untouched."""
+    """nid stripped from properties; empty properties dropped; caller's input untouched."""
     from neuro.base.nfx import Nfx
-    src_node = {"nid": LOCAL_1, "labels": ["L"], "properties": {"neuro.id": "x", "k": 1}}
-    src_empty = {"nid": LOCAL_2, "labels": ["L"], "properties": {"neuro.id": "y"}}
+    src_node = {"nid": LOCAL_1, "labels": ["L"], "properties": {"nid": "x", "k": 1}}
+    src_empty = {"nid": LOCAL_2, "labels": ["L"], "properties": {"nid": "y"}}
     src_data = {"nodes": [src_node, src_empty], "relationships": []}
     doc = Nfx.from_dict(src_data)
     assert doc.nodes[0]["properties"] == {"k": 1}
     assert "properties" not in doc.nodes[1]
     # caller input untouched
-    assert "neuro.id" in src_node["properties"]
-    assert "neuro.id" in src_empty["properties"]
+    assert "nid" in src_node["properties"]
+    assert "nid" in src_empty["properties"]
 
 
 def test_nfx_from_dict_normalizes_relationships():

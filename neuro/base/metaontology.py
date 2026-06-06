@@ -20,7 +20,7 @@ class OntologyValidator:
         MATCH (type)-[:SUBCLASS_OF*0..]->(root)
         MATCH (n)
         WHERE type.label IN labels(n)
-        RETURN coalesce(n.label, n.name, n.`neuro.id`) as label, type.label as ontology_object_type,
+        RETURN coalesce(n.label, n.name, n.nid) as label, type.label as ontology_object_type,
                labels(n) as labels, properties(n) as properties
         """
         data = self._nb.get_data(query, {"kind": kind})
@@ -105,10 +105,10 @@ class OntologyValidator:
         rows = self._nb.get_data(
             """
             MATCH (n)
-            WHERE n.`neuro.id` IS NOT NULL AND NOT n:OntologyMetadata
+            WHERE n.nid IS NOT NULL AND NOT n:OntologyMetadata
             OPTIONAL MATCH (n)<-[r]-()
             RETURN labels(n) AS labels,
-                   coalesce(n.label, n.name, n.`neuro.id`) AS identifier,
+                   coalesce(n.label, n.name, n.nid) AS identifier,
                    collect(DISTINCT type(r)) AS in_rel_types
             """
         )
@@ -319,7 +319,7 @@ class Metaontology:
         for dep_nid, dep_version in dependencies:
             data = self._nb.get_data(
                 """
-                MATCH (m:OntologyMetadata {`neuro.id`: $nid})
+                MATCH (m:OntologyMetadata {nid: $nid})
                 RETURN m.name as name, m.version as version
                 """,
                 {"nid": dep_nid},
@@ -358,11 +358,11 @@ class Metaontology:
                     return nfx.read(dep_path)
             rows = self._nb.get_data(
                 """
-                MATCH (m:OntologyMetadata {`neuro.id`: $nid})
+                MATCH (m:OntologyMetadata {nid: $nid})
                 OPTIONAL MATCH (m)-[:DEFINES]->(n)
                 OPTIONAL MATCH (m)-[:DEPENDS_ON]->(d:OntologyMetadata)
-                RETURN collect(DISTINCT n.`neuro.id`) as nids,
-                       collect(DISTINCT d.`neuro.id`) as dep_nids
+                RETURN collect(DISTINCT n.nid) as nids,
+                       collect(DISTINCT d.nid) as dep_nids
                 """,
                 {"nid": dep_nid},
             )
@@ -409,7 +409,7 @@ class Metaontology:
         if doc.nid and doc.name:
             self._nb.run_query(
                 """
-                MATCH (m:OntologyMetadata {`neuro.id`: $nid})-[:DEFINES]->(n)
+                MATCH (m:OntologyMetadata {nid: $nid})-[:DEFINES]->(n)
                 DETACH DELETE n
                 """,
                 {"nid": doc.nid},
@@ -419,14 +419,14 @@ class Metaontology:
                 ("type", doc.type),
             ) if v}
             self._nb.run_query(
-                "MERGE (m:OntologyMetadata {`neuro.id`: $nid}) SET m += $props",
+                "MERGE (m:OntologyMetadata {nid: $nid}) SET m += $props",
                 {"nid": doc.nid, "props": properties},
             )
             for dep_nid, _ in doc.dependencies:
                 self._nb.run_query(
                     """
-                    MATCH (m:OntologyMetadata {`neuro.id`: $nid})
-                    MATCH (d:OntologyMetadata {`neuro.id`: $dep_nid})
+                    MATCH (m:OntologyMetadata {nid: $nid})
+                    MATCH (d:OntologyMetadata {nid: $dep_nid})
                     MERGE (m)-[:DEPENDS_ON]->(d)
                     """,
                     {"nid": doc.nid, "dep_nid": dep_nid},
@@ -435,14 +435,14 @@ class Metaontology:
         for entry in doc.nodes:
             labels_str = ":".join(entry["labels"])
             self._nb.run_query(
-                f"MERGE (n:{labels_str} {{`neuro.id`: $nid}}) SET n += $props",
+                f"MERGE (n:{labels_str} {{nid: $nid}}) SET n += $props",
                 {"nid": entry["nid"], "props": entry.get("properties", {})},
             )
             if doc.nid:
                 self._nb.run_query(
                     f"""
-                    MATCH (m:OntologyMetadata {{`neuro.id`: $ontology_nid}})
-                    MATCH (n:{labels_str} {{`neuro.id`: $node_nid}})
+                    MATCH (m:OntologyMetadata {{nid: $ontology_nid}})
+                    MATCH (n:{labels_str} {{nid: $node_nid}})
                     MERGE (m)-[:DEFINES]->(n)
                     """,
                     {"ontology_nid": doc.nid, "node_nid": entry["nid"]},
@@ -451,8 +451,8 @@ class Metaontology:
         for rel in doc.relationships:
             self._nb.run_query(
                 f"""
-                MATCH (:OntologyMetadata)-[:DEFINES]->(a {{`neuro.id`: $from_id}})
-                MATCH (:OntologyMetadata)-[:DEFINES]->(b {{`neuro.id`: $to_id}})
+                MATCH (:OntologyMetadata)-[:DEFINES]->(a {{nid: $from_id}})
+                MATCH (:OntologyMetadata)-[:DEFINES]->(b {{nid: $to_id}})
                 MERGE (a)-[r:{rel["type"]}]->(b)
                 SET r += $props
                 """,
@@ -478,17 +478,17 @@ class Metaontology:
         WITH collect(DISTINCT prop.label) as required_keys
 
         MATCH (n:Metaontology)-[r]-(m:Metaontology)
-        WHERE n.`neuro.id` IS NOT NULL AND m.`neuro.id` IS NOT NULL
+        WHERE n.nid IS NOT NULL AND m.nid IS NOT NULL
         WITH required_keys,
-             collect(DISTINCT {nid: n.`neuro.id`, labels: labels(n),
+             collect(DISTINCT {nid: n.nid, labels: labels(n),
                  properties: apoc.map.fromPairs(
                      [k IN required_keys WHERE properties(n)[k] IS NOT NULL
                       | [k, properties(n)[k]]])})
-             + collect(DISTINCT {nid: m.`neuro.id`, labels: labels(m),
+             + collect(DISTINCT {nid: m.nid, labels: labels(m),
                  properties: apoc.map.fromPairs(
                      [k IN required_keys WHERE properties(m)[k] IS NOT NULL
                       | [k, properties(m)[k]]])}) as allNodes,
-             collect({from: startNode(r).`neuro.id`, to: endNode(r).`neuro.id`,
+             collect({from: startNode(r).nid, to: endNode(r).nid,
                  type: type(r), properties: properties(r)}) as relationships
         UNWIND allNodes as n
         WITH collect(DISTINCT n) as nodes, relationships
@@ -498,7 +498,7 @@ class Metaontology:
 
         meta_query = """
         MATCH (m:OntologyMetadata {name: "Metaontology"})
-        RETURN m.`neuro.id` as nid, m.name as name, m.version as version,
+        RETURN m.nid as nid, m.name as name, m.version as version,
                m.description as description
         """
         meta = self._nb.get_data(meta_query)

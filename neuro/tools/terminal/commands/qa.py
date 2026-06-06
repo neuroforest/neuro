@@ -358,8 +358,8 @@ class Primary(QACheck):
         return self.validated
 
 
-class NeuroIDs(QACheck):
-    name = "Neuro IDs"
+class Nids(QACheck):
+    name = "NIDs"
 
     def __init__(self, port, verbose=False):
         super().__init__(port)
@@ -368,17 +368,17 @@ class NeuroIDs(QACheck):
     def run(self) -> bool:
         resolved = True
 
-        unidentified = tw_get.tiddler_list("[!is[system]!has[neuro.id]]", port=self.port)
+        unidentified = tw_get.tiddler_list("[!is[system]!has[nid]]", port=self.port)
         if unidentified:
             with _progress() as progress:
-                task = progress.add_task("Adding neuro.id", total=len(unidentified))
+                task = progress.add_task("Adding nid", total=len(unidentified))
                 for tiddler in unidentified:
-                    progress.update(task, description=f"neuro.id: {_truncate(tiddler.title).ljust(32)}")
+                    progress.update(task, description=f"nid: {_truncate(tiddler.title).ljust(32)}")
                     tw_put.tiddler(tiddler, port=self.port)
                     progress.advance(task)
-                progress.update(task, description="neuro.id".ljust(32))
+                progress.update(task, description="nid".ljust(32))
 
-        all_nids = tw_get.filter_output("[has[neuro.id]get[neuro.id]]", port=self.port)
+        all_nids = tw_get.filter_output("[has[nid]get[nid]]", port=self.port)
         seen = set()
         duplicates = set()
         for nid in all_nids:
@@ -390,14 +390,14 @@ class NeuroIDs(QACheck):
         if duplicates:
             resolved = False
             if self.verbose:
-                print("The following neuro.id conflicts were found")
+                print("The following nid conflicts were found")
                 for i, nid in enumerate(duplicates):
-                    tid_titles = tw_get.filter_output(f"[search:neuro.id:literal[{nid}]]", port=self.port)
+                    tid_titles = tw_get.filter_output(f"[search:nid:literal[{nid}]]", port=self.port)
                     print(f"{i + 1}) {nid}:\n\t{'\n\t'.join(tid_titles)}")
 
         if not all(len(nid) == 36 for nid in seen):
             resolved = False
-            print("neuro.id length variability detected")
+            print("nid length variability detected")
 
         if resolved:
             print(f"{terminal_style.SUCCESS} Neuro ID")
@@ -420,7 +420,7 @@ def cli(ctx, interactive, port, verbose):
         ValidateTags(port, interactive),
         MissingTiddlers(port, interactive),
         Primary(port, interactive, verbose),
-        NeuroIDs(port, verbose),
+        Nids(port, verbose),
     ]
 
     host = os.getenv("HOST", "127.0.0.1")

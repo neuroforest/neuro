@@ -7,12 +7,12 @@ class ObjectAccessor(Accessor):
 
     def illuminate(self, query, query_params=None, dry_run=False):
         """
-        Stamp `neuro.id` on nodes returned by `query`.
+        Stamp `nid` on nodes returned by `query`.
         Without an id a node is invisible to ontology validation; illuminating
         brings it into the validator's view.
 
         :param query: Cypher returning an `eid` column (elementId of nodes to stamp).
-            Caller owns the filter — typically ``WHERE n.`neuro.id` IS NULL``.
+            Caller owns the filter — typically ``WHERE n.nid IS NULL``.
         :param query_params: optional dict of parameters for `query`.
         :param dry_run: if True, return elementIds that would be stamped without writing.
         :return: count of stamped nodes (or list of elementIds when dry_run).
@@ -23,12 +23,12 @@ class ObjectAccessor(Accessor):
             return eids
         stamp_query = """
         MATCH (n) WHERE elementId(n) = $eid
-        SET n.`neuro.id` = $new_id
+        SET n.nid = $new_id
         """
         for eid in eids:
             self._nb.run_query(stamp_query, {
                 "eid": eid,
-                "new_id": Node.generate_neuro_id(),
+                "new_id": Node.generate_nid(),
             })
         return len(eids)
 
@@ -37,7 +37,7 @@ class ObjectAccessor(Accessor):
         Save an Object to the database. Validates against the ontology before insertion.
 
         :param obj: Object with .labels and .properties
-        :param identifier_key: property key used as MERGE key (e.g. "neuro.id").
+        :param identifier_key: property key used as MERGE key (e.g. "nid").
             If provided, MERGE on that property; otherwise CREATE.
         :param validate: if False, skip ontology validation.
         :param replace: if True, replace the node's full property map (`SET n = $properties`)

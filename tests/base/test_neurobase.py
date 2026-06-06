@@ -33,7 +33,7 @@ class TestOntology:
 
 class TestNodeAccessor:
     def test_get_not_found(self, nb):
-        """Getting a nonexistent neuro.id raises ValueError."""
+        """Getting a nonexistent nid raises ValueError."""
         with pytest.raises(ValueError, match="No node found"):
             nb.nodes.get("nonexistent-uuid-000")
 
