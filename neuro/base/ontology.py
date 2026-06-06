@@ -20,7 +20,7 @@ class Ontology:
         WHERE root.label IN {list(ontology_objects)}
         MATCH (type)-[:SUBCLASS_OF*0..]->(root)
         MATCH (n)
-        WHERE type.label IN labels(n) AND n.`neuro.id` IS NOT NULL
+        WHERE type.label IN labels(n) AND n.nid IS NOT NULL
         RETURN count(DISTINCT n) AS count
         """
         result = self._nb.get_data(query)
@@ -40,7 +40,7 @@ class Ontology:
         WHERE root.label IN {list(ontology_objects)}
         MATCH (type)-[:SUBCLASS_OF*0..]->(root)
         MATCH (n)
-        WHERE type.label IN labels(n) AND n.`neuro.id` IS NOT NULL
+        WHERE type.label IN labels(n) AND n.nid IS NOT NULL
         DETACH DELETE n
         """
         self._nb.run_query(query)
@@ -68,16 +68,16 @@ class Ontology:
         WHERE root.label IN {list(ontology_objects)}
         MATCH (type)-[:SUBCLASS_OF*0..]->(root)
         MATCH (n)
-        WHERE type.label IN labels(n) AND n.`neuro.id` IS NOT NULL
-        RETURN DISTINCT n.`neuro.id` as nid, labels(n) as labels, properties(n) as properties
+        WHERE type.label IN labels(n) AND n.nid IS NOT NULL
+        RETURN DISTINCT n.nid as nid, labels(n) as labels, properties(n) as properties
         """
         nodes = self._nb.get_data(node_query)
         ids = [n["nid"] for n in nodes]
 
         rel_query = """
         MATCH (a)-[r]->(b)
-        WHERE a.`neuro.id` IN $ids AND b.`neuro.id` IN $ids
-        RETURN a.`neuro.id` as from, b.`neuro.id` as to,
+        WHERE a.nid IN $ids AND b.nid IN $ids
+        RETURN a.nid as from, b.nid as to,
                type(r) as type, properties(r) as properties
         """
         relationships = self._nb.get_data(rel_query, {"ids": ids})
@@ -130,12 +130,12 @@ class ObjectValidator:
             self.violations = metaproperties.validate_properties(self.object.properties, self.violations)
 
     def validate_relationships(self):
-        neuro_id = self.object.properties.get("neuro.id")
-        if not neuro_id:
+        nid = self.object.properties.get("nid")
+        if not nid:
             return
         for label in self.object.labels:
             if label in self.violations.undefined_labels:
                 continue
             metarelationships = Metarelationships.from_ontology(self.nb, label)
-            self.violations = metarelationships.validate_relationships(self.nb, neuro_id, self.violations)
+            self.violations = metarelationships.validate_relationships(self.nb, nid, self.violations)
 

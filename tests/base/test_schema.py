@@ -87,7 +87,7 @@ class TestLabel:
 
     def test_property_valid(self):
         mp = _make_metaproperty("Label", "OntologyProperty")
-        assert mp.validate("neuro.id")
+        assert mp.validate("nid")
 
     def test_property_uppercase(self):
         mp = _make_metaproperty("Label", "OntologyProperty")

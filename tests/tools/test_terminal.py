@@ -34,14 +34,14 @@ class TestQa:
         tid_titles = tw_get.tid_titles("[search:title[Draft of ']!has[draft.of]]", **kwargs)
         assert len(tid_titles) == 0
 
-    def test_resolve_neuro_id_missing(self, wf_qa):
+    def test_resolve_nids_missing(self, wf_qa):
         from neuro.core.data.str import Uuid
         from neuro.tools.tw5api import tw_get
         from neuro.tools.terminal.commands import qa
-        qa.NeuroIDs(wf_qa.port).run()
+        qa.Nids(wf_qa.port).run()
         example = tw_get.fields("Example", **kwargs)
-        assert "neuro.id" in example
-        assert Uuid.is_valid_uuid_v4(example["neuro.id"])
+        assert "nid" in example
+        assert Uuid.is_valid_uuid_v4(example["nid"])
 
     def test_set_roles(self, wf_qa):
         from neuro.tools.tw5api import tw_get

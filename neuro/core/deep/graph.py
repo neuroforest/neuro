@@ -14,16 +14,16 @@ class Node(Object):
         super().__init__(labels=labels, properties=kwargs.get("properties", dict()))
         if "uuid" in kwargs:
             self.uuid = kwargs["uuid"]
-        elif "neuro.id" not in self.properties:
-            self.uuid = self.generate_neuro_id()
+        elif "nid" not in self.properties:
+            self.uuid = self.generate_nid()
 
     @property
     def uuid(self):
-        return self.properties.get("neuro.id")
+        return self.properties.get("nid")
 
     @uuid.setter
     def uuid(self, value):
-        self.properties["neuro.id"] = value
+        self.properties["nid"] = value
 
     def __eq__(self, other):
         if isinstance(other, Node):
@@ -49,9 +49,9 @@ class Node(Object):
         setattr(self, key, value)
 
     @classmethod
-    def from_neurobase(cls, nb, neuro_id):
+    def from_neurobase(cls, nb, nid):
         query = f"""
-        MATCH (o {{`neuro.id`: "{neuro_id}"}})
+        MATCH (o {{nid: "{nid}"}})
         RETURN properties(o) as properties, labels(o) as labels;
         """
         data = nb.get_data(query)
@@ -59,9 +59,9 @@ class Node(Object):
         return cls(data[0]["labels"], properties=data[0]["properties"])
 
     @staticmethod
-    def generate_neuro_id():
+    def generate_nid():
         """
-        Generate NeuroID.
+        Generate nid.
         """
         return uuid.uuid4().__str__()
 

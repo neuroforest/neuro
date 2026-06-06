@@ -38,7 +38,7 @@ class TestTwActions:
         assert merge_target["created"] == "2025-01-23T16:42:27.976Z"
         assert merge_target["field1"] == "merge1"
         assert merge_target["override"] == "2"
-        assert merge_target["neuro.id"] == "9bd40ef6-2ec5-4952-abc2-57dd34df847b"
+        assert merge_target["nid"] == "9bd40ef6-2ec5-4952-abc2-57dd34df847b"
 
         assert tw_get.fields("Primary", **kwargs)["neuro.primary"] == "Merge Target"
         assert tw_get.fields("Text", **kwargs)["text"] == "[[Merge Target]]"
@@ -95,7 +95,7 @@ class TestTwDelete:
 class TestTwGet:
     def test_filter_output(self, wf_universal):
         from neuro.tools.tw5api import tw_get
-        tw_filter = "[title[test]get[created]] [title[test]get[neuro.id]]"
+        tw_filter = "[title[test]get[created]] [title[test]get[nid]]"
         filter_output = tw_get.filter_output(tw_filter, **kwargs)
         assert type(filter_output) is list
         assert len(filter_output) == 2

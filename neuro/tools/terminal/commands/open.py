@@ -18,7 +18,7 @@ from neuro.tools.tw5api import tw_actions, tw_get
 def cli(ctx, title):
     if Uuid.is_valid_uuid_v4(title):
         try:
-            title = tw_get.filter_output(f"[search:neuro.id[{title}]]")[0]
+            title = tw_get.filter_output(f"[search:nid[{title}]]")[0]
         except IndexError:
             print(f"Not found: {title}")
             return

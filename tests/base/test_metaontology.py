@@ -19,8 +19,8 @@ class TestMetaontology:
     def test_metaproperties(self, nb_meta):
         from neuro.base.schema import Metaproperties
         mp = Metaproperties.from_ontology(nb_meta, "Node")
-        assert "neuro.id" in mp
-        assert mp["neuro.id"].is_required()
+        assert "nid" in mp
+        assert mp["nid"].is_required()
 
     def test_metaontology(self, nb_meta):
         result = nb_meta.metaontology.is_ontology_valid()
@@ -35,7 +35,7 @@ class TestOntologyValidator:
             nb.metaontology.is_ontology_valid()
 
     def test_disconnected_ontology(self, nb_meta):
-        nb_meta.run_query("CREATE (:OntologyNode {label: 'Orphan', `neuro.id`: randomUUID()})")
+        nb_meta.run_query("CREATE (:OntologyNode {label: 'Orphan', nid: randomUUID()})")
         assert not nb_meta.metaontology.is_ontology_valid()
         violations = nb_meta.metaontology.violations
         assert violations.disconnected
@@ -45,7 +45,7 @@ class TestOntologyValidator:
     def test_undefined_property(self, nb_meta):
         nb_meta.run_query(
             "MATCH (root:OntologyNode {label: 'Node'})"
-            "CREATE (n:OntologyNode {label: 'HasBogus', `neuro.id`: randomUUID(), bogus: 'x'})"
+            "CREATE (n:OntologyNode {label: 'HasBogus', nid: randomUUID(), bogus: 'x'})"
             "-[:SUBCLASS_OF]->(root)"
         )
         assert not nb_meta.metaontology.is_ontology_valid()
@@ -60,7 +60,7 @@ class TestOntologyValidator:
     def test_invalid_label(self, nb_meta):
         nb_meta.run_query(
             "MATCH (root:OntologyNode {label: 'Node'})"
-            "CREATE (n:OntologyNode {label: 'bad-label', `neuro.id`: randomUUID()})"
+            "CREATE (n:OntologyNode {label: 'bad-label', nid: randomUUID()})"
             "-[:SUBCLASS_OF]->(root)"
         )
         assert not nb_meta.metaontology.is_ontology_valid()
@@ -72,10 +72,10 @@ class TestOntologyValidator:
         violations.violations.clear()
         assert not violations
 
-    def test_invalid_neuro_id(self, nb_meta):
+    def test_invalid_nid(self, nb_meta):
         nb_meta.run_query(
             "MATCH (root:OntologyNode {label: 'Node'})"
-            "CREATE (n:OntologyNode {label: 'BadId', `neuro.id`: 'not-a-uuid-v4'})"
+            "CREATE (n:OntologyNode {label: 'BadId', nid: 'not-a-uuid-v4'})"
             "-[:SUBCLASS_OF]->(root)"
         )
         assert not nb_meta.metaontology.is_ontology_valid()
@@ -83,7 +83,7 @@ class TestOntologyValidator:
         assert len(violations.violations) == 1
         label, ontology_object_type, v = violations.violations[0]
         assert (label, ontology_object_type) == ("BadId", "OntologyNode")
-        assert "neuro.id" in [p for p, _ in v.invalid_properties]
+        assert "nid" in [p for p, _ in v.invalid_properties]
         violations.violations.clear()
         assert not violations
 
@@ -97,7 +97,7 @@ class TestOntologyValidator:
         assert len(violations.violations) == 1
         label, ontology_object_type, v = violations.violations[0]
         assert (label, ontology_object_type) == ("NoId", "OntologyNode")
-        assert "neuro.id" in [p.label for p in v.missing_properties]
+        assert "nid" in [p.label for p in v.missing_properties]
         violations.violations.clear()
         assert not violations
 
@@ -121,15 +121,15 @@ class TestPropertyOverrides:
             MATCH (node_root:OntologyNode {{label: 'Node'}})
             MATCH (str:OntologyNode {{label: 'String'}})
             MERGE (op_subtype:OntologyNode {{label: $b_type}})
-                ON CREATE SET op_subtype.`neuro.id` = randomUUID()
+                ON CREATE SET op_subtype.nid = randomUUID()
             MERGE (op_subtype)-[:SUBCLASS_OF]->(str)
-            CREATE (a:OntologyNode {{label: 'A', `neuro.id`: randomUUID()}})
+            CREATE (a:OntologyNode {{label: 'A', nid: randomUUID()}})
                 -[:SUBCLASS_OF]->(node_root)
-            CREATE (b:OntologyNode {{label: 'B', `neuro.id`: randomUUID()}})
+            CREATE (b:OntologyNode {{label: 'B', nid: randomUUID()}})
                 -[:SUBCLASS_OF]->(a)
-            CREATE (a_id:String {{label: 'id', `neuro.id`: randomUUID()}})
+            CREATE (a_id:String {{label: 'id', nid: randomUUID()}})
             CREATE (a)-[:HAS_PROPERTY]->(a_id)
-            CREATE (b_id:{b_type} {{label: 'id', `neuro.id`: randomUUID()}})
+            CREATE (b_id:{b_type} {{label: 'id', nid: randomUUID()}})
             """,
             {"b_type": b_type},
         )
@@ -175,13 +175,13 @@ class TestPropertyOverrides:
             """
             MATCH (node_root:OntologyNode {label: 'Node'})
             MATCH (str:OntologyNode {label: 'String'})
-            CREATE (a:OntologyNode {label: 'A', `neuro.id`: randomUUID()})
+            CREATE (a:OntologyNode {label: 'A', nid: randomUUID()})
                 -[:SUBCLASS_OF]->(node_root)
-            CREATE (b:OntologyNode {label: 'B', `neuro.id`: randomUUID()})
+            CREATE (b:OntologyNode {label: 'B', nid: randomUUID()})
                 -[:SUBCLASS_OF]->(a)
-            CREATE (a_id:String {label: 'id', `neuro.id`: randomUUID()})
+            CREATE (a_id:String {label: 'id', nid: randomUUID()})
             CREATE (a)-[:HAS_KEY]->(a_id)
-            CREATE (b_id:String {label: 'id', `neuro.id`: randomUUID()})
+            CREATE (b_id:String {label: 'id', nid: randomUUID()})
             CREATE (b)-[:HAS_PROPERTY]->(b_id)
             """
         )
@@ -199,16 +199,16 @@ class TestPropertyOverrides:
             MATCH (node_root:OntologyNode {label: 'Node'})
             MATCH (str:OntologyNode {label: 'String'})
             MATCH (op_root:OntologyNode {label: 'OntologyProperty'})
-            CREATE (gp:OntologyNode {label: 'GenericProp', `neuro.id`: randomUUID()})
+            CREATE (gp:OntologyNode {label: 'GenericProp', nid: randomUUID()})
                 -[:SUBCLASS_OF]->(op_root)
             CREATE (str)-[:SUBCLASS_OF]->(gp)
-            CREATE (a:OntologyNode {label: 'A', `neuro.id`: randomUUID()})
+            CREATE (a:OntologyNode {label: 'A', nid: randomUUID()})
                 -[:SUBCLASS_OF]->(node_root)
-            CREATE (b:OntologyNode {label: 'B', `neuro.id`: randomUUID()})
+            CREATE (b:OntologyNode {label: 'B', nid: randomUUID()})
                 -[:SUBCLASS_OF]->(a)
-            CREATE (a_id:String {label: 'id', `neuro.id`: randomUUID()})
+            CREATE (a_id:String {label: 'id', nid: randomUUID()})
             CREATE (a)-[:HAS_PROPERTY]->(a_id)
-            CREATE (b_id:GenericProp {label: 'id', `neuro.id`: randomUUID()})
+            CREATE (b_id:GenericProp {label: 'id', nid: randomUUID()})
             CREATE (b)-[:HAS_PROPERTY]->(b_id)
             """
         )
@@ -225,15 +225,15 @@ class TestPropertyOverrides:
             """
             MATCH (node_root:OntologyNode {label: 'Node'})
             MATCH (op_root:OntologyNode {label: 'OntologyProperty'})
-            CREATE (sibling:OntologyNode {label: 'SiblingType', `neuro.id`: randomUUID()})
+            CREATE (sibling:OntologyNode {label: 'SiblingType', nid: randomUUID()})
                 -[:SUBCLASS_OF]->(op_root)
-            CREATE (a:OntologyNode {label: 'A', `neuro.id`: randomUUID()})
+            CREATE (a:OntologyNode {label: 'A', nid: randomUUID()})
                 -[:SUBCLASS_OF]->(node_root)
-            CREATE (b:OntologyNode {label: 'B', `neuro.id`: randomUUID()})
+            CREATE (b:OntologyNode {label: 'B', nid: randomUUID()})
                 -[:SUBCLASS_OF]->(a)
-            CREATE (a_id:String {label: 'id', `neuro.id`: randomUUID()})
+            CREATE (a_id:String {label: 'id', nid: randomUUID()})
             CREATE (a)-[:HAS_PROPERTY]->(a_id)
-            CREATE (b_id:SiblingType {label: 'id', `neuro.id`: randomUUID()})
+            CREATE (b_id:SiblingType {label: 'id', nid: randomUUID()})
             CREATE (b)-[:HAS_PROPERTY]->(b_id)
             """
         )
