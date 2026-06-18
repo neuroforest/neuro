@@ -408,7 +408,9 @@ class OntologyNodeInfo:
         self.source_ontology = None
         self.source_version = None
         self.nid = None
+        self.descendants: list
         self.get_lineage()
+        self.get_descendants()
         self.get_source()
         self.get_metaproperties()
         self.get_relationships()
@@ -423,6 +425,15 @@ class OntologyNodeInfo:
         if not data:
             raise ValueError(f"No ontology node found with label: {self.label}")
         self.lineage = [next(iter(record.values())) for record in data]
+
+    def get_descendants(self):
+        query = """
+        MATCH path = (d:OntologyNode)-[:SUBCLASS_OF*1..]->(ion:OntologyNode {label: $label})
+        RETURN d.label as label, min(length(path)) as depth
+        ORDER BY depth, label
+        """
+        data = self.nb.get_data(query, parameters={"label": self.label})
+        self.descendants = [(r["label"], r["depth"]) for r in data]
 
     def get_source(self):
         query = """
@@ -458,6 +469,14 @@ class OntologyNodeInfo:
         print()
         print(f"{B}Lineage{RST}")
         print(f"   {' ➜  '.join(self.lineage)}")
+
+        print(f"\n{B}Subtypes{RST}")
+        if self.descendants:
+            for label, depth in self.descendants:
+                marker = f"{DIM}└─{RST}" if depth > 1 else "•"
+                print(f"   {'   ' * (depth - 1)}{marker} {label}")
+        else:
+            print(f"   {DIM}none{RST}")
 
         print(f"\n{B}Properties{RST}")
         mps = sorted(self.metaproperties.values(), key=lambda x: x.label)
