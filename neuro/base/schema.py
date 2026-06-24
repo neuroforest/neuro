@@ -362,7 +362,9 @@ class Metarelationships(UserDict):
             target_labels = rel["target_labels"]
             candidate_keys = [
                 k for k, m in self.data.items()
-                if m.label == rel_type and k.endswith(f":{direction}")
+                if m.label == rel_type and (
+                    k.endswith(f":{direction}") or m.source == m.target
+                )  # self-referential rels collapse to a single (outgoing) key
             ]
             if not candidate_keys:
                 violations.undefined_relationships.append(
