@@ -342,15 +342,44 @@ class Metarelationships(UserDict):
             metarelationships[key] = mr
         return metarelationships
 
+    def _subclass_matches(self, nb, target_labels, expected):
+        """True if any leaf label in `target_labels` is `expected` or a
+        descendant of it via SUBCLASS_OF*. Lets an instance carrying only its
+        leaf label (leaf-only labelling) satisfy a relationship whose declared
+        target is an abstract ancestor — e.g. a :Codebase endpoint matching an
+        INCLUDES/CONTAINS target of ProjectComponent. Cached per instance."""
+        if not target_labels:
+            return False
+        cache = getattr(self, "_subclass_cache", None)
+        if cache is None:
+            cache = self._subclass_cache = {}
+        key = (expected, tuple(target_labels))
+        if key in cache:
+            return cache[key]
+        rows = nb.get_data(
+            """
+            MATCH (leaf:OntologyNode)-[:SUBCLASS_OF*0..]->(anc:OntologyNode)
+            WHERE leaf.label IN $labels AND anc.label = $expected
+            RETURN count(leaf) > 0 AS ok
+            """,
+            {"labels": list(target_labels), "expected": expected},
+        )
+        ok = bool(rows and rows[0]["ok"])
+        cache[key] = ok
+        return ok
+
     def validate_relationships(self, nb, nid, violations):
         """Validate that all relationships on a node comply with the ontology."""
+        # nid-agnostic: a relationship is judged by what it connects (endpoint
+        # labels), not by whether the neighbor is a nid-bearing managed node.
+        # Edges into nid-less substrate (e.g. raw :Directory/:File) are validated
+        # by their labels like any other, so a node's ANCHORED_IN → :Directory
+        # stays valid whether or not that Directory carries a nid.
         query = """
         MATCH (n {nid: $nid})-[r]->(target)
-        WHERE target.nid IS NOT NULL
         RETURN type(r) as rel_type, labels(target) as target_labels, "outgoing" as direction
         UNION
         MATCH (source)-[r]->(n {nid: $nid})
-        WHERE source.nid IS NOT NULL
         RETURN type(r) as rel_type, labels(source) as target_labels, "incoming" as direction
         """
         relationships = nb.get_data(query, {"nid": nid})
@@ -375,7 +404,9 @@ class Metarelationships(UserDict):
             for k in candidate_keys:
                 m = self.data[k]
                 expected = m.target if direction == "outgoing" else m.source
-                if expected in target_labels:
+                if expected in target_labels or self._subclass_matches(
+                    nb, target_labels, expected
+                ):
                     peer_match = k
                     break
             if peer_match is not None:
@@ -388,13 +419,20 @@ class Metarelationships(UserDict):
                 )
                 matched_keys.update(candidate_keys)
 
+        # The type+direction of every relationship an actual edge satisfied. A
+        # relationship declaring several HAS_TARGETs is disjunctive — an edge to
+        # ANY one target satisfies it — so each target became its own key but the
+        # requirement is met as a group.
+        satisfied = {
+            (self.data[k].label, k.rsplit(":", 1)[-1]) for k in matched_keys
+        }
         for key, mr in self.data.items():
             if key in matched_keys:
                 continue
             direction = key.rsplit(":", 1)[-1]
-            if direction == "outgoing" and mr.is_source_required():
-                violations.missing_relationships.append(mr)
-            elif direction == "incoming" and mr.is_target_required():
+            required = (mr.is_source_required() if direction == "outgoing"
+                        else mr.is_target_required())
+            if required and (mr.label, direction) not in satisfied:
                 violations.missing_relationships.append(mr)
 
         return violations
