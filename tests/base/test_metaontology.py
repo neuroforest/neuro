@@ -21,6 +21,9 @@ class TestMetaontology:
         mp = Metaproperties.from_ontology(nb_meta, "Node")
         assert "nid" in mp
         assert mp["nid"].is_required()
+        assert "color" in mp
+        assert mp["color"].property_type == "Color"
+        assert not mp["color"].is_required()
 
     def test_metaontology(self, nb_meta):
         result = nb_meta.metaontology.is_ontology_valid()
