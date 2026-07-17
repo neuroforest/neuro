@@ -64,6 +64,28 @@ class TestString:
         assert not self.mp.validate(None)
 
 
+class TestColor:
+    mp = _make_metaproperty("Color")
+
+    def test_valid(self):
+        assert self.mp.validate("#ff0000")
+
+    def test_uppercase(self):
+        assert not self.mp.validate("#FF0000")
+
+    def test_shorthand(self):
+        assert not self.mp.validate("#f00")
+
+    def test_named(self):
+        assert not self.mp.validate("red")
+
+    def test_alpha(self):
+        assert not self.mp.validate("#ff000000")
+
+    def test_not_a_string(self):
+        assert not self.mp.validate(0xff0000)
+
+
 class TestLabel:
     def test_node_valid(self):
         mp = _make_metaproperty("Label", "OntologyNode")

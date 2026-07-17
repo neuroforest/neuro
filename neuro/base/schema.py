@@ -24,11 +24,16 @@ def _check_label(value, mp):
     return bool(re.match(pattern, value))
 
 
+def _check_color(value, _mp):
+    return isinstance(value, str) and bool(re.match(r"^#[0-9a-f]{6}$", value))
+
+
 HARDCODED_VALIDATORS = {
     "String": lambda v, _mp: isinstance(v, str),
     "Uuid": lambda v, _mp: Uuid.is_valid_uuid_v4(v),
     "OntologyProperty": lambda _v, _mp: False,
     "Label": _check_label,
+    "Color": _check_color,
 }
 
 
