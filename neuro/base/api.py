@@ -35,7 +35,40 @@ class NeuroBase:
         self.metadata = MetadataAccessor(self)
         self.tiddlers = TiddlerAccessor(self)
 
+    def _verify_store_id(self):
+        """Refuse to act on a base other than the one config names.
+
+        BASE_NAME says which base we *mean*; NEO4J_URI decides which we
+        *reach*. Nothing reconciles the two, so a stale ENV or an inherited
+        default silently operates on the wrong base — a `clear` aimed at one
+        base wiping another, reporting success either way.
+
+        Neo4j's store id is intrinsic and unique per base, so pinning the
+        expected value in config catches this client-side, without writing a
+        marker into every base. Opt-in: unset NEO4J_STORE_ID means no check,
+        so unpinned bases and first-time bootstraps behave exactly as before.
+        """
+        expected = os.getenv("NEO4J_STORE_ID")
+        if not expected or not getattr(self, "driver", None):
+            return
+        try:
+            with self.driver.session() as session:
+                record = session.run("CALL db.info() YIELD id RETURN id").single()
+        except Exception:  # unreachable/unauthorised is reported elsewhere
+            return
+        actual = record["id"] if record else None
+        if actual and actual != expected:
+            print(
+                f"{terminal_style.FAIL} Refusing to use "
+                f"{os.getenv('NEO4J_URI', '?')}: expected "
+                f"{os.getenv('BASE_NAME', '?')} (store {expected[:8]}…) but "
+                f"found store {actual[:8]}…",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     def __enter__(self):
+        self._verify_store_id()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
