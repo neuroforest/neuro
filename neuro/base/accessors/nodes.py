@@ -161,9 +161,12 @@ class NodeAccessor(Accessor):
         - **Delete**: nodes previously DEFINES-linked from this metadata that
           are absent from the file are `DETACH DELETE`d.
         - **Relationships**: edges with both endpoints in the file are
-          reconciled — those not in the file are deleted, those in the file
-          are upserted with property replacement. Edges with one foot outside
-          the file are left alone.
+          reconciled *within the edge types the file declares* — an edge of a
+          managed type not in the file is deleted, those in the file are
+          upserted with property replacement. Edges of a type the file never
+          declares (and edges with one foot outside the file) are left alone,
+          so a file that declares stub nodes only to hang its own edge type off
+          them can't reap the foreign structural edges among those nodes.
 
         Extra labels added to retained nodes by curation are preserved.
         `metadata_label` lets the same machinery anchor different metadata
@@ -219,19 +222,33 @@ class NodeAccessor(Accessor):
             )
 
     def _reconcile_internal_edges(self, nids, keep_triples):
-        """Delete every edge `(a)-[r]->(b)` where both endpoints have a
-        `nid` in `nids` and the `(from, to, type)` triple is not in
-        `keep_triples`. Edges with one foot outside `nids` are left alone."""
+        """Delete every edge `(a)-[r]->(b)` where both endpoints have a `nid`
+        in `nids`, the edge's **type is one the file declares**, and the
+        `(from, to, type)` triple is not in `keep_triples`. Edges with one foot
+        outside `nids` are left alone.
+
+        The type gate matters when a file declares a node purely to be a
+        relationship *target* (e.g. metrics knowledge declaring stub
+        `OntologyNode`s for the classes its `APPLIES_TO` edges point at). Such
+        stubs make the file's node set span a slice of the pre-existing graph —
+        and a blanket "delete any internal edge not in the file" would then
+        reap foreign-typed structural edges the file never owned (the
+        `SUBCLASS_OF` edges among those classes). A file authoritatively owns
+        only the edge *types* it declares, so reconciliation is scoped to them;
+        a type absent from the file is left entirely untouched."""
+        managed_types = sorted({t for _, _, t in keep_triples})
         self._nb.run_query(
             """
             MATCH (a)-[r]->(b)
             WHERE a.nid IN $nids
               AND b.nid IN $nids
+              AND type(r) IN $managed
             WITH r, [a.nid, b.nid, type(r)] as triple
             WHERE NOT triple IN $keep
             DELETE r
             """,
-            {"nids": list(nids), "keep": [list(t) for t in keep_triples]},
+            {"nids": list(nids), "managed": managed_types,
+             "keep": [list(t) for t in keep_triples]},
         )
 
     def export_nfx(self, path, label=None, name="", description="", version="",
