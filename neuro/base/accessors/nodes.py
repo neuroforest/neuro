@@ -160,6 +160,11 @@ class NodeAccessor(Accessor):
           (not merged) — keys absent from the file are removed.
         - **Delete**: nodes previously DEFINES-linked from this metadata that
           are absent from the file are `DETACH DELETE`d.
+        - **Foreign references**: a node whose nid is in `dependency_nids` is
+          owned by a dependency and only re-declared here to anchor this file's
+          own edges; it is left entirely untouched (not property-replaced, not
+          DEFINES-linked, not pruned), so its owner's properties survive — the
+          same treatment ontology import gives a cross-ontology reference.
         - **Relationships**: edges with both endpoints in the file are
           reconciled *within the edge types the file declares* — an edge of a
           managed type not in the file is deleted, those in the file are
@@ -195,7 +200,19 @@ class NodeAccessor(Accessor):
         nfx_nids = list(doc.node_nids)
         meta.prune(metadata_label, doc.nid, nfx_nids)
 
+        # A node whose nid belongs to a dependency is a *foreign reference* — the
+        # file re-declares it only so its own edges have a resolvable endpoint
+        # (and so the file validates standalone). Its properties are the owner's,
+        # not this file's: `replace=True` would strip whatever the file omits
+        # (e.g. the `color` an OntologyNode class carries), and `link_defines`
+        # would make this metadata co-own it and later prune it. So ensure it
+        # exists but touch nothing else — exactly how ontology import treats a
+        # cross-ontology reference. `_reconcile_internal_edges` still sees it via
+        # `nfx_nids`, so edges landing on it are managed as before.
+        foreign = set(dependency_nids or ())
         for entry in doc.nodes:
+            if entry["nid"] in foreign:
+                continue
             properties = dict(entry.get("properties", {}))
             properties["nid"] = entry["nid"]
             node = Node(labels=entry["labels"], properties=properties)
