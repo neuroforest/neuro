@@ -6,6 +6,8 @@ __pycache__/
 /.idea
 /.pytest_cache
 /build
+# wheel build artefacts — spectro's scripts/deploy.sh builds into dist/
+/dist
 /neuro.egg-info
 /temp
 /venv
