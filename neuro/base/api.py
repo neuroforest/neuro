@@ -116,6 +116,32 @@ class NeuroBase:
         result = self.get_data(query, params)
         return result[0]["count"]
 
+    def descendant_labels(self, label):
+        """
+        Every class label at or below `label` in the ontology hierarchy.
+
+        Instances carry only their own leaf label, so `MATCH (n:PipelineRun)`
+        matches nothing even though every `*Run` class subclasses it. Resolve
+        the archetype to its concrete labels first:
+
+            labels = nb.descendant_labels("PipelineRun")
+            nb.get_data(
+                "MATCH (n) WHERE any(l IN labels(n) WHERE l IN $labels) "
+                "RETURN n", {"labels": labels}
+            )
+
+        Returns `[label]` when the class has no subclasses, and `[]` when no
+        such class is declared.
+        """
+        query = """
+        MATCH (c:OntologyNode {label: $label})
+        OPTIONAL MATCH (d:OntologyNode)-[:SUBCLASS_OF*]->(c)
+        WITH c, collect(DISTINCT d.label) AS descendants
+        RETURN descendants + [c.label] AS labels
+        """
+        result = self.get_data(query, {"label": label})
+        return sorted(result[0]["labels"]) if result else []
+
     def clear(self, confirm=False):
         if not confirm:
             raise ValueError("Refusing to clear database without confirm=True")
