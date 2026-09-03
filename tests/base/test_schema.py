@@ -253,3 +253,60 @@ class TestRelationshipRows:
             (" ", "Node", "←", "OF_SUBJECT", "WebVisit", "sirin-system v3.8"),
             (" ", "WebVisit", "→", "ON_PAGE", "WebPage", "sirin-system v3.8"),
         ]
+
+
+class TestLineageLines:
+    """Multiple inheritance is a DAG; the Lineage block must not flatten it."""
+
+    @staticmethod
+    def _info(label, parents):
+        from neuro.base.schema import OntologyNodeInfo
+        info = object.__new__(OntologyNodeInfo)
+        info.label = label
+        info.parents = parents
+        return info
+
+    def test_lineage_lines_chain(self):
+        info = self._info("EntityPage", {
+            "EntityPage": ["WebPage"], "WebPage": ["Node"], "Node": ["Object"],
+            "Object": [],
+        })
+        assert info.lineage_lines() == [
+            "   EntityPage ➜  WebPage ➜  Node ➜  Object",
+        ]
+
+    def test_lineage_lines_branching(self):
+        from neuro.utils import terminal_style
+        # MissedCall is both a PhoneCall and a Message; Object is reached down
+        # both branches and is the same node, so the repeat is dimmed.
+        info = self._info("MissedCall", {
+            "MissedCall": ["Message", "PhoneCall"], "Message": ["TimePoint"],
+            "TimePoint": ["Object"], "PhoneCall": ["Object"], "Object": [],
+        })
+        dim = f"{terminal_style.DIM}Object{terminal_style.RESET}"
+        assert info.lineage_lines() == [
+            "   MissedCall",
+            "   ├─ Message ➜  TimePoint ➜  Object",
+            f"   └─ PhoneCall ➜  {dim}",
+        ]
+
+    def test_lineage_lines_nested(self):
+        from neuro.utils import terminal_style
+        info = self._info("Leaf", {
+            "Leaf": ["Left", "Right"], "Left": ["Upper", "Lower"],
+            "Upper": ["Object"], "Lower": [], "Right": ["Object"], "Object": [],
+        })
+        dim = f"{terminal_style.DIM}Object{terminal_style.RESET}"
+        assert info.lineage_lines() == [
+            "   Leaf",
+            "   ├─ Left",
+            "   │  ├─ Lower",
+            "   │  └─ Upper ➜  Object",
+            f"   └─ Right ➜  {dim}",
+        ]
+
+    def test_lineage_lines_cycle(self):
+        from neuro.utils import terminal_style
+        info = self._info("A", {"A": ["B"], "B": ["A"]})
+        dim = f"{terminal_style.DIM}A{terminal_style.RESET}"
+        assert info.lineage_lines() == [f"   A ➜  B ➜  {dim}"]

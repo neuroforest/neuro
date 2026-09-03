@@ -473,15 +473,27 @@ class OntologyNodeInfo:
         self.get_relationships()
 
     def get_lineage(self):
-        query = f"""
-        MATCH (ion:OntologyNode {{label: "{self.label}"}})
-        MATCH (ion)-[:SUBCLASS_OF*0..]->(on:OntologyNode)
-        RETURN on.label as lineage_element
+        """Ancestor closure of this type, nearest first, plus the parent map.
+
+        Multiple inheritance makes ancestry a DAG, not a chain: `MissedCall`
+        is both a `PhoneCall` and a `Message`, and `Object` is reached down
+        both branches. So two things come back — `lineage`, the flat
+        de-duplicated set every other consumer wants (membership tests,
+        per-origin ontology lookup), and `parents`, which keeps the shape for
+        `lineage_lines` to render.
+        """
+        query = """
+        MATCH path = (:OntologyNode {label: $label})-[:SUBCLASS_OF*0..]->(on:OntologyNode)
+        WITH on, min(length(path)) as distance
+        OPTIONAL MATCH (on)-[:SUBCLASS_OF]->(p:OntologyNode)
+        RETURN on.label as label, distance, collect(DISTINCT p.label) as parents
+        ORDER BY distance, label
         """
         data = self.nb.get_data(query, parameters={"label": self.label})
         if not data:
             raise ValueError(f"No ontology node found with label: {self.label}")
-        self.lineage = [next(iter(record.values())) for record in data]
+        self.lineage = [r["label"] for r in data]
+        self.parents = {r["label"]: r["parents"] for r in data}
 
     def get_descendants(self):
         query = """
@@ -515,6 +527,53 @@ class OntologyNodeInfo:
     def get_relationships(self):
         self.metarelationships = Metarelationships.from_ontology(self.nb, self.label)
 
+    def _lineage_chain(self, label, seen):
+        """Collapse a run of single-parent hops into one `A ➜ B ➜ C` string.
+
+        Returns the string and the parents of the label that ended the run —
+        empty when the run reached a root or re-entered an already-rendered
+        ancestor. A repeated ancestor is dimmed and stops the walk: it is the
+        same node shown a second time, not a second node, and dimming it also
+        makes the walk safe against a cycle in `SUBCLASS_OF`.
+        """
+        DIM, RST = terminal_style.DIM, terminal_style.RESET
+        parts, current = [], label
+        while True:
+            if current in seen:
+                parts.append(f"{DIM}{current}{RST}")
+                return " ➜  ".join(parts), []
+            parts.append(current)
+            seen.add(current)
+            parents = self.parents.get(current, [])
+            if len(parents) != 1:
+                return " ➜  ".join(parts), parents
+            current = parents[0]
+
+    def lineage_lines(self):
+        """Display lines for the Lineage block.
+
+        A single-parent ancestry stays one arrow chain, as before. A type with
+        several parents branches instead of being flattened — the old join over
+        `lineage` printed `MissedCall ➜ PhoneCall ➜ Object ➜ Message ➜
+        TimePoint ➜ Object`, which reads as `Object` subclassing `Message` and
+        shows `Object` twice as if they were different nodes.
+        """
+        lines, seen = [], set()
+
+        def emit(label, prefix, child_prefix):
+            chain, parents = self._lineage_chain(label, seen)
+            lines.append(prefix + chain)
+            # Ordering is a display concern — nothing in the graph ranks one
+            # parent above another, so branch alphabetically and stay stable.
+            for i, parent in enumerate(sorted(parents)):
+                last = i == len(parents) - 1
+                emit(parent,
+                     child_prefix + ("└─ " if last else "├─ "),
+                     child_prefix + ("   " if last else "│  "))
+
+        emit(self.label, "   ", "   ")
+        return lines
+
     def display(self):
         B, DIM, RST = terminal_style.BOLD, terminal_style.DIM, terminal_style.RESET
         print(f"{B}{self.label}{RST}")
@@ -525,7 +584,8 @@ class OntologyNodeInfo:
             print(f"  {self.source_ontology} v{self.source_version}")
         print()
         print(f"{B}Lineage{RST}")
-        print(f"   {' ➜  '.join(self.lineage)}")
+        for line in self.lineage_lines():
+            print(line)
 
         print(f"\n{B}Subtypes{RST}")
         if self.descendants:
