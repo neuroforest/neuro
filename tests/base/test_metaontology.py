@@ -245,3 +245,144 @@ class TestPropertyOverrides:
         assert len(v.override_violations) == 1
         ov = v.override_violations[0]
         assert ov["type_relation"] == "unrelated"
+
+
+class TestImportReconciliation:
+    """`import_nfx` must not destroy what the file being imported does not own.
+
+    The old clear — `MATCH (m:OntologyMetadata {nid})-[:DEFINES]->(n) DETACH
+    DELETE n` — is scoped by who defines a node in the graph's *last* state,
+    not by what the file on disk declares, and `DETACH` takes every edge on
+    those nodes with them. A hoist across files is exactly the operation that
+    makes those two disagree (PLAN-2026-143, issue #25).
+    """
+
+    CORE = "aed7bdc4-bde9-4bff-b083-aa74ec4166fb"
+    DEPENDENT = "5f40d75f-1a92-4fd1-9d15-64c176146e64"
+    KNOWLEDGE = "6c223d58-5249-4849-adc7-65da90aca557"
+    SHARED = "5e7160af-c5bd-451d-b9ba-2a06a31811f8"
+    LOCAL = "446d7dbd-e637-4f40-a3d0-3f2a8967a30d"
+    METRIC = "d7076410-3ff0-4022-9fbc-d93c4af4df34"
+    DROPPED = "500dc293-d43d-4f10-8170-ae9663c80b2c"
+
+    @staticmethod
+    def _write(tmp_path, name, nid, version, nodes, relationships=(), dependencies=()):
+        from neuro.base import nfx
+        path = tmp_path / f"{name}-{version}.nfx"
+        nfx.write(path, nfx.Nfx(
+            nid=nid, type="ontology", name=name, version=version,
+            dependencies=tuple(dependencies), nodes=tuple(nodes),
+            relationships=tuple(relationships),
+        ))
+        return path
+
+    @classmethod
+    def _node(cls, nid, label):
+        return {"nid": nid, "labels": ["OntologyNode"], "properties": {"label": label}}
+
+    def _exists(self, nb, nid):
+        return bool(nb.get_data("MATCH (n {nid: $nid}) RETURN n.nid", {"nid": nid}))
+
+    def _edge(self, nb, from_nid, to_nid, rel_type):
+        rows = nb.get_data(
+            f"MATCH (a {{nid: $f}})-[:{rel_type}]->(b {{nid: $t}}) RETURN count(*) AS c",
+            {"f": from_nid, "t": to_nid},
+        )
+        return rows[0]["c"] > 0
+
+    def test_hoist_keeps_node(self, nb_meta, tmp_path):
+        """Moving a node into a dependency must not lose it (issue #25)."""
+        # Release 1: the dependent owns both nodes.
+        old = self._write(
+            tmp_path, "dependent", self.DEPENDENT, "1.0",
+            [self._node(self.SHARED, "Shared"), self._node(self.LOCAL, "Local")],
+        )
+        nb_meta.metaontology.import_nfx(old)
+        assert self._exists(nb_meta, self.SHARED)
+
+        # Release 2: Shared is hoisted into the core; the dependent declares
+        # only Local and points at Shared through the dependency.
+        core = self._write(
+            tmp_path, "core", self.CORE, "1.0", [self._node(self.SHARED, "Shared")],
+        )
+        new = self._write(
+            tmp_path, "dependent", self.DEPENDENT, "1.1",
+            [self._node(self.LOCAL, "Local")],
+            [{"from": self.LOCAL, "to": self.SHARED, "type": "SUBCLASS_OF"}],
+            [(self.CORE, "1.0")],
+        )
+        nb_meta.metaontology.import_nfx(core)
+        nb_meta.metaontology.import_nfx(new)
+
+        assert self._exists(nb_meta, self.SHARED), "hoisted node deleted by its old owner"
+        assert self._edge(nb_meta, self.LOCAL, self.SHARED, "SUBCLASS_OF")
+
+    def test_reimport_keeps_dependent_edges(self, nb_meta, tmp_path):
+        """Re-importing a core must not take dependents' edges into it."""
+        core = self._write(
+            tmp_path, "core", self.CORE, "1.0", [self._node(self.SHARED, "Shared")],
+        )
+        dependent = self._write(
+            tmp_path, "dependent", self.DEPENDENT, "1.0",
+            [self._node(self.LOCAL, "Local")],
+            [{"from": self.LOCAL, "to": self.SHARED, "type": "SUBCLASS_OF"}],
+            [(self.CORE, "1.0")],
+        )
+        nb_meta.metaontology.import_nfx(core)
+        nb_meta.metaontology.import_nfx(dependent)
+        assert self._edge(nb_meta, self.LOCAL, self.SHARED, "SUBCLASS_OF")
+
+        bumped = self._write(
+            tmp_path, "core", self.CORE, "1.1", [self._node(self.SHARED, "Shared")],
+        )
+        nb_meta.metaontology.import_nfx(bumped)
+
+        assert self._edge(nb_meta, self.LOCAL, self.SHARED, "SUBCLASS_OF"), \
+            "dependent's SUBCLASS_OF severed by the core's re-import"
+
+    def test_reimport_keeps_instance_edges(self, nb_meta, tmp_path):
+        """Edges from outside the ontology layer must survive a re-import.
+
+        Mode 3 of PLAN-2026-143: measured components and metric definitions
+        point straight at `OntologyNode`s, and no ontology re-import restores
+        those edges once `DETACH` has taken them.
+        """
+        core = self._write(
+            tmp_path, "core", self.CORE, "1.0", [self._node(self.SHARED, "Shared")],
+        )
+        nb_meta.metaontology.import_nfx(core)
+        nb_meta.run_query(
+            """
+            MATCH (c {nid: $shared})
+            CREATE (k:KnowledgeMetadata {nid: $knowledge, name: 'pages'})
+            CREATE (m:MetricDefinition {nid: $metric, label: 'Coverage'})
+            CREATE (k)-[:DEFINES]->(m)
+            CREATE (m)-[:APPLIES_TO]->(c)
+            """,
+            {"shared": self.SHARED, "knowledge": self.KNOWLEDGE, "metric": self.METRIC},
+        )
+
+        bumped = self._write(
+            tmp_path, "core", self.CORE, "1.1", [self._node(self.SHARED, "Shared")],
+        )
+        nb_meta.metaontology.import_nfx(bumped)
+
+        assert self._edge(nb_meta, self.METRIC, self.SHARED, "APPLIES_TO"), \
+            "APPLIES_TO from a knowledge-defined node severed by the re-import"
+
+    def test_undeclared_node_is_orphaned_not_deleted(self, nb_meta, tmp_path):
+        """A node dropped from a file is kept and un-DEFINES'd, never deleted."""
+        first = self._write(
+            tmp_path, "core", self.CORE, "1.0",
+            [self._node(self.SHARED, "Shared"), self._node(self.DROPPED, "Dropped")],
+        )
+        nb_meta.metaontology.import_nfx(first)
+
+        second = self._write(
+            tmp_path, "core", self.CORE, "1.1", [self._node(self.SHARED, "Shared")],
+        )
+        nb_meta.metaontology.import_nfx(second)
+
+        assert self._exists(nb_meta, self.DROPPED), "undeclared node must be kept"
+        assert not self._edge(nb_meta, self.CORE, self.DROPPED, "DEFINES"), \
+            "the dropping ontology must release its DEFINES"

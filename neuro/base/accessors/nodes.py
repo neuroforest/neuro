@@ -254,7 +254,7 @@ class NodeAccessor(Accessor):
         only the edge *types* it declares, so reconciliation is scoped to them;
         a type absent from the file is left entirely untouched."""
         managed_types = sorted({t for _, _, t in keep_triples})
-        self._nb.run_query(
+        rows = self._nb.get_data(
             """
             MATCH (a)-[r]->(b)
             WHERE a.nid IN $nids
@@ -262,11 +262,14 @@ class NodeAccessor(Accessor):
               AND type(r) IN $managed
             WITH r, [a.nid, b.nid, type(r)] as triple
             WHERE NOT triple IN $keep
-            DELETE r
+            WITH collect(r) as pruned
+            FOREACH (r IN pruned | DELETE r)
+            RETURN size(pruned) as pruned
             """,
             {"nids": list(nids), "managed": managed_types,
              "keep": [list(t) for t in keep_triples]},
         )
+        return rows[0]["pruned"] if rows else 0
 
     def export_nfx(self, path, label=None, name="", description="", version="",
                    query=None, query_params=None, **properties):

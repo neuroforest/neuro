@@ -374,6 +374,64 @@ class Metaontology:
             )
         return resolve
 
+    def _release_undeclared(self, ontology_nid, declared):
+        """Drop this ontology's `DEFINES` from nodes it no longer declares.
+
+        The nodes themselves are kept. The set of edges pointing *into* an
+        ontology node is open — measured components and metric definitions
+        reach into the ontology layer from outside it — so a `DETACH DELETE`
+        here severs edges that no ontology import will ever restore, silently
+        (PLAN-2026-143). Releasing the claim instead makes a hoist a
+        re-parenting, and leaves anything genuinely dropped queryable as an
+        orphan: `MATCH (n:OntologyNode) WHERE NOT (n)<-[:DEFINES]-()`.
+
+        Returns the `released` / `reparented` / `orphaned` slice of the import
+        report. `reparented` is normal (another ontology has claimed the nid);
+        `orphaned` is what needs a human, especially where `edges` is non-zero.
+        """
+        rows = self._nb.get_data(
+            """
+            MATCH (m:OntologyMetadata {nid: $nid})-[d:DEFINES]->(n)
+            WHERE NOT n.nid IN $declared
+            OPTIONAL MATCH (other:OntologyMetadata)-[:DEFINES]->(n)
+            WHERE other.nid <> $nid
+            WITH n, d, collect(DISTINCT other.name) AS claimed_by
+            DELETE d
+            RETURN n.nid AS nid, coalesce(n.label, n.nid) AS label, claimed_by
+            """,
+            {"nid": ontology_nid, "declared": list(declared)},
+        )
+        orphan_nids = [r["nid"] for r in rows if not r["claimed_by"]]
+        inbound = self._foreign_inbound(orphan_nids)
+        return {
+            "released": [r["label"] for r in rows],
+            "reparented": [(r["label"], r["claimed_by"]) for r in rows if r["claimed_by"]],
+            "orphaned": [(r["label"], inbound.get(r["nid"], 0))
+                         for r in rows if not r["claimed_by"]],
+        }
+
+    def _foreign_inbound(self, nids):
+        """nid -> number of inbound edges whose source sits outside the
+        ontology layer. "Outside" is structural, not a label list: a peer that
+        no `OntologyMetadata` defines and that is not itself metadata. Stated
+        as that general predicate because any `MeasuredComponent` subclass may
+        grow an edge into the ontology at any time."""
+        if not nids:
+            return {}
+        rows = self._nb.get_data(
+            """
+            MATCH (n)<-[r]-(o)
+            WHERE n.nid IN $nids
+              AND NOT any(lbl IN labels(o) WHERE lbl IN
+                    ['OntologyMetadata', 'KnowledgeMetadata'])
+              AND NOT (o)<-[:DEFINES]-(:OntologyMetadata)
+              AND NOT o.nid IN $nids
+            RETURN n.nid AS nid, count(r) AS edges
+            """,
+            {"nids": list(nids)},
+        )
+        return {r["nid"]: r["edges"] for r in rows}
+
     def import_nfx(self, path, index=None, on_import=None, _depth=0):
         """Import an ontology from an NFX file.
 
@@ -405,15 +463,13 @@ class Metaontology:
                 f"NFX validation failed for {path}:\n" + "\n".join(msgs)
             )
 
-        # Clear and rewrite this ontology's nodes.
+        # Reconcile this ontology's nodes. Never a blanket clear: see
+        # `_release_undeclared`.
+        declared = [entry["nid"] for entry in doc.nodes]
+        report = {"nodes": len(declared), "released": [], "reparented": [],
+                  "orphaned": [], "edges_pruned": 0}
         if doc.nid and doc.name:
-            self._nb.run_query(
-                """
-                MATCH (m:OntologyMetadata {nid: $nid})-[:DEFINES]->(n)
-                DETACH DELETE n
-                """,
-                {"nid": doc.nid},
-            )
+            report.update(self._release_undeclared(doc.nid, declared))
             properties = {k: v for k, v in (
                 ("name", doc.name), ("version", doc.version), ("description", doc.description),
                 ("type", doc.type),
@@ -434,8 +490,10 @@ class Metaontology:
 
         for entry in doc.nodes:
             labels_str = ":".join(entry["labels"])
+            # `SET n =` (not `+=`): a property dropped from the file must go.
+            # The old clear achieved that by deleting the node first.
             self._nb.run_query(
-                f"MERGE (n:{labels_str} {{nid: $nid}}) SET n += $props",
+                f"MERGE (n:{labels_str} {{nid: $nid}}) SET n = $props, n.nid = $nid",
                 {"nid": entry["nid"], "props": entry.get("properties", {})},
             )
             if doc.nid:
@@ -448,6 +506,13 @@ class Metaontology:
                     {"ontology_nid": doc.nid, "node_nid": entry["nid"]},
                 )
 
+        # Prune edges this file used to declare and no longer does. Type-scoped
+        # and confined to the nids this file touches, so foreign edge types
+        # (APPLIES_TO, RENDERS) and other files' edges are never candidates.
+        keep = [(r["from"], r["to"], r["type"]) for r in doc.relationships]
+        scope = set(declared) | {nid for triple in keep for nid in triple[:2]}
+        report["edges_pruned"] = self._nb.nodes._reconcile_internal_edges(scope, keep)
+
         for rel in doc.relationships:
             self._nb.run_query(
                 f"""
@@ -459,6 +524,8 @@ class Metaontology:
                 {"from_id": rel["from"], "to_id": rel["to"],
                  "props": rel.get("properties", {})},
             )
+
+        return report
 
     def is_ontology_valid(self):
         """Validate metaontology structure. Returns True if valid, False otherwise."""
