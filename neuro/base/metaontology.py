@@ -511,7 +511,9 @@ class Metaontology:
         # (APPLIES_TO, RENDERS) and other files' edges are never candidates.
         keep = [(r["from"], r["to"], r["type"]) for r in doc.relationships]
         scope = set(declared) | {nid for triple in keep for nid in triple[:2]}
-        report["edges_pruned"] = self._nb.nodes._reconcile_internal_edges(scope, keep)
+        report["edges_pruned"] = self._nb.nodes._reconcile_internal_edges(
+            scope, keep, sources=declared
+        )
 
         for rel in doc.relationships:
             self._nb.run_query(

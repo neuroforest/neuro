@@ -238,11 +238,20 @@ class NodeAccessor(Accessor):
                 },
             )
 
-    def _reconcile_internal_edges(self, nids, keep_triples):
+    def _reconcile_internal_edges(self, nids, keep_triples, sources=None):
         """Delete every edge `(a)-[r]->(b)` where both endpoints have a `nid`
         in `nids`, the edge's **type is one the file declares**, and the
         `(from, to, type)` triple is not in `keep_triples`. Edges with one foot
         outside `nids` are left alone.
+
+        `sources`, when given, additionally restricts the tail: only edges
+        leaving a node the file itself *declares* are candidates. Without it a
+        file that merely references both endpoints of a foreign edge reaps it
+        — e.g. `sequencing` declaring `ShovillRun SUBCLASS_OF PipelineRun` and
+        `Assembly SUBCLASS_OF Node` puts both `PipelineRun` and `Node` in scope
+        and silently deletes `provenance`\'s own `PipelineRun SUBCLASS_OF Node`.
+        A file owns the edges leaving its own nodes, not every edge between
+        nodes it happens to name.
 
         The type gate matters when a file declares a node purely to be a
         relationship *target* (e.g. metrics knowledge declaring stub
@@ -260,6 +269,7 @@ class NodeAccessor(Accessor):
             WHERE a.nid IN $nids
               AND b.nid IN $nids
               AND type(r) IN $managed
+              AND ($sources IS NULL OR a.nid IN $sources)
             WITH r, [a.nid, b.nid, type(r)] as triple
             WHERE NOT triple IN $keep
             WITH collect(r) as pruned
@@ -267,7 +277,8 @@ class NodeAccessor(Accessor):
             RETURN size(pruned) as pruned
             """,
             {"nids": list(nids), "managed": managed_types,
-             "keep": [list(t) for t in keep_triples]},
+             "keep": [list(t) for t in keep_triples],
+             "sources": None if sources is None else list(sources)},
         )
         return rows[0]["pruned"] if rows else 0
 
