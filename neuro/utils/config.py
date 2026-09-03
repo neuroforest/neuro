@@ -48,25 +48,30 @@ def resolve_xdg_paths():
     NF_CONFIG is shared across environments (holds env files).
     NF_DATA uses XDG_DATA_HOME for production, XDG_STATE_HOME for develop/testing.
     NF_STATE, NF_CACHE are always namespaced per environment.
+
+    Derivation is unconditional: this function is the only producer of these
+    four variables, so a value already in os.environ was inherited from a parent
+    process or left behind by an earlier config.main() under a different
+    APP_NAME/ENV. Honouring it made the declared identity lose to an ambient one
+    — testing wrote into production directories and sirin queries answered from
+    nbase (issue #13, PLAN-2026-146).
     """
     home = Path.home()
     app_name = os.environ["APP_NAME"].lower()
     env_name = os.environ["ENV"].lower()
 
     # Config is shared (holds env, env.{name} overrides)
-    if "NF_CONFIG" not in os.environ:
-        base = os.getenv("XDG_CONFIG_HOME", home / ".config")
-        os.environ["NF_CONFIG"] = str(Path(base) / app_name)
+    base = os.getenv("XDG_CONFIG_HOME", home / ".config")
+    os.environ["NF_CONFIG"] = str(Path(base) / app_name)
     logging.debug(f"XDG path NF_CONFIG={os.environ['NF_CONFIG']}")
 
     # Data: production uses XDG_DATA_HOME, develop/testing use XDG_STATE_HOME
-    if "NF_DATA" not in os.environ:
-        if env_name == "production":
-            base = os.getenv("XDG_DATA_HOME", home / ".local" / "share")
-            os.environ["NF_DATA"] = str(Path(base) / app_name)
-        else:
-            base = os.getenv("XDG_STATE_HOME", home / ".local" / "state")
-            os.environ["NF_DATA"] = str(Path(base) / app_name / env_name)
+    if env_name == "production":
+        base = os.getenv("XDG_DATA_HOME", home / ".local" / "share")
+        os.environ["NF_DATA"] = str(Path(base) / app_name)
+    else:
+        base = os.getenv("XDG_STATE_HOME", home / ".local" / "state")
+        os.environ["NF_DATA"] = str(Path(base) / app_name / env_name)
     logging.debug(f"XDG path NF_DATA={os.environ['NF_DATA']}")
 
     # State and cache: always namespaced per environment
@@ -76,8 +81,7 @@ def resolve_xdg_paths():
     }
 
     for var, base in xdg_map.items():
-        if var not in os.environ:
-            os.environ[var] = str(Path(base) / app_name / env_name)
+        os.environ[var] = str(Path(base) / app_name / env_name)
         logging.debug(f"XDG path {var}={os.environ[var]}")
 
 
