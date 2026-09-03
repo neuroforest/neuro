@@ -199,3 +199,57 @@ class TestMetarelationship:
         assert mr.is_target_required()
         assert not mr.is_source_required()
         assert not self.mr.is_target_required()
+
+    def test_ontology_label(self):
+        mr = Metarelationship({"relationship": "APPLIES_TO", "source": "MetricDefinition",
+                               "target": "OntologyNode", "relationship_type": "HAS_RELATIONSHIP",
+                               "target_link_type": "HAS_TARGET",
+                               "ontology": "sirin-metrics", "ontology_version": "3.27"})
+        assert mr.ontology_label() == "sirin-metrics v3.27"
+        assert self.mr.ontology_label() == ""
+
+
+class TestRelationshipRows:
+    """A class pointing at its own ancestor must not print twice."""
+
+    @staticmethod
+    def _info(lineage, records):
+        from neuro.base.schema import (Metarelationship, Metarelationships,
+                                       OntologyNodeInfo)
+        info = object.__new__(OntologyNodeInfo)
+        info.lineage = lineage
+        info.metarelationships = Metarelationships(lineage[0])
+        for key, record in records:
+            info.metarelationships[key] = Metarelationship(record)
+        return info
+
+    def test_relationship_rows(self):
+        # One declaration, WebVisit -[:OF_SUBJECT]-> Node, collected twice
+        # because Node is WebVisit's own ancestor.
+        record = {"relationship": "OF_SUBJECT", "source": "WebVisit", "target": "Node",
+                  "relationship_type": "HAS_RELATIONSHIP", "target_link_type": "HAS_TARGET",
+                  "ontology": "sirin-system", "ontology_version": "3.8"}
+        info = self._info(
+            ["WebVisit", "Node", "Object"],
+            [("OF_SUBJECT:Node:outgoing", record), ("OF_SUBJECT:WebVisit:incoming", record)],
+        )
+        assert len(info.metarelationships) == 2
+        assert info.relationship_rows() == [
+            (" ", "Node", "←", "OF_SUBJECT", "WebVisit", "sirin-system v3.8"),
+        ]
+
+    def test_relationship_rows_distinct(self):
+        outgoing = {"relationship": "ON_PAGE", "source": "WebVisit", "target": "WebPage",
+                    "relationship_type": "HAS_RELATIONSHIP", "target_link_type": "HAS_TARGET",
+                    "ontology": "sirin-system", "ontology_version": "3.8"}
+        incoming = {"relationship": "OF_SUBJECT", "source": "WebVisit", "target": "Node",
+                    "relationship_type": "HAS_RELATIONSHIP", "target_link_type": "HAS_TARGET",
+                    "ontology": "sirin-system", "ontology_version": "3.8"}
+        info = self._info(
+            ["WebVisit", "Node", "Object"],
+            [("ON_PAGE:WebPage:outgoing", outgoing), ("OF_SUBJECT:Node:outgoing", incoming)],
+        )
+        assert info.relationship_rows() == [
+            (" ", "Node", "←", "OF_SUBJECT", "WebVisit", "sirin-system v3.8"),
+            (" ", "WebVisit", "→", "ON_PAGE", "WebPage", "sirin-system v3.8"),
+        ]

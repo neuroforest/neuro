@@ -247,9 +247,15 @@ class Metarelationship:
         self.target = record["target"]
         self.relationship_type = record["relationship_type"]
         self.target_link_type = record["target_link_type"]
+        self.ontology = record.get("ontology")
+        self.ontology_version = record.get("ontology_version")
 
     def __repr__(self):
         return f"<Metarelationship ({self.source})-[:{self.label}]->({self.target})>"
+
+    def ontology_label(self):
+        """`name vX.Y` of the ontology declaring this relationship, or ""."""
+        return f"{self.ontology} v{self.ontology_version}" if self.ontology else ""
 
     def is_source_required(self):
         """Source must emit this relationship (REQUIRE_RELATIONSHIP)."""
@@ -301,10 +307,13 @@ class Metarelationships(UserDict):
         WHERE type(olink) = linktype.label
         OPTIONAL MATCH (orel)-[otlink]->(otarget:OntologyNode)
         WHERE type(otlink) = tlinktype.label
+        // Declaring ontology of the edge itself — not of the lineage endpoint
+        OPTIONAL MATCH (oom:OntologyMetadata)-[:DEFINES]->(orel)
         WITH ion, collect(DISTINCT {{
             source: osource.label, relationship: orel.label,
             target: otarget.label, relationship_type: type(olink),
             target_link_type: type(otlink),
+            ontology: oom.name, ontology_version: oom.version,
             direction: "outgoing"
         }}) as outgoing
 
@@ -316,10 +325,12 @@ class Metarelationships(UserDict):
             (:OntologyRelationship {{label: "HAS_TARGET"}})
         OPTIONAL MATCH (isource:OntologyNode)-[ilink]->(irel:OntologyRelationship)-[itlink]->(itarget)
         WHERE type(ilink) = ilinktype.label AND type(itlink) = itlinktype.label
+        OPTIONAL MATCH (iom:OntologyMetadata)-[:DEFINES]->(irel)
         WITH outgoing, collect(DISTINCT {{
             source: isource.label, relationship: irel.label,
             target: itarget.label, relationship_type: type(ilink),
             target_link_type: type(itlink),
+            ontology: iom.name, ontology_version: iom.version,
             direction: "incoming"
         }}) as incoming
 
@@ -328,6 +339,7 @@ class Metarelationships(UserDict):
         RETURN DISTINCT r.source as source, r.relationship as relationship,
                r.target as target, r.relationship_type as relationship_type,
                r.target_link_type as target_link_type,
+               r.ontology as ontology, r.ontology_version as ontology_version,
                r.direction as direction
         """
         data = nb.get_data(query)
@@ -533,16 +545,36 @@ class OntologyNodeInfo:
         terminal_components.table(rows, header=(" ", "PROPERTY", "TYPE", "REL", "ORIGIN", "ONTOLOGY"), indent=0)
 
         print(f"\n{B}Relationships{RST}")
-        mrs = sorted(self.metarelationships.values(), key=lambda x: x.label)
-        rows = []
-        for mr in mrs:
+        terminal_components.table(
+            self.relationship_rows(),
+            header=(" ", "ORIGIN", "DIR", "REL", "PEER", "ONTOLOGY"), indent=0,
+        )
+
+    def relationship_rows(self):
+        """Display rows for the Relationships table, one per declaration.
+
+        A declaration whose source *and* target both lie in the queried type's
+        lineage — a class pointing at its own ancestor, e.g.
+        `WebVisit -[:OF_SUBJECT]-> Node` — is collected twice by
+        `Metarelationships.from_ontology`: once walking outgoing edges from the
+        lineage, once walking incoming edges into it. The two carry different
+        dedup keys, so both survive, and both render identically because the
+        target is in the lineage either way. Collapse them here rather than in
+        the accessor: `validate_relationships` reads direction out of those keys,
+        so the pair is load-bearing there even though it is noise on screen.
+        """
+        rows, seen = [], set()
+        for mr in sorted(self.metarelationships.values(), key=lambda x: x.label):
             if mr.target in self.lineage:
                 arrow, peer, via, required = "←", mr.source, mr.target, mr.is_target_required()
             else:
                 arrow, peer, via, required = "→", mr.target, mr.source, mr.is_source_required()
-            rows.append(("*" if required else " ", via, arrow, mr.label, peer,
-                         self.origin_ontology.get(via, "")))
-        terminal_components.table(rows, header=(" ", "ORIGIN", "DIR", "REL", "PEER", "ONTOLOGY"), indent=0)
+            row = ("*" if required else " ", via, arrow, mr.label, peer, mr.ontology_label())
+            if row in seen:
+                continue
+            seen.add(row)
+            rows.append(row)
+        return rows
 
 
 class Violations:
