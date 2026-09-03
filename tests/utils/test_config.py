@@ -1,10 +1,32 @@
 import pytest
 
 
-pytestmark = pytest.mark.integration
+def test_resolve_xdg_paths(monkeypatch):
+    """An inherited NF_* never outranks the declared APP_NAME/ENV."""
+    import os
+    from neuro.utils import config
+
+    for var in ("NF_CONFIG", "NF_DATA", "NF_STATE", "NF_CACHE"):
+        monkeypatch.setenv(var, f"/stale/{var.lower()}")
+    monkeypatch.setenv("APP_NAME", "myapp")
+    monkeypatch.setenv("ENV", "PRODUCTION")
+
+    config.resolve_xdg_paths()
+    assert os.environ["NF_CONFIG"].endswith("/myapp")
+    assert os.environ["NF_DATA"].endswith("/myapp")
+    assert os.environ["NF_STATE"].endswith("/myapp/production")
+    assert os.environ["NF_CACHE"].endswith("/myapp/production")
+
+    # A second pass under a different ENV re-namespaces rather than sticking.
+    monkeypatch.setenv("ENV", "TESTING")
+    config.resolve_xdg_paths()
+    assert os.environ["NF_DATA"].endswith("/myapp/testing")
+    assert os.environ["NF_STATE"].endswith("/myapp/testing")
 
 
 class TestUtils:
+    pytestmark = pytest.mark.integration
+
     def test_config(self):
         import os
         assert os.getenv("HOST") == "127.0.0.1"
