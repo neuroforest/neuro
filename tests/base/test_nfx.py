@@ -160,6 +160,30 @@ def test_validate_invalid_nid():
     assert result["invalid_nids"] == ["not-a-uuid"]
 
 
+def test_validate_duplicate_nid():
+    from neuro.base.nfx import Nfx, validate
+    doc = Nfx.from_dict({
+        "nodes": [{"nid": LOCAL_1}, {"nid": LOCAL_2}, {"nid": LOCAL_1}, {"nid": LOCAL_1}],
+    })
+    assert validate(doc)["duplicate_nids"] == [LOCAL_1, LOCAL_1]
+
+
+def test_validate_duplicate_relationship():
+    """Same (from, to, type) twice is a duplicate; a different type is not."""
+    from neuro.base.nfx import Nfx, validate
+    doc = Nfx.from_dict({
+        "nodes": [{"nid": LOCAL_1}, {"nid": LOCAL_2}],
+        "relationships": [
+            {"from": LOCAL_1, "to": LOCAL_2, "type": "USES"},
+            {"from": LOCAL_1, "to": LOCAL_2, "type": "OTHER"},
+            {"from": LOCAL_1, "to": LOCAL_2, "type": "USES", "properties": {"k": 1}},
+        ],
+    })
+    result = validate(doc)
+    assert result["duplicate_relationships"] == [doc.relationships[2]]
+    assert result["duplicate_nids"] == []
+
+
 def test_lint_format_flags_empty_arrays():
     from neuro.base.nfx import lint_format
     assert lint_format({"nodes": [], "relationships": []})["empty"] == ["nodes", "relationships"]

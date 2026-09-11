@@ -185,9 +185,12 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
 
     Returns dict with 'unresolved' (endpoints not in local or dependency nodes),
     'foreign' (both endpoints are non-local), 'invalid_nids' (not valid UUID v4),
-    'missing_required' (required top-level fields absent or empty), and
+    'missing_required' (required top-level fields absent or empty),
     'invalid_type' (the `type` value when set to something outside
-    `ALLOWED_TYPES`, else None).
+    `ALLOWED_TYPES`, else None), 'duplicate_nids' (node nids declared again),
+    and 'duplicate_relationships' (repeated `(from, to, type)` triples).
+    Duplicates list every repeat after the first occurrence. They are only
+    detectable here: an import MERGEs them into a single node or edge.
     Format-level checks (key order / unknown keys / empty arrays on the raw
     on-disk dict) live in `lint_format()`.
     """
@@ -200,14 +203,29 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
         all_nids.add(rel["to"])
     invalid_nids = sorted(nid for nid in all_nids if not Uuid.is_valid_uuid_v4(nid))
 
+    seen_nids: set[str] = set()
+    duplicate_nids = []
+    for node in doc.nodes:
+        if "nid" not in node:
+            continue
+        if node["nid"] in seen_nids:
+            duplicate_nids.append(node["nid"])
+        seen_nids.add(node["nid"])
+
     unresolved = []
     foreign = []
+    seen_triples: set[tuple] = set()
+    duplicate_relationships = []
     for rel in doc.relationships:
         from_nid, to_nid = rel["from"], rel["to"]
         if from_nid not in valid_nids or to_nid not in valid_nids:
             unresolved.append(rel)
         elif from_nid not in local_nids and to_nid not in local_nids:
             foreign.append(rel)
+        triple = (from_nid, to_nid, rel.get("type"))
+        if triple in seen_triples:
+            duplicate_relationships.append(rel)
+        seen_triples.add(triple)
 
     missing_required = [f for f in _REQUIRED_FIELDS if not getattr(doc, f, "")]
     invalid_type = doc.type if doc.type and doc.type not in ALLOWED_TYPES else None
@@ -218,6 +236,8 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
         "invalid_nids": invalid_nids,
         "missing_required": missing_required,
         "invalid_type": invalid_type,
+        "duplicate_nids": duplicate_nids,
+        "duplicate_relationships": duplicate_relationships,
     }
 
 
