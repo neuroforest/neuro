@@ -145,6 +145,51 @@ def load_env_files():
             resolve_user_paths()
 
 
+# The keys that decide which base a process reaches. A live value for one of
+# these that the env-file chain does not declare was not configured — it was
+# inherited from a parent that had loaded a different base. ENV is deliberately
+# absent: it is the label, and the label is what a wrapper re-declares while the
+# rest of the identity rides along underneath it (INC-2026-007).
+IDENTITY_KEYS = ("BASE_NAME", "NEO4J_URI", "NEO4J_PORT_BOLT", "NEO4J_PORT_HTTP",
+                 "NEO4J_STORE_ID")
+
+
+def declared_values():
+    """What the env-file chain declares for this APP_NAME/ENV, read without applying it.
+
+    The same files in the same precedence as load_env_files() — repo `.env`, then
+    `$NF_CONFIG/env`, then `$NF_CONFIG/env.<env>`, later files winning — so the
+    result is what this process *would* hold had nothing been inherited.
+    """
+    app_dir = os.getenv("APP_DIR", os.getcwd())
+    paths = [os.path.join(app_dir, ".env")]
+    nf_config = os.getenv("NF_CONFIG")
+    if nf_config:
+        env_name = os.getenv("ENV", "DEVELOP").lower()
+        paths += [os.path.join(nf_config, "env"), os.path.join(nf_config, f"env.{env_name}")]
+    declared = {}
+    for path in paths:
+        if os.path.exists(path):
+            declared.update({k: v for k, v in dotenv.dotenv_values(path).items() if v is not None})
+    return declared
+
+
+def identity_drift(declared=None):
+    """{key: (live, declared)} for each set identity key the chain does not declare as-is.
+
+    A key the process holds but no file names counts as drift too: that is the
+    shape of the leak, a production-only key (a pinned store id) arriving in a
+    process whose own config never mentions it.
+    """
+    declared = declared_values() if declared is None else declared
+    drift = {}
+    for key in IDENTITY_KEYS:
+        live = os.environ.get(key)
+        if live is not None and live != declared.get(key):
+            drift[key] = (live, declared.get(key))
+    return drift
+
+
 def config_logging():
     log_level = os.getenv("LOGGING", "WARNING")
     log_format = os.getenv("LOGGING_FORMAT")

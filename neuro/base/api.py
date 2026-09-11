@@ -4,7 +4,7 @@ import logging
 
 import neo4j
 
-from neuro.utils import terminal_style
+from neuro.utils import config, terminal_style
 from neuro.base.accessors.metadata import MetadataAccessor
 from neuro.base.accessors.nodes import NodeAccessor
 from neuro.base.accessors.objects import ObjectAccessor
@@ -21,6 +21,7 @@ class NeuroBase:
         uri = neo4j_uri or os.getenv("NEO4J_URI")
         user = neo4j_user or os.getenv("NEO4J_USER")
         password = neo4j_password or os.getenv("NEO4J_PASSWORD")
+        self._uri = uri
         try:
             self.driver = neo4j.GraphDatabase.driver(uri, auth=(user, password), **driver_kwargs)
         except neo4j.exceptions.ConfigurationError:
@@ -142,9 +143,33 @@ class NeuroBase:
         result = self.get_data(query, {"label": label})
         return sorted(result[0]["labels"]) if result else []
 
+    def _verify_declared_identity(self):
+        """Refuse a destructive act on a base the config did not name.
+
+        `_verify_store_id` proves the URI and the store agree, but an inherited
+        environment carries both together, so a wrong base passes it. And a
+        caller's `ENV != PRODUCTION` check reads a label any wrapper re-declares.
+        What cannot be faked by inheritance is the env-file chain itself: if the
+        live identity differs from what the files for this APP_NAME/ENV declare,
+        the base was not configured here. `nte app.test` cleared the sirin
+        production base exactly this way (INC-2026-007).
+        """
+        declared = config.declared_values()
+        drift = config.identity_drift(declared)
+        want_uri = declared.get("NEO4J_URI")
+        if want_uri and self._uri != want_uri:
+            drift["NEO4J_URI"] = (self._uri, want_uri)
+        if drift:
+            detail = "; ".join(f"{k}={live!r} (declared {want!r})"
+                               for k, (live, want) in sorted(drift.items()))
+            raise RuntimeError(
+                f"Refusing to clear {self._uri}: base identity is not the one config "
+                f"declares for {os.getenv('APP_NAME', '?')}/{os.getenv('ENV', '?')} — {detail}")
+
     def clear(self, confirm=False):
         if not confirm:
             raise ValueError("Refusing to clear database without confirm=True")
+        self._verify_declared_identity()
 
         query = """
         MATCH (o)
