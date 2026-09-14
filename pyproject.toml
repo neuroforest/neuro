@@ -37,7 +37,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest==9.0.2",
-    "ruff==0.15.9",
+    "ruff==0.16.7",
 ]
 
 [project.scripts]
@@ -56,3 +56,10 @@ markers = [
 [tool.setuptools.packages.find]
 include = ["neuro*"]
 exclude = ["build*", "tests*", "venv*"]
+
+[tool.ruff.lint]
+# Declared, not inherited: ruff 0.16 widened its defaults from 59 rules to 413,
+# so upgrading the binary silently redefines what "lint" means here. This is the
+# set that was in force before the version was pinned; widening it is a
+# deliberate commit, one rule family at a time.
+select = ["E4", "E7", "E9", "F"]
