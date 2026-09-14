@@ -6,10 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "neuro"
 readme = "README.md"
 version = "2.7.0"
-# zz-imi's venv is 3.10.12 while zz-apex builds on 3.14 — a py3-none-any wheel
-# installs on either and only fails at import, so the floor is declared here
-# rather than discovered on the host (PLAN-2026-130 step 4).
-requires-python = ">=3.10"
+# Both hosts run 3.14 now (zz-imi's venvs were rebuilt off 3.10.12) — a
+# py3-none-any wheel installs anywhere and only fails at import, so the floor is
+# declared here rather than discovered on the host (PLAN-2026-130 step 4). ruff
+# reads this as its target-version: raising it is what lets PEP 701 f-strings
+# through, so it must not drift below what the hosts actually run.
+requires-python = ">=3.14"
 dependencies = [
     "beautifulsoup4>=4.12.0",
     "click>=8.1.0",
