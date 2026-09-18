@@ -5,10 +5,14 @@ import requests
 
 
 def resolve_taxon_name(taxon_name):
+    # Quoted phrase + field tag: an unquoted term goes through Entrez automatic
+    # term mapping, which silently drops unmatched words — "Shigella flexneri
+    # tip 6" became `6[All Names]` and resolved to [Eubacterium] cellulosolvens.
     url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+    phrase = taxon_name.replace('"', "").strip()
     params = {
         "db": "taxonomy",
-        "term": taxon_name,
+        "term": f'"{phrase}"[All Names]',
         "retmode": "json",
         "api_key": os.getenv("NCBI_API_KEY")
     }

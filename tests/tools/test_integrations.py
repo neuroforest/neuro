@@ -37,6 +37,9 @@ class TestNCBI:
         assert len(taxon_ids) == 2
         taxon_ids = ncbi.resolve_taxon_name("Protozoa")
         assert len(taxon_ids) == 0
+        # Unmatched words must not be dropped (was: 6[All Names] → taxid 29322)
+        taxon_ids = ncbi.resolve_taxon_name("Shigella flexneri tip 6")
+        assert len(taxon_ids) == 0
 
     def test_get_lineage(self):
         from neuro.tools.integrations import ncbi
