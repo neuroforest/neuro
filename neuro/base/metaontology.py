@@ -435,8 +435,11 @@ class Metaontology:
     def import_nfx(self, path, index=None, on_import=None, _depth=0):
         """Import an ontology from an NFX file.
 
-        Clears and rewrites this ontology's nodes. Dependencies are checked
-        in the DB; if missing or version mismatch, imported via the index.
+        Reconciles this ontology's nodes — never a blanket clear, see
+        `_release_undeclared` (PLAN-2026-143). Declared nodes are merged in
+        place so their edges survive; a node the file no longer declares loses
+        only this ontology's `DEFINES`. Dependencies are checked in the DB; if
+        missing or at a mismatched version, imported via the index.
 
         on_import(name, imported, depth): optional callback for dependency status.
         """
