@@ -22,7 +22,11 @@ ALLOWED_TYPES = ("metaontology", "ontology", "knowledge")
 _KEY_ORDER = ("type", "nid", "version", "name", "description", "dependencies", "hash", "nodes", "relationships")
 _NODE_KEY_ORDER = ("nid", "labels", "properties")
 _REL_KEY_ORDER = ("from", "to", "type", "properties")
-_REQUIRED_FIELDS = ("type", "nid", "version")
+# `name` earns its place here: `Metaontology.import_nfx` gates the whole
+# metadata block on it, so a nameless file imports its nodes and never gets an
+# `OntologyMetadata` node to hang them off — leaving every one an orphan that
+# `ontology.prune` may then delete. Releases are named after it too.
+_REQUIRED_FIELDS = ("type", "nid", "version", "name")
 
 
 @dataclass(frozen=True, slots=True)
