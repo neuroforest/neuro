@@ -469,6 +469,9 @@ class Metaontology:
         missing or at a mismatched version, imported via the index.
 
         on_import(name, imported, depth): optional callback for dependency status.
+
+        Raises `NfxViolation` if the document declares no `nid` or no `name`:
+        both are required to mint the `OntologyMetadata` every node hangs off.
         """
         doc = nfx.read(path)
 
@@ -493,30 +496,44 @@ class Metaontology:
                 f"NFX validation failed for {path}:\n" + "\n".join(msgs)
             )
 
+        # `nid` and `name` are what the metadata node is built from, and every
+        # relationship below is written between two nodes some metadata node
+        # DEFINES. So a document missing either imports its nodes, writes no
+        # DEFINES, and then silently discards every edge it declares — nodes in
+        # the graph, the structure gone, exit status clean. Refuse instead: a
+        # headerless document has no legitimate caller, and the old skip made
+        # `ontology.export`'s broken output look importable (issue #72).
+        missing = [f for f in ("nid", "name") if not getattr(doc, f)]
+        if missing:
+            raise exceptions.NfxViolation(
+                f"{path} declares no {', '.join(repr(f) for f in missing)} — without it no "
+                f"OntologyMetadata is minted, so no node would be DEFINES'd and all "
+                f"{len(doc.relationships)} relationship(s) would be dropped. Refusing to import."
+            )
+
         # Reconcile this ontology's nodes. Never a blanket clear: see
         # `_release_undeclared`.
         declared = [entry["nid"] for entry in doc.nodes]
         report = {"nodes": len(declared), "released": [], "reparented": [],
                   "orphaned": [], "edges_pruned": 0}
-        if doc.nid and doc.name:
-            report.update(self._release_undeclared(doc.nid, declared))
-            properties = {k: v for k, v in (
-                ("name", doc.name), ("version", doc.version), ("description", doc.description),
-                ("type", doc.type),
-            ) if v}
+        report.update(self._release_undeclared(doc.nid, declared))
+        properties = {k: v for k, v in (
+            ("name", doc.name), ("version", doc.version), ("description", doc.description),
+            ("type", doc.type),
+        ) if v}
+        self._nb.run_query(
+            "MERGE (m:OntologyMetadata {nid: $nid}) SET m += $props",
+            {"nid": doc.nid, "props": properties},
+        )
+        for dep_nid, _ in doc.dependencies:
             self._nb.run_query(
-                "MERGE (m:OntologyMetadata {nid: $nid}) SET m += $props",
-                {"nid": doc.nid, "props": properties},
+                """
+                MATCH (m:OntologyMetadata {nid: $nid})
+                MATCH (d:OntologyMetadata {nid: $dep_nid})
+                MERGE (m)-[:DEPENDS_ON]->(d)
+                """,
+                {"nid": doc.nid, "dep_nid": dep_nid},
             )
-            for dep_nid, _ in doc.dependencies:
-                self._nb.run_query(
-                    """
-                    MATCH (m:OntologyMetadata {nid: $nid})
-                    MATCH (d:OntologyMetadata {nid: $dep_nid})
-                    MERGE (m)-[:DEPENDS_ON]->(d)
-                    """,
-                    {"nid": doc.nid, "dep_nid": dep_nid},
-                )
 
         claimed = self._claimed_nodes(doc.nid)
         for entry in doc.nodes:
@@ -546,15 +563,14 @@ class Metaontology:
                 """,
                 params,
             )
-            if doc.nid:
-                self._nb.run_query(
-                    f"""
-                    MATCH (m:OntologyMetadata {{nid: $ontology_nid}})
-                    MATCH (n:{labels[0]} {{nid: $node_nid}})
-                    MERGE (m)-[:DEFINES]->(n)
-                    """,
-                    {"ontology_nid": doc.nid, "node_nid": entry["nid"]},
-                )
+            self._nb.run_query(
+                f"""
+                MATCH (m:OntologyMetadata {{nid: $ontology_nid}})
+                MATCH (n:{labels[0]} {{nid: $node_nid}})
+                MERGE (m)-[:DEFINES]->(n)
+                """,
+                {"ontology_nid": doc.nid, "node_nid": entry["nid"]},
+            )
 
         # Prune edges this file used to declare and no longer does. Type-scoped
         # and confined to the nids this file touches, so foreign edge types

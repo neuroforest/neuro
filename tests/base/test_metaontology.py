@@ -290,6 +290,25 @@ class TestImportReconciliation:
         )
         return rows[0]["c"] > 0
 
+    def test_import_refuses_headerless_document(self, nb_meta, tmp_path):
+        """No nid/name means no metadata node, hence no DEFINES, hence no edges.
+
+        The import used to accept such a file and write the nodes without any
+        of its relationships, reporting success (issue #72).
+        """
+        import json
+
+        from neuro.utils import exceptions
+        path = tmp_path / "headerless.nfx"
+        path.write_text(json.dumps({
+            "nodes": [self._node(self.SHARED, "Shared"), self._node(self.LOCAL, "Local")],
+            "relationships": [{"from": self.SHARED, "to": self.LOCAL, "type": "SUBCLASS_OF"}],
+        }))
+        with pytest.raises(exceptions.NfxViolation):
+            nb_meta.metaontology.import_nfx(path)
+        assert not self._exists(nb_meta, self.SHARED)
+        assert not self._exists(nb_meta, self.LOCAL)
+
     def test_hoist_keeps_node(self, nb_meta, tmp_path):
         """Moving a node into a dependency must not lose it (issue #25)."""
         # Release 1: the dependent owns both nodes.
