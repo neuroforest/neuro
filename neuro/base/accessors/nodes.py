@@ -282,7 +282,7 @@ class NodeAccessor(Accessor):
         )
         return rows[0]["pruned"] if rows else 0
 
-    def export_nfx(self, path, label=None, name="", description="", version="",
+    def export_nfx(self, path, type, nid, label=None, name="", description="", version="",
                    query=None, query_params=None, **properties):
         """
         Export nodes and their relationships to an NFX file.
@@ -291,6 +291,12 @@ class NodeAccessor(Accessor):
         - query=<cypher>: custom Cypher returning nid, labels, properties columns;
           use query_params for parameterized queries
         - default: filter by label and/or property kwargs
+
+        `type` and `nid` are required and are not guessed: this exports an
+        arbitrary query result, so there is no metadata node to read a header
+        off, and a `nid` must never be minted silently. The document is
+        validated before anything is written, because a file the repo's own
+        pre-commit lint rejects is not a useful thing to produce (issue #72).
         """
         params = {}
 
@@ -322,8 +328,15 @@ class NodeAccessor(Accessor):
         relationships = self._nb.get_data(rel_query, {"ids": ids})
 
         doc = nfx.Nfx.from_dict({
+            "type": type, "nid": nid,
             "name": name, "description": description, "version": version,
-            "nodes": nodes, "relationships": relationships,
+            "nodes": nfx.order_labels(nodes), "relationships": relationships,
         })
+        violations = nfx.validate(doc)
+        fatal = {k: v for k, v in violations.items()
+                 if k in ("missing_required", "invalid_type", "invalid_nids",
+                          "duplicate_nids", "duplicate_relationships") and v}
+        if fatal:
+            raise exceptions.NfxViolation(f"refusing to write {path}: {fatal}")
         nfx.write(path, doc)
         return doc

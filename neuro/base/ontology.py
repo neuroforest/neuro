@@ -3,7 +3,7 @@ import os
 
 from neuro.base import nfx
 from neuro.base.schema import Metaproperties, Metarelationships, OntologyNodeInfo, Violations
-from neuro.utils import terminal_components
+from neuro.utils import exceptions, terminal_components
 
 
 class Ontology:
@@ -55,39 +55,126 @@ class Ontology:
         """Return an OntologyNodeInfo for the given label."""
         return OntologyNodeInfo(self._nb, label)
 
-    def export_nfx(self, path, name="", description="", version=""):
-        """Export all ontology instances to an NFX file.
+    def _metadata(self, name=""):
+        """The `OntologyMetadata` rows to export, newest-registered order aside.
 
-        Fetches every node whose label is a subclass (via SUBCLASS_OF) of any
-        root ontology type (OntologyNode, OntologyRelationship, OntologyProperty),
-        together with all relationships between them.
+        Matching on `name` is case-insensitive so `-o Filesystem` and
+        `-o filesystem` both resolve; an unknown name raises rather than
+        exporting nothing.
         """
-        ontology_objects = json.loads(os.environ["ONTOLOGY_OBJECTS"])
-        node_query = f"""
-        MATCH (root:OntologyNode)
-        WHERE root.label IN {list(ontology_objects)}
-        MATCH (type)-[:SUBCLASS_OF*0..]->(root)
-        MATCH (n)
-        WHERE type.label IN labels(n) AND n.nid IS NOT NULL
-        RETURN DISTINCT n.nid as nid, labels(n) as labels, properties(n) as properties
-        """
-        nodes = self._nb.get_data(node_query)
-        ids = [n["nid"] for n in nodes]
+        rows = self._nb.get_data(
+            """
+            MATCH (m:OntologyMetadata)
+            WHERE $name = "" OR toLower(m.name) = toLower($name)
+            RETURN m.nid AS nid, m.type AS type, m.name AS name,
+                   m.version AS version, m.description AS description
+            ORDER BY m.name
+            """,
+            {"name": name},
+        )
+        if name and not rows:
+            raise exceptions.NoOntology(f"no ontology named {name!r} in this base")
+        return rows
 
-        rel_query = """
-        MATCH (a)-[r]->(b)
-        WHERE a.nid IN $ids AND b.nid IN $ids
-        RETURN a.nid as from, b.nid as to,
-               type(r) as type, properties(r) as properties
-        """
-        relationships = self._nb.get_data(rel_query, {"ids": ids})
+    def export_nfx(self, path, name=""):
+        """Export one ontology per file, reconstructed from what defines it.
 
-        doc = nfx.Nfx.from_dict({
-            "name": name, "description": description, "version": version,
-            "nodes": nodes, "relationships": relationships,
-        })
-        nfx.write(path, doc)
-        return doc
+        With `name`, `path` is the file to write. Without it, `path` is a
+        directory and every ontology in the base is written to
+        `<name>.nfx` inside it — the base still comes out in one call, but as
+        n valid modules rather than one document claiming to be a module it is
+        not (issue #72).
+
+        Each document is scoped by the metadata node: its nodes are that
+        node's `DEFINES` targets, its relationships those whose *source* it
+        defines — the same ownership rule `import_nfx` reconciles by — and its
+        header, dependencies included, is read off the node itself.
+
+        Two fidelity limits, both inherent:
+
+        - `hash` is `sha256(validators.py)` and is not stored in the graph, so
+          a re-exported dir-form plugin comes back without one and needs
+          `ontology.rehash` before it would pass pre-commit.
+        - dependency versions are the dependency's *current* version in this
+          base, not necessarily the pin the source file recorded.
+
+        So the export is faithful to the base, which is what it is for; it is
+        not a way to recover a historical file. For the same reason, an export
+        taken from a base built by `ontology.render` carries the `:Dependency`
+        marker that task adds to dependency-provided nodes — base state, not a
+        defect here.
+        """
+        targets = self._metadata(name)
+        docs = []
+        for meta in targets:
+            nodes = self._nb.get_data(
+                """
+                MATCH (:OntologyMetadata {nid: $nid})-[:DEFINES]->(n)
+                RETURN DISTINCT n.nid AS nid, labels(n) AS labels,
+                       properties(n) AS properties
+                ORDER BY n.nid
+                """,
+                {"nid": meta["nid"]},
+            )
+            # An edge belongs to the module that is *allowed* to declare it,
+            # which is not simply the owner of its source. A file may declare an
+            # edge as long as one endpoint is its own and the other is reachable
+            # through its dependencies, so a cross-module edge belongs to
+            # whichever endpoint-owner has the other in its dependency closure —
+            # exactly one can, since a dependency cycle is rejected at import.
+            # Assigning by source instead puts an upward reference in the
+            # dependency's own file, and that file then fails to import against
+            # its declared dependencies (issue #72).
+            relationships = self._nb.get_data(
+                """
+                MATCH (m:OntologyMetadata {nid: $nid})-[:DEPENDS_ON*0..]->(dep:OntologyMetadata)
+                WITH m, collect(DISTINCT dep) AS scope
+                MATCH (a)-[r]->(b)
+                WHERE a.nid IS NOT NULL AND b.nid IS NOT NULL
+                  AND NOT a:OntologyMetadata AND NOT b:OntologyMetadata
+                  AND ((EXISTS { (m)-[:DEFINES]->(a) }
+                        AND any(s IN scope WHERE EXISTS { (s)-[:DEFINES]->(b) }))
+                    OR (EXISTS { (m)-[:DEFINES]->(b) }
+                        AND any(s IN scope WHERE EXISTS { (s)-[:DEFINES]->(a) })))
+                RETURN DISTINCT a.nid AS from, b.nid AS to, type(r) AS type,
+                       properties(r) AS properties
+                ORDER BY from, to, type
+                """,
+                {"nid": meta["nid"]},
+            )
+            dependencies = [
+                f"{r['nid']}@{r['version']}" for r in self._nb.get_data(
+                    """
+                    MATCH (:OntologyMetadata {nid: $nid})-[:DEPENDS_ON]->(d:OntologyMetadata)
+                    RETURN d.nid AS nid, d.version AS version ORDER BY d.name
+                    """,
+                    {"nid": meta["nid"]},
+                )
+            ]
+            doc = nfx.Nfx.from_dict({
+                "type": meta["type"] or "", "nid": meta["nid"] or "",
+                "version": meta["version"] or "", "name": meta["name"] or "",
+                "description": meta["description"] or "",
+                "dependencies": dependencies,
+                "nodes": nfx.order_labels(nodes),
+                "relationships": relationships,
+            })
+            # Write only what validates: a partial run should leave fewer
+            # files, never an invalid one.
+            violations = nfx.validate(doc)
+            fatal = {k: v for k, v in violations.items()
+                     if k in ("missing_required", "invalid_nids", "duplicate_nids",
+                              "duplicate_relationships") and v}
+            if fatal:
+                raise exceptions.NfxViolation(
+                    f"refusing to write {meta['name']}: {fatal}"
+                )
+            target = path if name else os.path.join(path, f"{meta['name']}.nfx")
+            if not name:
+                os.makedirs(path, exist_ok=True)
+            nfx.write(target, doc)
+            docs.append(doc)
+        return docs[0] if name else docs
 
 
 class ObjectValidator:
