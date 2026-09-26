@@ -171,8 +171,8 @@ class Ontology:
             # files, never an invalid one.
             violations = nfx.validate(doc)
             fatal = {k: v for k, v in violations.items()
-                     if k in ("missing_required", "invalid_nids", "duplicate_nids",
-                              "duplicate_relationships") and v}
+                     if k in ("missing_required", "invalid_nids", "untaggable_name",
+                              "duplicate_nids", "duplicate_relationships") and v}
             if fatal:
                 raise exceptions.NfxViolation(
                     f"refusing to write {meta['name']}: {fatal}"
