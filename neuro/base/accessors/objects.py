@@ -57,14 +57,32 @@ class ObjectAccessor(Accessor):
 
         if identifier_key:
             param_name = identifier_key.replace(".", "_")
+            # Keyed on the first label only, never on the whole set. A
+            # label-scoped `MERGE (n:A:B {nid: …})` stops matching the stored
+            # node the moment the caller's label set changes, and MERGE then
+            # does what MERGE does — it creates, leaving two nodes under one
+            # identifier (ISSUE-71). The first label is the node's *class*, the
+            # one member of the set that is its kind rather than a marker, so it
+            # stays in the pattern: it keeps the match a label scan instead of a
+            # scan of every node in the base. The rest are reconciled after.
+            #
+            # Labels follow the property semantics rather than inventing their
+            # own: `replace` means the caller's set is authoritative, so a label
+            # it omits is removed; the additive default only ever adds.
+            reconcile = (
+                "WITH n, [l IN labels(n) WHERE NOT l IN $labels] AS stale\n"
+                "            REMOVE n:$(stale)\n" if replace else ""
+            )
             query = f"""
-            MERGE (n:{labels_str} {{`{identifier_key}`: ${param_name}}})
+            MERGE (n:{obj.labels[0]} {{`{identifier_key}`: ${param_name}}})
             SET n {set_op} $properties
-            RETURN n
+            SET n:$($labels)
+            {reconcile}RETURN n
             """
             parameters = {
                 param_name: obj.properties[identifier_key],
                 "properties": obj.properties,
+                "labels": list(obj.labels),
             }
         elif replace:
             raise ValueError("replace=True requires identifier_key")

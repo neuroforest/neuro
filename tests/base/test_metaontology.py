@@ -277,8 +277,8 @@ class TestImportReconciliation:
         return path
 
     @classmethod
-    def _node(cls, nid, label):
-        return {"nid": nid, "labels": ["OntologyNode"], "properties": {"label": label}}
+    def _node(cls, nid, label, labels=("OntologyNode",)):
+        return {"nid": nid, "labels": list(labels), "properties": {"label": label}}
 
     def _exists(self, nb, nid):
         return bool(nb.get_data("MATCH (n {nid: $nid}) RETURN n.nid", {"nid": nid}))
@@ -386,3 +386,58 @@ class TestImportReconciliation:
         assert self._exists(nb_meta, self.DROPPED), "undeclared node must be kept"
         assert not self._edge(nb_meta, self.CORE, self.DROPPED, "DEFINES"), \
             "the dropping ontology must release its DEFINES"
+
+    def _labels(self, nb, nid):
+        return [set(r["labels"]) for r in nb.get_data(
+            "MATCH (n {nid: $nid}) RETURN labels(n) AS labels", {"nid": nid})]
+
+    def test_relabel_reconciles_one_node(self, nb_meta, tmp_path):
+        """A changed label set relabels the node; it never forks it (issue #71).
+
+        The label-scoped `MERGE (n:A:B {nid})` stopped matching as soon as the
+        file's labels changed and created a second node under the same nid —
+        both `DEFINES`'d, so no orphan check could see it, and the original
+        keeping every edge while the new one carried the current properties.
+        """
+        first = self._write(
+            tmp_path, "core", self.CORE, "1.0", [self._node(self.SHARED, "Shared")],
+        )
+        nb_meta.metaontology.import_nfx(first)
+        # An edge from outside the ontology layer, so the assertion below is
+        # about *which* node survived, not merely how many.
+        nb_meta.run_query(
+            """
+            MATCH (c {nid: $shared})
+            CREATE (m:MetricDefinition {nid: $metric, label: 'Coverage'})
+            CREATE (m)-[:APPLIES_TO]->(c)
+            """,
+            {"shared": self.SHARED, "metric": self.METRIC},
+        )
+
+        added = self._write(
+            tmp_path, "core", self.CORE, "1.1",
+            [self._node(self.SHARED, "Shared", ["OntologyNode", "Sirin"])],
+        )
+        nb_meta.metaontology.import_nfx(added)
+
+        assert self._labels(nb_meta, self.SHARED) == [{"OntologyNode", "Sirin"}], \
+            "label change forked the node"
+        assert self._edge(nb_meta, self.METRIC, self.SHARED, "APPLIES_TO"), \
+            "the relabelled node is not the one that held the edges"
+        assert self._edge(nb_meta, self.CORE, self.SHARED, "DEFINES")
+
+    def test_relabel_drops_undeclared_label(self, nb_meta, tmp_path):
+        """The file is authoritative for labels as it is for properties."""
+        first = self._write(
+            tmp_path, "core", self.CORE, "1.0",
+            [self._node(self.SHARED, "Shared", ["OntologyNode", "Sirin"])],
+        )
+        nb_meta.metaontology.import_nfx(first)
+        assert self._labels(nb_meta, self.SHARED) == [{"OntologyNode", "Sirin"}]
+
+        second = self._write(
+            tmp_path, "core", self.CORE, "1.1", [self._node(self.SHARED, "Shared")],
+        )
+        nb_meta.metaontology.import_nfx(second)
+
+        assert self._labels(nb_meta, self.SHARED) == [{"OntologyNode"}]

@@ -432,6 +432,33 @@ class Metaontology:
         )
         return {r["nid"]: r["edges"] for r in rows}
 
+    def _claimed_nodes(self, ontology_nid):
+        """`nid` -> elementId of the nodes this ontology already defines.
+
+        The import writes a declared node through this id when it has one, which
+        is what makes a relabel a relabel. Matching by label set instead — the
+        old `MERGE (n:A:B {nid: $nid})` — stops matching the moment the file's
+        labels change, and MERGE then does what MERGE does: it creates. The
+        result was a second node under the same nid, both `DEFINES`'d, invisible
+        to `nfx.validate` (the document declares one node), to
+        `_release_undeclared` (the nid *is* declared) and to `ontology.prune`
+        (the fork holds a `DEFINES`, so it is no orphan) — ISSUE-71.
+
+        One query per import, not per node: the traversal is along `DEFINES`
+        from a single metadata node, so it costs a fraction of the per-node
+        writes it makes safe. An ontology being imported for the first time has
+        no metadata node yet and simply claims nothing.
+        """
+        if not ontology_nid:
+            return {}
+        return {r["nid"]: r["eid"] for r in self._nb.get_data(
+            """
+            MATCH (:OntologyMetadata {nid: $nid})-[:DEFINES]->(n)
+            RETURN n.nid AS nid, elementId(n) AS eid
+            """,
+            {"nid": ontology_nid},
+        )}
+
     def import_nfx(self, path, index=None, on_import=None, _depth=0):
         """Import an ontology from an NFX file.
 
@@ -491,19 +518,39 @@ class Metaontology:
                     {"nid": doc.nid, "dep_nid": dep_nid},
                 )
 
+        claimed = self._claimed_nodes(doc.nid)
         for entry in doc.nodes:
-            labels_str = ":".join(entry["labels"])
+            labels = entry["labels"]
+            params = {"nid": entry["nid"], "props": entry.get("properties", {}),
+                      "labels": labels}
+            eid = claimed.get(entry["nid"])
+            if eid:
+                params["eid"] = eid
+                anchor = "MATCH (n) WHERE elementId(n) = $eid"
+            else:
+                anchor = f"MERGE (n:{labels[0]} {{nid: $nid}})"
             # `SET n =` (not `+=`): a property dropped from the file must go.
-            # The old clear achieved that by deleting the node first.
+            # The old clear achieved that by deleting the node first. Labels
+            # follow the same rule and for the same reason — the file is
+            # authoritative, so a label it stopped declaring is removed rather
+            # than left to accumulate. Both clauses take the label list as a
+            # *parameter* (Neo4j 5.26 dynamic labels), which is also what keeps
+            # a label out of the interpolated query text.
             self._nb.run_query(
-                f"MERGE (n:{labels_str} {{nid: $nid}}) SET n = $props, n.nid = $nid",
-                {"nid": entry["nid"], "props": entry.get("properties", {})},
+                f"""
+                {anchor}
+                SET n = $props, n.nid = $nid
+                SET n:$($labels)
+                WITH n, [l IN labels(n) WHERE NOT l IN $labels] AS stale
+                REMOVE n:$(stale)
+                """,
+                params,
             )
             if doc.nid:
                 self._nb.run_query(
                     f"""
                     MATCH (m:OntologyMetadata {{nid: $ontology_nid}})
-                    MATCH (n:{labels_str} {{nid: $node_nid}})
+                    MATCH (n:{labels[0]} {{nid: $node_nid}})
                     MERGE (m)-[:DEFINES]->(n)
                     """,
                     {"ontology_nid": doc.nid, "node_nid": entry["nid"]},
