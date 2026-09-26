@@ -29,6 +29,19 @@ _REL_KEY_ORDER = ("from", "to", "type", "properties")
 _REQUIRED_FIELDS = ("type", "nid", "version", "name")
 
 
+def _ordered(mapping: dict, canonical: tuple[str, ...]) -> dict:
+    """Copy `mapping` with its canonical keys first, in `canonical` order.
+
+    Unknown keys are kept, in encounter order, after the known ones. Dropping
+    them would be worse than emitting them: `lint_format` reports an unknown
+    key as a violation, and a writer that silently discarded it would hide the
+    very thing that check exists to surface.
+    """
+    known = [k for k in canonical if k in mapping]
+    return {**{k: mapping[k] for k in known},
+            **{k: v for k, v in mapping.items() if k not in canonical}}
+
+
 @dataclass(frozen=True, slots=True)
 class Nfx:
     """In-memory representation of an NFX module.
@@ -105,6 +118,14 @@ class Nfx:
         """Serialize to a canonical NFX dict in `_KEY_ORDER`. Empty optional
         fields are omitted, including `nodes`/`relationships` — a bundle-only
         ontology that declares no schema of its own simply omits those keys.
+
+        Nodes and relationships are canonicalized too, not copied verbatim:
+        their key order is what `lint_format` checks, so a writer that
+        preserved whatever order it was handed could emit a document the
+        repo's own pre-commit hook rejects. That is not hypothetical — a
+        Cypher map projection comes back in the driver's order, which is how
+        `Metaontology.export_nfx` produced 80 relationships keyed
+        `to, from, type` (issue #72).
         """
         out: dict = {}
         if self.type:
@@ -122,9 +143,9 @@ class Nfx:
         if self.hash:
             out["hash"] = self.hash
         if self.nodes:
-            out["nodes"] = [dict(n) for n in self.nodes]
+            out["nodes"] = [_ordered(n, _NODE_KEY_ORDER) for n in self.nodes]
         if self.relationships:
-            out["relationships"] = [dict(r) for r in self.relationships]
+            out["relationships"] = [_ordered(r, _REL_KEY_ORDER) for r in self.relationships]
         return out
 
     @property
@@ -163,8 +184,14 @@ def dumps(doc: Nfx) -> str:
 
     4-space indentation with `"labels"` arrays re-inlined to one line,
     matching the repo convention and the pre-commit lint rule.
+
+    `ensure_ascii=False`: the files hold prose — em-dashes in descriptions,
+    Slovenian glosses in `name_sl` — and this function is what the re-pin
+    cascade and `ontology.rehash` rewrite them with. Escaping would turn a
+    dependency bump into a diff that also mangles every non-ASCII character in
+    the file (issue #72).
     """
-    text = json.dumps(doc.to_dict(), indent=4, default=str)
+    text = json.dumps(doc.to_dict(), indent=4, default=str, ensure_ascii=False)
     text = re.sub(
         r'"labels":\s*\[\s*\n([^\]]*?)\n\s*\]',
         lambda m: '"labels": ['

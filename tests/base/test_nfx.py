@@ -103,6 +103,49 @@ def test_nfx_to_dict_omits_empty_nodes_and_relationships():
     assert out == {"nid": LOCAL_1}
 
 
+def test_nfx_to_dict_canonicalizes_node_key_order():
+    from neuro.base.nfx import Nfx, lint_format
+    out = Nfx.from_dict({
+        "type": "ontology", "nid": LOCAL_1, "version": "1.0", "name": "X",
+        "nodes": [{"properties": {"k": 1}, "labels": ["L"], "nid": LOCAL_2}],
+    }).to_dict()
+    assert list(out["nodes"][0]) == ["nid", "labels", "properties"]
+    assert lint_format(out)["key_order"] == []
+
+
+def test_nfx_to_dict_canonicalizes_relationship_key_order():
+    from neuro.base.nfx import Nfx, lint_format
+    out = Nfx.from_dict({
+        "type": "ontology", "nid": LOCAL_1, "version": "1.0", "name": "X",
+        "nodes": [{"nid": LOCAL_2, "labels": ["L"]}],
+        "relationships": [{"to": LOCAL_2, "from": LOCAL_2, "type": "SELF"}],
+    }).to_dict()
+    assert list(out["relationships"][0]) == ["from", "to", "type"]
+    assert lint_format(out)["key_order"] == []
+
+
+def test_nfx_to_dict_keeps_unknown_node_key():
+    """An unknown key is a lint violation, so the writer must not hide it."""
+    from neuro.base.nfx import Nfx, lint_format
+    out = Nfx.from_dict({
+        "type": "ontology", "nid": LOCAL_1, "version": "1.0", "name": "X",
+        "nodes": [{"bogus": 1, "nid": LOCAL_2, "labels": ["L"]}],
+    }).to_dict()
+    assert list(out["nodes"][0]) == ["nid", "labels", "bogus"]
+    assert lint_format(out)["unknown_keys"] == [{"where": "nodes[0]", "keys": ["bogus"]}]
+
+
+def test_dumps_keeps_non_ascii_literal():
+    from neuro.base.nfx import Nfx, dumps
+    text = dumps(Nfx.from_dict({
+        "type": "knowledge", "nid": LOCAL_1, "version": "1.0", "name": "X",
+        "description": "an em-dash — and a š",
+        "nodes": [{"nid": LOCAL_2, "labels": ["L"], "properties": {"name_sl": "Tuš"}}],
+    }))
+    assert "—" in text and "Tuš" in text
+    assert "\\u" not in text
+
+
 def test_nfx_is_frozen():
     from neuro.base.nfx import Nfx
     doc = Nfx(nid=LOCAL_1)
