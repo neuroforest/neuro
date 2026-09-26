@@ -146,6 +146,24 @@ def test_dumps_keeps_non_ascii_literal():
     assert "\\u" not in text
 
 
+def test_order_labels_demotes_module_marker():
+    from neuro.base.nfx import order_labels
+    out = order_labels([
+        {"nid": LOCAL_1, "labels": ["Metaontology", "OntologyRelationship"]},
+        {"nid": LOCAL_2, "labels": ["Metaontology", "OntologyNode"]},
+    ])
+    assert [n["labels"] for n in out] == [
+        ["OntologyRelationship", "Metaontology"], ["OntologyNode", "Metaontology"]]
+
+
+def test_order_labels_keeps_a_universal_only_node():
+    """Demoting every label would leave no class to anchor the import MERGE."""
+    from neuro.base.nfx import order_labels
+    out = order_labels([{"nid": LOCAL_1, "labels": ["OntologyNode"]},
+                        {"nid": LOCAL_2, "labels": ["OntologyNode"]}])
+    assert [n["labels"] for n in out] == [["OntologyNode"], ["OntologyNode"]]
+
+
 def test_nfx_is_frozen():
     from neuro.base.nfx import Nfx
     doc = Nfx(nid=LOCAL_1)
