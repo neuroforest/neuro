@@ -590,13 +590,21 @@ class Metaontology:
         return not bool(self.violations)
 
     def export_nfx(self, path=None):
-        """Export metaontology nodes and their relationships to an NFX file."""
+        """Export metaontology nodes and their relationships to an NFX file.
+
+        The relationship match is directed and its collect is `DISTINCT`: an
+        undirected pattern binds every edge once per endpoint, so the export
+        used to emit all 40 relationships twice — a file the pre-commit hook's
+        duplicate check rejects. `test_nfx_integrity` did not catch it because
+        `DeepDiff(ignore_order=True)` ignores repetition unless asked for it
+        (issue #72).
+        """
         query = """
         MATCH (:OntologyNode:Metaontology)-[:SUBCLASS_OF*0..]->
               (:OntologyNode:Metaontology)-[:REQUIRE_PROPERTY]->(prop:Metaontology)
         WITH collect(DISTINCT prop.label) as required_keys
 
-        MATCH (n:Metaontology)-[r]-(m:Metaontology)
+        MATCH (n:Metaontology)-[r]->(m:Metaontology)
         WHERE n.nid IS NOT NULL AND m.nid IS NOT NULL
         WITH required_keys,
              collect(DISTINCT {nid: n.nid, labels: labels(n),
@@ -607,7 +615,7 @@ class Metaontology:
                  properties: apoc.map.fromPairs(
                      [k IN required_keys WHERE properties(m)[k] IS NOT NULL
                       | [k, properties(m)[k]]])}) as allNodes,
-             collect({from: startNode(r).nid, to: endNode(r).nid,
+             collect(DISTINCT {from: startNode(r).nid, to: endNode(r).nid,
                  type: type(r), properties: properties(r)}) as relationships
         UNWIND allNodes as n
         WITH collect(DISTINCT n) as nodes, relationships
@@ -618,17 +626,21 @@ class Metaontology:
         meta_query = """
         MATCH (m:OntologyMetadata {name: "Metaontology"})
         RETURN m.nid as nid, m.name as name, m.version as version,
-               m.description as description
+               m.description as description, m.type as type
         """
         meta = self._nb.get_data(meta_query)
         meta = meta[0] if meta else {}
 
         doc = nfx.Nfx.from_dict({
+            # `type` comes off the metadata node like the rest of the header.
+            # Omitting it was the whole of this export's invalidity: every other
+            # required field was already here (issue #72).
+            "type": meta.get("type", "metaontology"),
             "nid": meta.get("nid", ""),
             "name": meta.get("name", "Metaontology"),
             "description": meta.get("description", ""),
             "version": meta.get("version", ""),
-            "nodes": result["nodes"],
+            "nodes": nfx.order_labels(result["nodes"]),
             "relationships": result["relationships"],
         })
         nfx.write(path, doc)

@@ -88,7 +88,16 @@ class TestNodeAccessor:
         }
 
     def test_nfx_integrity(self, nb_meta, tmp_path):
-        """Export metaontology NFX and verify node/relationship integrity."""
+        """Export metaontology NFX and verify it is a valid, faithful document.
+
+        `report_repetition` is not optional here: without it `ignore_order`
+        treats `[a, a, b]` as equal to `[a, b]`, which is how this test passed
+        for as long as the export emitted every relationship twice (issue #72).
+        The header assertions are the other half — a document that round-trips
+        its nodes but carries no `type` is still not an `.nfx`.
+        """
+        import json
+
         import deepdiff
         from neuro.base import nfx
         from neuro.utils.internal_utils import get_path
@@ -98,8 +107,21 @@ class TestNodeAccessor:
         nb_meta.metaontology.export_nfx(export_path)
         exported = nfx.read(export_path)
 
-        node_diff = deepdiff.DeepDiff(list(original.nodes), list(exported.nodes), ignore_order=True)
+        violations = nfx.validate(exported)
+        assert violations["missing_required"] == []
+        assert violations["duplicate_relationships"] == []
+        assert violations["duplicate_nids"] == []
+        raw = json.loads(export_path.read_text())
+        lint = nfx.lint_format(raw)
+        assert lint == {"unknown_keys": [], "key_order": [], "empty": []}, lint
+
+        for field in ("type", "nid", "name", "version", "description"):
+            assert getattr(exported, field) == getattr(original, field), field
+
+        node_diff = deepdiff.DeepDiff(list(original.nodes), list(exported.nodes),
+                                      ignore_order=True, report_repetition=True)
         assert node_diff == {}, f"Nodes mismatch:\n{node_diff}"
 
-        rel_diff = deepdiff.DeepDiff(list(original.relationships), list(exported.relationships), ignore_order=True)
+        rel_diff = deepdiff.DeepDiff(list(original.relationships), list(exported.relationships),
+                                     ignore_order=True, report_repetition=True)
         assert rel_diff == {}, f"Relationships mismatch:\n{rel_diff}"

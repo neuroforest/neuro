@@ -29,6 +29,37 @@ _REL_KEY_ORDER = ("from", "to", "type", "properties")
 _REQUIRED_FIELDS = ("type", "nid", "version", "name")
 
 
+def order_labels(nodes: list[dict]) -> list[dict]:
+    """Reorder each exported node's `labels` so its class label comes first.
+
+    Neo4j does not record label order, so `labels(n)` comes back in storage
+    order and an exporter cannot just copy it: the first label is the node's
+    class — `Metaontology.import_nfx` anchors its `MERGE` on it — while the
+    rest are markers. The class is recovered from the shape of the module: a
+    label carried by *every* node in the export is a module marker
+    (`Metaontology`, `Dependency`), so it is demoted, and what remains is the
+    class.
+
+    A node whose labels are all universal is left alone, so a module whose
+    nodes genuinely share a single class is not reordered into nonsense. Only
+    exporters call this — a file being read is authoritative about its own
+    order and must never be second-guessed (issue #72).
+    """
+    if not nodes:
+        return nodes
+    universal = set(nodes[0].get("labels", []))
+    for n in nodes[1:]:
+        universal &= set(n.get("labels", []))
+    out = []
+    for n in nodes:
+        labels = n.get("labels", [])
+        head = [lab for lab in labels if lab not in universal]
+        if head:
+            n = {**n, "labels": head + [lab for lab in labels if lab in universal]}
+        out.append(n)
+    return out
+
+
 def _ordered(mapping: dict, canonical: tuple[str, ...]) -> dict:
     """Copy `mapping` with its canonical keys first, in `canonical` order.
 
