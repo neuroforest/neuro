@@ -55,8 +55,13 @@ class Ontology:
         """Return an OntologyNodeInfo for the given label."""
         return OntologyNodeInfo(self._nb, label)
 
+    # Knowledge modules anchor on `KnowledgeMetadata` but are otherwise the
+    # same shape — `DEFINES` membership, `DEPENDS_ON` pins, the same header
+    # properties — so one export path covers both. Leaving them out would
+    # narrow what a base-wide export covers: the old sweep took every node
+    # under the ontology roots regardless of which metadata defined it.
     def _metadata(self, name=""):
-        """The `OntologyMetadata` rows to export, newest-registered order aside.
+        """The metadata rows to export, one per module, ordered by name.
 
         Matching on `name` is case-insensitive so `-o Filesystem` and
         `-o filesystem` both resolve; an unknown name raises rather than
@@ -64,7 +69,7 @@ class Ontology:
         """
         rows = self._nb.get_data(
             """
-            MATCH (m:OntologyMetadata)
+            MATCH (m:OntologyMetadata|KnowledgeMetadata)
             WHERE $name = "" OR toLower(m.name) = toLower($name)
             RETURN m.nid AS nid, m.type AS type, m.name AS name,
                    m.version AS version, m.description AS description
@@ -73,7 +78,7 @@ class Ontology:
             {"name": name},
         )
         if name and not rows:
-            raise exceptions.NoOntology(f"no ontology named {name!r} in this base")
+            raise exceptions.NoOntology(f"no module named {name!r} in this base")
         return rows
 
     def export_nfx(self, path, name=""):
@@ -109,7 +114,7 @@ class Ontology:
         for meta in targets:
             nodes = self._nb.get_data(
                 """
-                MATCH (:OntologyMetadata {nid: $nid})-[:DEFINES]->(n)
+                MATCH (:OntologyMetadata|KnowledgeMetadata {nid: $nid})-[:DEFINES]->(n)
                 RETURN DISTINCT n.nid AS nid, labels(n) AS labels,
                        properties(n) AS properties
                 ORDER BY n.nid
@@ -127,11 +132,13 @@ class Ontology:
             # its declared dependencies (issue #72).
             relationships = self._nb.get_data(
                 """
-                MATCH (m:OntologyMetadata {nid: $nid})-[:DEPENDS_ON*0..]->(dep:OntologyMetadata)
+                MATCH (m:OntologyMetadata|KnowledgeMetadata {nid: $nid})
+                      -[:DEPENDS_ON*0..]->(dep:OntologyMetadata|KnowledgeMetadata)
                 WITH m, collect(DISTINCT dep) AS scope
                 MATCH (a)-[r]->(b)
                 WHERE a.nid IS NOT NULL AND b.nid IS NOT NULL
-                  AND NOT a:OntologyMetadata AND NOT b:OntologyMetadata
+                  AND NOT (a:OntologyMetadata|KnowledgeMetadata)
+                  AND NOT (b:OntologyMetadata|KnowledgeMetadata)
                   AND ((EXISTS { (m)-[:DEFINES]->(a) }
                         AND any(s IN scope WHERE EXISTS { (s)-[:DEFINES]->(b) }))
                     OR (EXISTS { (m)-[:DEFINES]->(b) }
@@ -145,7 +152,8 @@ class Ontology:
             dependencies = [
                 f"{r['nid']}@{r['version']}" for r in self._nb.get_data(
                     """
-                    MATCH (:OntologyMetadata {nid: $nid})-[:DEPENDS_ON]->(d:OntologyMetadata)
+                    MATCH (:OntologyMetadata|KnowledgeMetadata {nid: $nid})
+                          -[:DEPENDS_ON]->(d:OntologyMetadata|KnowledgeMetadata)
                     RETURN d.nid AS nid, d.version AS version ORDER BY d.name
                     """,
                     {"nid": meta["nid"]},
