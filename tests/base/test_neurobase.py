@@ -87,44 +87,6 @@ class TestNodeAccessor:
             ("rc-metric", "rc-parent", "APPLIES_TO"),
         }
 
-    def test_nfx_integrity(self, nb_meta, tmp_path):
-        """Export metaontology NFX and verify it is a valid, faithful document.
-
-        `report_repetition` is not optional here: without it `ignore_order`
-        treats `[a, a, b]` as equal to `[a, b]`, which is how this test passed
-        for as long as the export emitted every relationship twice (issue #72).
-        The header assertions are the other half — a document that round-trips
-        its nodes but carries no `type` is still not an `.nfx`.
-        """
-        import json
-
-        import deepdiff
-        from neuro.base import nfx
-        from neuro.utils.internal_utils import get_path
-
-        original = nfx.read(get_path("assets") / "ontology" / "metaontology.nfx")
-        export_path = tmp_path / "metaontology_export.nfx"
-        nb_meta.metaontology.export_nfx(export_path)
-        exported = nfx.read(export_path)
-
-        violations = nfx.validate(exported)
-        assert violations["missing_required"] == []
-        assert violations["duplicate_relationships"] == []
-        assert violations["duplicate_nids"] == []
-        raw = json.loads(export_path.read_text())
-        lint = nfx.lint_format(raw)
-        assert lint == {"unknown_keys": [], "key_order": [], "empty": []}, lint
-
-        for field in ("type", "nid", "name", "version", "description"):
-            assert getattr(exported, field) == getattr(original, field), field
-
-        node_diff = deepdiff.DeepDiff(list(original.nodes), list(exported.nodes),
-                                      ignore_order=True, report_repetition=True)
-        assert node_diff == {}, f"Nodes mismatch:\n{node_diff}"
-
-        rel_diff = deepdiff.DeepDiff(list(original.relationships), list(exported.relationships),
-                                     ignore_order=True, report_repetition=True)
-        assert rel_diff == {}, f"Relationships mismatch:\n{rel_diff}"
 
 
 class TestOntologyExport:
@@ -166,6 +128,19 @@ class TestOntologyExport:
         )
 
     def test_export_reproduces_the_metaontology_source(self, nb_meta, tmp_path):
+        """The export must reproduce `assets/ontology/metaontology.nfx`.
+
+        This replaces the old `test_nfx_integrity`, which exported through a
+        second, bespoke query in `Metaontology` — retired once this path was
+        shown to reproduce the same file, since two writers for one document is
+        the drift that produced issue #72. `report_repetition` is not optional:
+        without it `ignore_order` treats `[a, a, b]` as equal to `[a, b]`, which
+        is why the old test passed for as long as that export emitted every
+        relationship twice.
+        """
+        import json
+
+        import deepdiff
         from neuro.base import nfx
         from neuro.utils.internal_utils import get_path
 
@@ -173,16 +148,23 @@ class TestOntologyExport:
         out = tmp_path / "Metaontology.nfx"
         doc = nb_meta.ontology.export_nfx(out, name="Metaontology")
 
-        assert nfx.validate(doc)["missing_required"] == []
+        violations = nfx.validate(doc)
+        assert violations["missing_required"] == []
+        assert violations["duplicate_relationships"] == []
+        assert violations["duplicate_nids"] == []
+        lint = nfx.lint_format(json.loads(out.read_text()))
+        assert lint == {"unknown_keys": [], "key_order": [], "empty": []}, lint
+
         for field in ("type", "nid", "name", "version", "description"):
             assert getattr(doc, field) == getattr(original, field), field
-        key = lambda d: sorted(d.items())  # noqa: E731
-        assert sorted((n["nid"], tuple(n["labels"])) for n in doc.nodes) == \
-               sorted((n["nid"], tuple(n["labels"])) for n in original.nodes)
-        assert {(r["from"], r["to"], r["type"]) for r in doc.relationships} == \
-               {(r["from"], r["to"], r["type"]) for r in original.relationships}
-        assert sorted(key(n.get("properties", {})) for n in doc.nodes) == \
-               sorted(key(n.get("properties", {})) for n in original.nodes)
+
+        node_diff = deepdiff.DeepDiff(list(original.nodes), list(doc.nodes),
+                                      ignore_order=True, report_repetition=True)
+        assert node_diff == {}, f"Nodes mismatch:\n{node_diff}"
+
+        rel_diff = deepdiff.DeepDiff(list(original.relationships), list(doc.relationships),
+                                     ignore_order=True, report_repetition=True)
+        assert rel_diff == {}, f"Relationships mismatch:\n{rel_diff}"
 
     def test_export_is_case_insensitive_and_rejects_unknown(self, nb_meta, tmp_path):
         from neuro.utils import exceptions
