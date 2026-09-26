@@ -27,6 +27,18 @@ _REL_KEY_ORDER = ("from", "to", "type", "properties")
 # `OntologyMetadata` node to hang them off — leaving every one an orphan that
 # `ontology.prune` may then delete. Releases are named after it too.
 _REQUIRED_FIELDS = ("type", "nid", "version", "name")
+# An ontology's release tag is `<name>.lower()/<version>`, so its `name` has to be
+# a legal git ref component or `post-commit` fails *after* the commit has landed —
+# no tag, a traceback, nothing staged to retry (issue #73). `/` is rejected along
+# with git's own illegal characters: it would nest the tag and make
+# `latest_release`'s `split("/", 1)[1]` read the version as `b/1.0`.
+# Deliberately *not* one of `schema._check_label`'s three patterns, which look
+# similar but constrain a different thing: the `Label` value of a class /
+# relationship / property declared inside `nodes`, not the module header's `name`.
+# Neither is reusable here — of the 51 committed ontology names, the
+# `OntologyNode` pattern rejects the 25 kebab-case ones (`sirin-quality`) and the
+# `OntologyProperty` pattern rejects the 26 PascalCase ones (`Maldi`).
+_TAGGABLE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def order_labels(nodes: list[dict]) -> list[dict]:
@@ -239,6 +251,26 @@ def write(path, doc: Nfx) -> None:
         f.write(dumps(doc))
 
 
+def missing_fields(doc: Nfx) -> list[str]:
+    """Return the required top-level fields `doc` does not carry.
+
+    Split out of `validate` so a caller can gate on a headerless document before
+    running any check that reads `name` as an identity — the pre-commit hook used
+    to measure the version gap against the tag series named after the *filename*
+    first, and report the absent `name` only afterwards (issue #73).
+    """
+    return [f for f in _REQUIRED_FIELDS if not getattr(doc, f, "")]
+
+
+def is_taggable(name: str) -> bool:
+    """Whether `name` can form the `<name>/<version>` half of a release tag."""
+    return bool(
+        _TAGGABLE_NAME.match(name)
+        and ".." not in name
+        and not name.endswith((".", ".lock", "-"))
+    )
+
+
 def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
     """Validate referential integrity of an `Nfx`.
 
@@ -249,7 +281,8 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
     'foreign' (both endpoints are non-local), 'invalid_nids' (not valid UUID v4),
     'missing_required' (required top-level fields absent or empty),
     'invalid_type' (the `type` value when set to something outside
-    `ALLOWED_TYPES`, else None), 'duplicate_nids' (node nids declared again),
+    `ALLOWED_TYPES`, else None), 'untaggable_name' (an `ontology`'s `name` when it
+    cannot form a git ref, else None), 'duplicate_nids' (node nids declared again),
     and 'duplicate_relationships' (repeated `(from, to, type)` triples).
     Duplicates list every repeat after the first occurrence. They are only
     detectable here: an import MERGEs them into a single node or edge.
@@ -289,15 +322,16 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
             duplicate_relationships.append(rel)
         seen_triples.add(triple)
 
-    missing_required = [f for f in _REQUIRED_FIELDS if not getattr(doc, f, "")]
     invalid_type = doc.type if doc.type and doc.type not in ALLOWED_TYPES else None
+    untaggable = doc.type == "ontology" and doc.name and not is_taggable(doc.name)
 
     return {
         "unresolved": unresolved,
         "foreign": foreign,
         "invalid_nids": invalid_nids,
-        "missing_required": missing_required,
+        "missing_required": missing_fields(doc),
         "invalid_type": invalid_type,
+        "untaggable_name": doc.name if untaggable else None,
         "duplicate_nids": duplicate_nids,
         "duplicate_relationships": duplicate_relationships,
     }

@@ -245,6 +245,40 @@ def test_validate_duplicate_relationship():
     assert result["duplicate_nids"] == []
 
 
+def test_validate_missing_required():
+    """A nameless document reports `name` — the field's own regression guard.
+
+    Every other assertion on this list checks that it is *empty*, so dropping
+    `name` from `_REQUIRED_FIELDS` would leave the suite green while restoring
+    the orphaning import of issue #73.
+    """
+    from neuro.base.nfx import Nfx, validate
+    doc = Nfx.from_dict({"type": "ontology", "nid": LOCAL_1, "version": "1.0"})
+    assert validate(doc)["missing_required"] == ["name"]
+    assert validate(Nfx.from_dict({}))["missing_required"] == [
+        "type", "nid", "version", "name"]
+
+
+def test_validate_untaggable_name():
+    """An ontology's name has to survive `git tag <name>/<version>`."""
+    from neuro.base.nfx import Nfx, validate
+    base = {"type": "ontology", "nid": LOCAL_1, "version": "1.0"}
+    assert validate(Nfx.from_dict({**base, "name": "NLZOH branches"}))[
+        "untaggable_name"] == "NLZOH branches"
+    assert validate(Nfx.from_dict({**base, "name": "sirin-system"}))["untaggable_name"] is None
+    assert validate(Nfx.from_dict({**base, "name": "ISO-639"}))["untaggable_name"] is None
+    # knowledge is never tagged, so the same name is fine there
+    assert validate(Nfx.from_dict({
+        **base, "type": "knowledge", "name": "NLZOH branches"}))["untaggable_name"] is None
+
+
+def test_is_taggable():
+    from neuro.base.nfx import is_taggable
+    assert all(is_taggable(n) for n in ("Metaontology", "sirin-system", "ISO-639", "a.b"))
+    assert not any(is_taggable(n) for n in (
+        "has space", "a/b", "-lead", "trail-", "dot.", "a..b", "x.lock", "~tilde", "q?", ""))
+
+
 def test_lint_format_flags_empty_arrays():
     from neuro.base.nfx import lint_format
     assert lint_format({"nodes": [], "relationships": []})["empty"] == ["nodes", "relationships"]

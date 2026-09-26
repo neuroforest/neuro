@@ -335,7 +335,8 @@ class NodeAccessor(Accessor):
         violations = nfx.validate(doc)
         fatal = {k: v for k, v in violations.items()
                  if k in ("missing_required", "invalid_type", "invalid_nids",
-                          "duplicate_nids", "duplicate_relationships") and v}
+                          "untaggable_name", "duplicate_nids",
+                          "duplicate_relationships") and v}
         if fatal:
             raise exceptions.NfxViolation(f"refusing to write {path}: {fatal}")
         nfx.write(path, doc)
