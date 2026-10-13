@@ -5,7 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "neuro"
 readme = "README.md"
-version = "2.8.0"
+# One literal: the VERSION file beside this one. Moved only by a
+# release, never by hand.
+dynamic = ["version"]
 # Every target runs 3.14 now - a
 # py3-none-any wheel installs anywhere and only fails at import, so the floor is
 # declared here rather than discovered on the host. ruff
@@ -56,6 +58,9 @@ markers = [
 [tool.setuptools.packages.find]
 include = ["neuro*"]
 exclude = ["build*", "tests*", "venv*"]
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
 
 [tool.ruff.lint]
 # Declared, not inherited: ruff 0.16 widened its defaults from 59 rules to 413,
