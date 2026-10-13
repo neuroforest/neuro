@@ -1,0 +1,36 @@
+# neuro's deploy manifest — read by rodis ≥ 0.5.1 (PLAN-2026-321), typed as
+# `deploy neuro …` from anywhere (PLAN-2026-319): `--bump patch` is the release AND
+# the deploy. The artifact is the wheel, built from this checkout at the release
+# commit and installed into the host venv; nothing rsyncs, nothing restarts — the
+# pipeline scripts and the nightly backup pick the new code up on their next run.
+#
+# WHERE it lands is not in this file. The repo is public, and a target is an
+# absolute path on a named host, so the one [[target]] (host, path, venv) lives in
+# deploy.local.toml beside this one — untracked, merged by rodis at load
+# (PLAN-2026-324). Without it rodis refuses: a clone that cannot deploy, by design.
+# The Sirin deploy-targets seeder holds every value.
+
+[app]
+name         = "neuro"
+version_file = "VERSION"                              # the one literal; pyproject.toml reads it (dynamic),
+tree         = ["VERSION", "pyproject.toml", "neuro"] # neuro.__version__ reads it or the installed metadata
+                                                      # gate 1: what the wheel carries. tests/, uv.lock and CI are not it.
+[release]
+branch = "develop"                    # the working branch, which the app submodule tracks; master is
+tag    = "v{version}"                 # fast-forwarded by hand with the GitHub push (README)
+twins  = []                           # VERSION is the only place the version is stated
+
+# ── per target, before the install ──────────────────────────────────────────
+[[preflight]]
+name = "no pipeline running on the host"
+run  = "scripts/preflight/pipeline-idle"
+
+# ── what ships: this checkout as a wheel ────────────────────────────────────
+[[wheel]]
+dist = "neuro"
+src  = "."                            # built with `uv build` from HEAD — the release commit just made;
+                                      # recorded BUILT_FROM this checkout's :Codebase, PROVIDES `neuro`
+
+# ── the proof, on the host, in the venv ─────────────────────────────────────
+[[health]]
+run = "scripts/health/host-probe"

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# The proof the install worked, run as rodis's [[health]] after the install
+# (PLAN-2026-321; lifted from scripts/deploy.sh's assert block). On the host, in
+# the venv the wheel went into:
+#   - no editable finder survived (a stale __editable__ .pth keeps resolving the
+#     package to an old checkout even after the wheel lands);
+#   - neuro imports, and the installed metadata, the module and the version rodis
+#     just released agree.
+# Host and venv come from rodis (RODIS_TARGET_*): this repo is public and names no
+# place (PLAN-2026-324).
+set -euo pipefail
+HOST="${RODIS_TARGET_HOST:?RODIS_TARGET_HOST unset — run through rodis, per target}"
+VENV="${RODIS_TARGET_VENV:?RODIS_TARGET_VENV unset — the target declares no venv}"
+WANT="${RODIS_VERSION:?RODIS_VERSION unset — run through rodis}"
+ssh "$HOST" "
+    set -e
+    # find, not a glob: the host shell is zsh, which errors on a pattern that
+    # matches nothing — which is exactly the passing case here.
+    ! find $VENV/lib -maxdepth 3 -name '__editable__*' | grep -q . \
+        || { echo '  ✘ editable finder survived the install' >&2; exit 1; }
+    $VENV/bin/python - <<'PY'
+import importlib.metadata as m
+import neuro
+have = m.version('neuro')
+if not (have == neuro.__version__ == '$WANT'):
+    raise SystemExit(f'  ✘ host has neuro {have} (module says {neuro.__version__}), released $WANT')
+print('    neuro', have, neuro.__file__)
+PY
+"

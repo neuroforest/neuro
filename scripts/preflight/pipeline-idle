@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Never swap neuro under a live pipeline (PLAN-2026-321; the guard scripts/deploy.sh
+# carried, as the Speq pipeline's own manifest carries it). The pipeline's push_*.py
+# steps import neuro while writing to the graph and S3, and a reinstalled package
+# under them is a half-written run. A preflight refuses; it never kills.
+#
+# Per target: rodis sets RODIS_TARGET_HOST. No host is named here — this repo is
+# public, and the places live in deploy.local.toml (PLAN-2026-324).
+set -euo pipefail
+HOST="${RODIS_TARGET_HOST:?RODIS_TARGET_HOST unset — run through rodis, per target}"
+running=$(ssh "$HOST" 'pgrep -af "run_[a-z]*\.sh" || true')
+if [[ -n "$running" ]]; then
+    echo "  ✘ a pipeline is running on $HOST — wait for it or kill it:" >&2
+    echo "$running" | sed 's/^/      /' >&2
+    exit 1
+fi
+echo "    no run_*.sh on $HOST"

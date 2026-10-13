@@ -6,8 +6,13 @@ __pycache__/
 /.idea
 /.pytest_cache
 /build
-# wheel build artefacts — spectro's scripts/deploy.sh builds into dist/
+# wheel build artefacts — `deploy neuro` (rodis) builds into dist/
 /dist
 /neuro.egg-info
 /temp
 /venv
+
+# WHERE the wheel lands: host and venv, absolute paths on a named box. This repo is
+# public, so rodis reads them from an untracked overlay beside deploy.toml
+# (PLAN-2026-324); the Sirin deploy-targets seeder holds every value.
+/deploy.local.toml
