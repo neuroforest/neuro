@@ -1,11 +1,36 @@
 import os
+from pathlib import Path
+
 import requests
 
 from neuro.utils import exceptions
 
 
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
-HEADERS = {"User-Agent": f"{os.environ['APP_NAME']}/{os.environ['APP_VERSION']} ({os.environ['APP_URL']})"}
+
+
+def _user_agent():
+    """`<app>/<version> (<url>)`, as Wikidata's policy asks. The app's version is
+    the VERSION file in APP_DIR (PLAN-2026-322: APP_VERSION left the environment
+    when the file became the one literal); without an app dir, or without the
+    file, neuro's own version stands in. Never a KeyError at import: the pipeline
+    scripts import this module on a host that sets no APP_* at all."""
+    name = os.environ.get("APP_NAME", "NeuroForest")
+    url = os.environ.get("APP_URL", "https://github.com/neuroforest")
+    version = ""
+    app_dir = os.environ.get("APP_DIR")
+    if app_dir:
+        try:
+            version = (Path(app_dir) / "VERSION").read_text().strip()
+        except OSError:
+            version = ""
+    if not version:
+        from neuro import __version__
+        version = __version__
+    return f"{name}/{version} ({url})"
+
+
+HEADERS = {"User-Agent": _user_agent()}
 
 
 def fetch(query_file_path, params: dict = None, wikidata_sparql_url=WIKIDATA_SPARQL_URL):
