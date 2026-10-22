@@ -142,6 +142,27 @@ class Metaproperty:
         return bool(fn(property_value, self))
 
 
+def _check_property_value(mp, property_value, strict):
+    """Verdict for one value against one Metaproperty declaration.
+
+    Returns (status, message) with status in {"ok", "warn", "invalid"}.
+    Shared by the single-label validator and the multi-label union so both
+    treat unvalidated types identically.
+    """
+    if not mp.has_validator():
+        if strict:
+            return "invalid", f"unvalidated data type: {mp.property_type}"
+        if isinstance(property_value, str):
+            return "warn", f"unvalidated data type {mp.property_type}, accepted as String"
+        return "invalid", (
+            f"unvalidated data type: {mp.property_type} "
+            f"(and not String: got {property_value!r})"
+        )
+    if not mp.validate(property_value):
+        return "invalid", f"expected {mp.property_type}, got {property_value}"
+    return "ok", None
+
+
 class Metaproperties(UserDict):
     def __init__(self, node_label):
         super().__init__()
@@ -207,29 +228,91 @@ class Metaproperties(UserDict):
         for property_key, property_value in properties.items():
             if property_key not in self.data:
                 violations.undefined_properties.append(property_key)
-            else:
-                mp = self.data[property_key]
-                if not mp.has_validator():
-                    if strict:
-                        reason = f"unvalidated data type: {mp.property_type}"
-                        violations.invalid_properties.append((property_key, reason))
-                    elif isinstance(property_value, str):
-                        violations.warnings.append(
-                            f"{property_key}: unvalidated data type {mp.property_type}, accepted as String"
-                        )
-                    else:
-                        reason = (
-                            f"unvalidated data type: {mp.property_type} "
-                            f"(and not String: got {property_value!r})"
-                        )
-                        violations.invalid_properties.append((property_key, reason))
-                elif not mp.validate(property_value):
-                    reason = f"expected {mp.property_type}, got {property_value}"
-                    violations.invalid_properties.append((property_key, reason))
+                continue
+            status, message = _check_property_value(
+                self.data[property_key], property_value, strict
+            )
+            if status == "warn":
+                violations.warnings.append(f"{property_key}: {message}")
+            elif status == "invalid":
+                violations.invalid_properties.append((property_key, message))
 
         for p in self.data.values():
             if p.is_required() and p.label not in properties:
                 violations.missing_properties.append(p)
+
+        return violations
+
+
+class MetapropertiesUnion(Metaproperties):
+    """Metaproperties merged across every label of a (multi-label) node.
+
+    A node may carry several class labels; it is an instance of each. This
+    merges their schemas so validation sees all labels at once:
+
+    - ``data[property_label]`` is the list of each contributing label's
+      declaration of that property (one per label, already distance-resolved
+      within that label's own lineage by ``Metaproperties.from_ontology``).
+    - **undefined** ⇔ no label declares the key.
+    - **value** must satisfy *every* declaration (conjunction) - a value that
+      fails any declaration is invalid, and the message names all declarations
+      so a conflict between two unrelated classes is legible.
+    - **required** ⇔ *any* declaration requires it (required-union).
+
+    Distances across unrelated lineages are not comparable, so declarations are
+    never collapsed by nearness the way a single lineage's are - all are kept.
+    A single-label node is the union of one and behaves exactly as before.
+    """
+
+    def __init__(self, node_labels):
+        node_labels = list(node_labels)
+        super().__init__("+".join(node_labels))
+        self.node_labels = node_labels
+
+    def __setitem__(self, property_label, metaproperty_object: Metaproperty):
+        self.data.setdefault(property_label, []).append(metaproperty_object)
+
+    @classmethod
+    def from_ontology(cls, nb, node_labels):
+        union = cls(node_labels)
+        for label in node_labels:
+            for prop_label, mp in Metaproperties.from_ontology(nb, label).data.items():
+                union[prop_label] = mp
+        return union
+
+    def validate_properties(self, properties: dict, violations=None, strict=False):
+        if violations is None:
+            violations = Violations()
+        for property_key, property_value in properties.items():
+            declarations = self.data.get(property_key)
+            if not declarations:
+                violations.undefined_properties.append(property_key)
+                continue
+            statuses = [
+                _check_property_value(mp, property_value, strict) for mp in declarations
+            ]
+            if any(status == "invalid" for status, _ in statuses):
+                if len(declarations) > 1:
+                    named = ", ".join(
+                        f"{mp.property_type} ({mp.node})" for mp in declarations
+                    )
+                    reason = f"must satisfy all of [{named}], got {property_value!r}"
+                else:
+                    reason = next(msg for status, msg in statuses if status == "invalid")
+                violations.invalid_properties.append((property_key, reason))
+            else:
+                for status, msg in statuses:
+                    if status == "warn":
+                        violations.warnings.append(f"{property_key}: {msg}")
+                        break
+
+        seen_required = set()
+        for declarations in self.data.values():
+            for mp in declarations:
+                if mp.is_required() and mp.label not in properties \
+                        and mp.label not in seen_required:
+                    violations.missing_properties.append(mp)
+                    seen_required.add(mp.label)
 
         return violations
 
@@ -358,6 +441,23 @@ class Metarelationships(UserDict):
                     continue
             metarelationships[key] = mr
         return metarelationships
+
+    @classmethod
+    def union(cls, nb, node_labels):
+        """Merge the metarelationships of several labels for a multi-label node.
+
+        Keyed by ``label:peer:direction``, so every label's declarations
+        coexist: a relationship is undefined only if no label declares it, a
+        target is invalid only if no declaration accepts it, and the required
+        set is the union - exactly what ``validate_relationships`` computes over
+        the merged ``data``.
+        """
+        node_labels = list(node_labels)
+        merged = cls("+".join(node_labels))
+        for label in node_labels:
+            for key, mr in cls.from_ontology(nb, label).data.items():
+                merged[key] = mr
+        return merged
 
     def _subclass_matches(self, nb, target_labels, expected):
         """True if any leaf label in `target_labels` is `expected` or a
@@ -642,6 +742,7 @@ class Violations:
 
     def __init__(self):
         self.undefined_labels: list[str] = []
+        self.redundant_labels: list = []
         self.undefined_properties: list = []
         self.missing_properties: list = []
         self.invalid_properties: list = []
@@ -652,7 +753,8 @@ class Violations:
 
     def __bool__(self):
         return any([
-            self.undefined_labels, self.undefined_properties,
+            self.undefined_labels, self.redundant_labels,
+            self.undefined_properties,
             self.missing_properties, self.invalid_properties,
             self.undefined_relationships, self.missing_relationships,
             self.invalid_relationships,
@@ -669,6 +771,9 @@ class Violations:
             quoted = ", ".join(f"'{lb}'" for lb in self.undefined_labels)
             noun = "label" if len(self.undefined_labels) == 1 else "labels"
             lines.append(f"  undefined {noun}: {quoted}")
+        if self.redundant_labels:
+            for sub, sup in self.redundant_labels:
+                lines.append(f"  redundant label: {B}{sub}{RST} implies {sup} (same lineage)")
         if self.invalid_properties:
             for p, reason in self.invalid_properties:
                 lines.append(f"  invalid value: {B}{p}{RST} ({reason})")

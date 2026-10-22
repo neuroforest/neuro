@@ -2,7 +2,12 @@ import json
 import os
 
 from neuro.base import nfx
-from neuro.base.schema import Metaproperties, Metarelationships, OntologyNodeInfo, Violations
+from neuro.base.schema import (
+    MetapropertiesUnion,
+    Metarelationships,
+    OntologyNodeInfo,
+    Violations,
+)
 from neuro.utils import exceptions, terminal_components
 
 
@@ -195,6 +200,7 @@ class ObjectValidator:
 
     def get_violations(self, validate_relationships=False):
         self.validate_labels()
+        self.validate_label_antichain()
         self.validate_properties()
         if validate_relationships:
             self.validate_relationships()
@@ -217,20 +223,46 @@ class ObjectValidator:
         for label in self.object.labels:
             self.validate_label(label)
 
+    def _defined_labels(self):
+        """The node's labels that resolve to an ontology node - the set the
+        union validators judge against. Undefined labels are reported by
+        ``validate_labels`` and excluded here."""
+        return [lbl for lbl in self.object.labels if lbl not in self.violations.undefined_labels]
+
+    def validate_label_antichain(self):
+        """A multi-label node's class labels must be mutually incomparable
+        A label that is an ancestor or descendant of
+        another in the set is redundant - the subclass already implies its
+        ancestors through the lineage - so report the redundant pair. No
+        declared joining class is required; only co-lineal labels are refused."""
+        labels = self._defined_labels()
+        if len(labels) < 2:
+            return
+        rows = self.nb.get_data(
+            """
+            MATCH (sub:OntologyNode)-[:SUBCLASS_OF*1..]->(sup:OntologyNode)
+            WHERE sub.label IN $labels AND sup.label IN $labels
+            RETURN sub.label AS sub, sup.label AS sup
+            """,
+            parameters={"labels": labels},
+        )
+        for r in rows:
+            self.violations.redundant_labels.append((r["sub"], r["sup"]))
+
     def validate_properties(self):
-        for label in self.object.labels:
-            if label in self.violations.undefined_labels:
-                continue
-            metaproperties = Metaproperties.from_ontology(self.nb, label)
-            self.violations = metaproperties.validate_properties(self.object.properties, self.violations)
+        labels = self._defined_labels()
+        if not labels:
+            return
+        union = MetapropertiesUnion.from_ontology(self.nb, labels)
+        self.violations = union.validate_properties(self.object.properties, self.violations)
 
     def validate_relationships(self):
         nid = self.object.properties.get("nid")
         if not nid:
             return
-        for label in self.object.labels:
-            if label in self.violations.undefined_labels:
-                continue
-            metarelationships = Metarelationships.from_ontology(self.nb, label)
-            self.violations = metarelationships.validate_relationships(self.nb, nid, self.violations)
+        labels = self._defined_labels()
+        if not labels:
+            return
+        union = Metarelationships.union(self.nb, labels)
+        self.violations = union.validate_relationships(self.nb, nid, self.violations)
 

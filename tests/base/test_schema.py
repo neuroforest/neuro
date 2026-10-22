@@ -8,7 +8,12 @@ hardcoded in `Metaproperty.check` and tested here. Non-core validators
 
 import pytest
 
-from neuro.base.schema import Metaproperties, Metaproperty, Metarelationship
+from neuro.base.schema import (
+    Metaproperties,
+    MetapropertiesUnion,
+    Metaproperty,
+    Metarelationship,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -310,3 +315,62 @@ class TestLineageLines:
         info = self._info("A", {"A": ["B"], "B": ["A"]})
         dim = f"{terminal_style.DIM}A{terminal_style.RESET}"
         assert info.lineage_lines() == [f"   A ➜  B ➜  {dim}"]
+
+
+def _decl(property_label, property_type, node, required=False):
+    return Metaproperty({
+        "property": property_label,
+        "node": node,
+        "node_object": None,
+        "property_object": None,
+        "property_type": property_type,
+        "relationship_type": "HAS_PROPERTY",
+        "relationship_lineage": ["HAS_PROPERTY"] + (["REQUIRE_PROPERTY"] if required else []),
+        "deep_node": "OntologyNode",
+        "distance": 0,
+    })
+
+
+class TestMetapropertiesUnion:
+    """Validation across a multi-label node's merged schemas."""
+
+    def _union(self, *declarations):
+        union = MetapropertiesUnion(["A", "B"])
+        for mp in declarations:
+            union[mp.label] = mp
+        return union
+
+    def test_property_defined_by_either_label(self):
+        union = self._union(_decl("a", "String", "A"), _decl("b", "String", "B"))
+        v = union.validate_properties({"a": "x", "b": "y"})
+        assert not v
+        assert not v.undefined_properties
+
+    def test_undefined_only_when_no_label_declares(self):
+        union = self._union(_decl("a", "String", "A"))
+        v = union.validate_properties({"a": "x", "ghost": "z"})
+        assert v.undefined_properties == ["ghost"]
+
+    def test_conjunction_passes_when_all_declarations_hold(self):
+        union = self._union(_decl("c", "String", "A"), _decl("c", "String", "B"))
+        v = union.validate_properties({"c": "hello"})
+        assert not v
+
+    def test_conjunction_fails_naming_both_declarations(self):
+        union = self._union(_decl("name", "String", "Microscope"),
+                            _decl("name", "Color", "Thing"))
+        v = union.validate_properties({"name": "hello"})
+        assert v.invalid_properties
+        reason = v.invalid_properties[0][1]
+        assert "String (Microscope)" in reason and "Color (Thing)" in reason
+
+    def test_required_is_union_across_labels(self):
+        union = self._union(_decl("a", "String", "A"), _decl("b", "String", "B", required=True))
+        v = union.validate_properties({"a": "x"})
+        assert [p.label for p in v.missing_properties] == ["b"]
+
+    def test_single_label_behaves_as_before(self):
+        union = self._union(_decl("a", "String", "A", required=True))
+        assert not union.validate_properties({"a": "x"})
+        v = union.validate_properties({})
+        assert [p.label for p in v.missing_properties] == ["a"]
