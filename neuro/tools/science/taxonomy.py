@@ -69,6 +69,12 @@ class SyncInvariantError(RuntimeError):
     """A taxon has more than one parent after the run - a bug, not a state."""
 
 
+class EntrezUnavailable(RuntimeError):
+    """Entrez answered nothing for a base that holds taxa: an outage, not a
+    taxonomy in which every id was withdrawn. The run stops before a single
+    ``GONE`` is written."""
+
+
 class Graph(Protocol):
     def taxa(self) -> list[Taxon]: ...
     def rename(self, nid: str, name: str, rank: str) -> None: ...
@@ -93,6 +99,8 @@ def sync(graph: Graph, fetch: Callable[[list[str]], dict], dry_run: bool = False
     taxa = graph.taxa()
     by_id: dict[str, Taxon] = {t.id: t for t in taxa}
     fetched = fetch(list(by_id))
+    if by_id and not fetched:
+        raise EntrezUnavailable(f"Entrez answered nothing for {len(by_id)} taxa - an outage, not a withdrawal")
     merges = merged(by_id, fetched)
 
     def write(fn, *args):

@@ -181,10 +181,18 @@ class TestSync:
         assert g.nodes["x"].id == "21" and g.nodes["x"].name == "New name"
 
     def test_gone_is_logged_not_deleted(self):
+        g = graph_2026_10_27()
+        g.nodes["x"] = Taxon("x", "99", "Withdrawn", "species", ["724"])
+        g.held.add("x")
+        changes = taxonomy.sync(g, entrez_now)
+        assert ("GONE", "99") in kinds(changes)
+        assert "x" in g.nodes and g.nodes["x"].parents == ["724"]
+
+    def test_an_empty_answer_is_an_outage_not_a_withdrawal(self):
         g = FakeGraph([Taxon("x", "99", "Withdrawn", "species", [])], held={"x"})
-        changes = taxonomy.sync(g, lambda ids: {})
-        assert kinds(changes) == [("GONE", "99")]
-        assert "x" in g.nodes
+        with pytest.raises(taxonomy.EntrezUnavailable):
+            taxonomy.sync(g, lambda ids: {})
+        assert g.log == []
 
     def test_dry_run_decides_but_writes_nothing(self):
         g = graph_2026_10_27()
