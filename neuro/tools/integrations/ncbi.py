@@ -48,6 +48,71 @@ def get_lineage(taxon_id):
     return lineage
 
 
+def fetch_taxa(taxon_ids, batch=100):
+    """Entrez's current record for each taxid, by id - ``{TaxId, ScientificName,
+    Rank, ParentTaxId, AkaTaxIds, LineageEx}`` with ``LineageEx`` root first as
+    ``get_lineage`` shapes it. Batched POSTs, ``batch`` ids each.
+
+    The result is keyed by the id Entrez *returns*, which is not always the one
+    asked: a merged taxid comes back as the surviving record with the old id in
+    its ``AkaTaxIds``, and a deleted one comes back as nothing. Both are the
+    caller's to read off the dictionary - ``merged(asked, fetched)`` does it.
+
+    One bad id fails its whole batch, so a batch that errors is retried one id
+    at a time; an id that still fails is simply absent from the result."""
+    url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+    ids = [str(i) for i in taxon_ids]
+    out = {}
+    for start in range(0, len(ids), batch):
+        chunk = ids[start:start + batch]
+        try:
+            out.update(_efetch(url, chunk))
+        except (requests.RequestException, ElementTree.ParseError, ValueError):
+            if len(chunk) == 1:
+                continue
+            for one in chunk:
+                try:
+                    out.update(_efetch(url, [one]))
+                except (requests.RequestException, ElementTree.ParseError, ValueError):
+                    pass
+    return out
+
+
+def _efetch(url, ids):
+    data = {"db": "taxonomy", "id": ",".join(ids), "retmode": "xml",
+            "api_key": os.getenv("NCBI_API_KEY")}
+    res = requests.post(url, data=data, timeout=60)
+    res.raise_for_status()
+    tree = ElementTree.fromstring(res.text)
+    records = {}
+    for taxon in tree.findall("./Taxon"):
+        lineage = [{"TaxId": le.findtext("TaxId"), "ScientificName": le.findtext("ScientificName"),
+                    "Rank": le.findtext("Rank")}
+                   for le in taxon.findall("./LineageEx/Taxon")]
+        record = {
+            "TaxId": taxon.findtext("TaxId"),
+            "ScientificName": taxon.findtext("ScientificName"),
+            "Rank": taxon.findtext("Rank"),
+            "ParentTaxId": taxon.findtext("ParentTaxId"),
+            "AkaTaxIds": [e.text for e in taxon.findall("./AkaTaxIds/TaxId")],
+            "LineageEx": lineage,
+        }
+        records[record["TaxId"]] = record
+    return records
+
+
+def merged(asked, fetched):
+    """``{old id: surviving id}`` for every asked id Entrez answered with another
+    record - the merges - read off a ``fetch_taxa`` result."""
+    asked = {str(i) for i in asked}
+    out = {}
+    for tax_id, record in fetched.items():
+        for aka in record["AkaTaxIds"]:
+            if aka in asked and aka != tax_id:
+                out[aka] = tax_id
+    return out
+
+
 def get_taxon_info(taxon_id):
     url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
     params = {
