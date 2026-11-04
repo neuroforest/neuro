@@ -5,6 +5,7 @@ Tools for Docker container management.
 import json
 import logging
 import os
+import shutil
 import subprocess
 
 import docker
@@ -49,14 +50,30 @@ class Container:
 
     @staticmethod
     def is_valid_backup(b):
-        if os.path.isfile(f"{b}/data.tar.gz") and os.path.isfile(f"{b}/container.tar"):
-            return True
-        else:
-            return False
+        """A backup is a directory holding the data volume; the rest is optional.
 
-    def backup(self):
+        `container.tar` and `logs.tar.gz` ride along only in a full backup
+        a restore needs the data volume alone, the container is
+        recreated from the compose image.
         """
-        Backup docker container and associated data.
+        return os.path.isfile(f"{b}/data.tar.gz")
+
+    @staticmethod
+    def backup_kind(b):
+        """'full' when the container image is in the backup, 'data' when only the
+        volume is, None when it is not a backup at all."""
+        if not Container.is_valid_backup(b):
+            return None
+        return "full" if os.path.isfile(f"{b}/container.tar") else "data"
+
+    def backup(self, full=False):
+        """
+        Back up the container's data volume into a new archive directory.
+
+        Default is the data volume only; `full` adds the container image and the
+        logs volume. Every file is written by this process (owner = the caller,
+        mode 0600), never by a container onto a bind mount, so nothing in the
+        archive is root-owned or world-readable.
         """
         if not self.name:
             raise ValueError("Container name not provided.")
@@ -64,7 +81,68 @@ class Container:
         self.backup_location = f"{self.archive}/{self.name}-{self.instant}"
         os.makedirs(self.backup_location)
         self.backup_data()
-        self.backup_container()
+        if full:
+            self.backup_logs()
+            self.backup_container()
+
+    def _mounted_volume(self, destination):
+        """Name of the named volume mounted at `destination` in the container,
+        None when nothing is mounted there."""
+        result = subprocess.run([
+            "docker",
+            "inspect",
+            self.name,
+            "--format", "{{json .Mounts}}"
+        ], capture_output=True, text=True)
+        try:
+            mounts = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            raise Exception(f"Container not found: {self.name}")
+        for mount in mounts:
+            if mount["Destination"] == destination and mount.get("Type") == "volume":
+                return mount["Name"]
+        return None
+
+    @staticmethod
+    def _stream_to_file(cmd, dest):
+        """Run `cmd` and write its stdout to `dest`, created 0600 by this process.
+
+        The producer's exit status is checked: a failed producer leaves no file
+        behind, so a half-written archive can never be mistaken for a backup.
+        """
+        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(fd, "wb") as out:
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                shutil.copyfileobj(proc.stdout, out, length=1 << 20)
+                _, stderr = proc.communicate()
+        except BaseException:
+            os.unlink(dest)
+            raise
+        if proc.returncode != 0:
+            os.unlink(dest)
+            raise Exception(
+                f"Backup error: {' '.join(cmd[:2])} exited {proc.returncode}: "
+                f"{stderr.decode(errors='replace').strip()}"
+            )
+
+    def _tar_volume(self, destination, filename):
+        """Tar a named volume mounted at `destination` in the (stopped) container
+        straight into `<backup_location>/<filename>`. Returns False when the
+        container mounts nothing there."""
+        volume = self._mounted_volume(destination)
+        if not volume:
+            return False
+        logging.debug(f"Found {destination} volume: {volume}")
+        self._stream_to_file([
+            "docker",
+            "run", "--rm",
+            "-v", f"{volume}:/src:ro",
+            "alpine", "sh", "-c",
+            "cd /src && tar cz ."
+        ], f"{self.backup_location}/{filename}")
+        logging.debug(f"Archived {destination} to {self.backup_location}/{filename}")
+        return True
 
     def list_backups(self):
         archive_dir = Dir(self.archive)
@@ -81,65 +159,31 @@ class Container:
             print(b.replace(f"{self.archive}/", ""))
 
     def backup_data(self):
-        # Find /data mount
-        result = subprocess.run([
-            "docker",
-            "inspect",
-            self.name,
-            "--format", "{{json .Mounts}}"
-        ], capture_output=True, text=True)
-        try:
-            mounts = json.loads(result.stdout)
-        except json.JSONDecodeError:
-            raise Exception(f"Container not found: {self.name}")
-        data_mount = dict()
-        for mount in mounts:
-            if mount["Destination"] == "/data":
-                data_mount = mount
-                break
-        data_mount_id = data_mount["Name"]
-        logging.debug(f"Found /data volume: {data_mount_id}")
+        """The data volume (/data) → data.tar.gz.
 
-        # Copy /data volume to an independent volume
-        data_backup_volume_name = f"{self.name}-{self.instant}"
-        subprocess.run([
-            "docker",
-            "run", "--rm",
-            "-v", f"{data_mount_id}:/from",
-            "-v", f"{data_backup_volume_name}:/to",
-            "alpine", "ash", "-c",
-            "cd /from && cp -a . /to"
-        ], capture_output=True)
-        logging.debug(f"Copied /data volume to {data_backup_volume_name}")
-        self.dirty["volume"].append(data_backup_volume_name)
+        Read straight from the volume, mounted read-only: the container is stopped
+        before a backup, so the volume is quiescent and the scratch copy the old
+        path made (cp -a into a throw-away volume, then tar) only doubled the I/O
+        and the time the base was down.
+        """
+        if not self._tar_volume("/data", "data.tar.gz"):
+            raise Exception(f"Backup error: {self.name} mounts no volume at /data.")
 
-        # Verify
-        result = subprocess.run([
-            "docker",
-            "volume",
-            "ls"], capture_output=True, text=True)
-        if data_backup_volume_name not in result.stdout:
-            raise Exception(f"Backup error: volume {data_mount_id} not found.")
-
-        # Export volume to tar.gz file
-        subprocess.run([
-            "docker",
-            "run", "--rm",
-            "-v", f"{data_backup_volume_name}:/data",
-            "-v", f"{self.backup_location}:/backup",
-            "alpine", "sh", "-c",
-            "cd /data && tar czf /backup/data.tar.gz ."
-        ], capture_output=True)
-        logging.debug(f"Archived /data to {self.backup_location}/data.tar.gz")
+    def backup_logs(self):
+        """The logs volume (/logs) → logs.tar.gz; skipped when the container has none."""
+        if not self._tar_volume("/logs", "logs.tar.gz"):
+            logging.debug(f"{self.name} mounts no volume at /logs - no logs.tar.gz")
 
     def backup_container(self):
         backup_name = f"{self.name}:{self.instant}"
-        subprocess.run([
+        result = subprocess.run([
             "docker",
             "commit",
             self.name,
             backup_name
-        ], capture_output=True)
+        ], capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"Backup error: docker commit failed: {result.stderr.strip()}")
         logging.debug(f"Saved {self.name} to {backup_name}")
 
         # Verify
@@ -152,13 +196,11 @@ class Container:
             raise Exception(f"Backup error: image {backup_name} not found.")
         self.dirty["image"].append(backup_name)
 
-        # Archive container
-        subprocess.run([
-            "docker",
-            "save",
-            backup_name,
-            "-o", f"{self.backup_location}/container.tar"
-        ], capture_output=True)
+        # Archive container - to stdout, written by this process (0600)
+        self._stream_to_file(
+            ["docker", "save", backup_name],
+            f"{self.backup_location}/container.tar",
+        )
 
     def restore(self, backup_location):
         if self.is_valid_backup(backup_location):
@@ -173,7 +215,8 @@ class Container:
         self.name, self.instant = self.backup_location.rsplit("/", 1)[1].split("-", 1)
 
         self.restore_data()
-        self.restore_container()
+        if self.backup_kind(self.backup_location) == "full":
+            self.restore_container()
 
     def restore_data(self, target_volume=None):
         """Restore backup data into a volume. Clears existing contents first.
@@ -197,6 +240,9 @@ class Container:
         ], capture_output=True)
 
     def restore_container(self):
+        """Load the saved container image - only a full backup carries one."""
+        if not os.path.isfile(f"{self.backup_location}/container.tar"):
+            raise ValueError(f"Not a full backup (no container.tar): {self.backup_location}")
         logging.debug("Restoring container as image")
         subprocess.run([
             "docker",
