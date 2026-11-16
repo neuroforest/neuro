@@ -329,6 +329,27 @@ def container_running(container_name):
     return result.returncode == 0 and result.stdout.strip() == "true"
 
 
+def container_publishing_port(host_port):
+    """Name of the running container that publishes ``host_port``, or None.
+
+    Only a *running* container can hold a host port; a stopped one has no
+    binding, however its config reads. So a busy port with no publisher here
+    belongs to something that is not Docker - an SSH tunnel, typically.
+    """
+    result = subprocess.run(
+        ["docker", "ps", "--format", "{{.Names}}\t{{.Ports}}"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return None
+    needle = f":{host_port}->"
+    for line in result.stdout.splitlines():
+        name, _, ports = line.partition("\t")
+        if needle in ports:
+            return name
+    return None
+
+
 def network_exists(network_name):
     result = subprocess.run(
         ["docker", "network", "inspect", network_name],
