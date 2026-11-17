@@ -8,12 +8,19 @@ the index accepts every type - `NfxIndex` is that unrestricted view.
 knowledge.
 
 Discovery is delegated to `neuro.base.plugins.walk_plugins`. Validators are
-loaded once per plugin root via `plugins.load_validators_at`. Implicit parent
+loaded once per validators file via `plugins.load_validators`. Implicit parent
 dependencies (nested-plugin "ontology import" semantics) are computed at
 register time and surfaced via `Entry.implicit_parent_nid`; `_topo` /
 `NfxTree` callers obtain them through the index's `extra_deps` callable.
+
+Three things are fatal at scan time: a nid claimed by two
+files anywhere; a local name (file stem, case-insensitive) used twice inside
+one registry root - across roots it may repeat, the roots' namespaces tell
+them apart; and, in a consolidated root, a file whose
+kind subdir disagrees with its `type` field.
 """
 
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,6 +38,13 @@ class Entry:
     plugin_root: Path | None = None
     parent_plugin_root: Path | None = None
     implicit_parent_nid: str | None = None
+    registry_root: Path | None = None
+    validators_path: Path | None = None
+
+    @property
+    def local_name(self) -> str:
+        """The module's name inside its root - the file stem."""
+        return self.path.stem
 
 
 class PluginIndex:
@@ -47,21 +61,22 @@ class PluginIndex:
     def __init__(self, *roots):
         self._index: dict[str, Entry] = {}
         self._by_plugin_root: dict[Path, Entry] = {}
+        self._by_local_name: dict[tuple[Path, str], Path] = {}
         self._roots = tuple(Path(r).resolve() for r in roots)
         self._scan()
         self._resolve_implicit_parents()
 
     # ---- registration ----------------------------------------------------------
 
-    def _register(
-        self,
-        path: Path,
-        plugin_root: Path | None = None,
-        parent_plugin_root: Path | None = None,
-    ) -> Entry | None:
+    def _register(self, pf: plugins.PluginFile) -> Entry | None:
+        path = pf.nfx_path
         doc = nfx.read(path)
         if not doc.nid:
             return None
+        if pf.expected_type and doc.type and doc.type != pf.expected_type:
+            raise exceptions.NfxViolation(
+                f"{path} sits in {pf.expected_type}/ but declares type {doc.type!r}"
+            )
         if self.KIND and doc.type not in self.KIND:
             return None
         existing = self._index.get(doc.nid)
@@ -69,24 +84,33 @@ class PluginIndex:
             raise exceptions.NfxViolation(
                 f"nid collision: {doc.nid} claimed by {existing.path} and {path}"
             )
+        name_key = (pf.registry_root, path.stem.lower())
+        claimed = self._by_local_name.get(name_key)
+        if claimed is not None and claimed != path:
+            raise exceptions.NfxViolation(
+                f"local name collision in {pf.registry_root}: {path.stem!r} claimed by {claimed} and {path}"
+            )
         entry = Entry(
             path=path,
             nid=doc.nid,
             type=doc.type,
             name=doc.name,
             version=doc.version,
-            plugin_root=plugin_root,
-            parent_plugin_root=parent_plugin_root,
+            plugin_root=pf.plugin_root,
+            parent_plugin_root=pf.parent_plugin_root,
+            registry_root=pf.registry_root,
+            validators_path=pf.validators_path,
         )
         self._index[doc.nid] = entry
-        if plugin_root is not None:
-            self._by_plugin_root[plugin_root.resolve()] = entry
+        self._by_local_name[name_key] = path
+        if pf.plugin_root is not None:
+            self._by_plugin_root[pf.plugin_root.resolve()] = entry
         return entry
 
     def _scan(self) -> None:
         for pf in plugins.walk_plugins(self._roots):
-            self._register(pf.nfx_path, pf.plugin_root, pf.parent_plugin_root)
-            plugins.load_validators_at(pf.plugin_root)
+            self._register(pf)
+            plugins.load_validators(pf)
 
     def _resolve_implicit_parents(self) -> None:
         """Second pass: each entry whose path has a parent plugin root gets
@@ -99,16 +123,7 @@ class PluginIndex:
             parent_entry = self._by_plugin_root.get(entry.parent_plugin_root.resolve())
             if parent_entry is None:
                 continue
-            updates[nid] = Entry(
-                path=entry.path,
-                nid=entry.nid,
-                type=entry.type,
-                name=entry.name,
-                version=entry.version,
-                plugin_root=entry.plugin_root,
-                parent_plugin_root=entry.parent_plugin_root,
-                implicit_parent_nid=parent_entry.nid,
-            )
+            updates[nid] = dataclasses.replace(entry, implicit_parent_nid=parent_entry.nid)
         self._index.update(updates)
         for entry in updates.values():
             if entry.plugin_root is not None:
@@ -154,6 +169,11 @@ class PluginIndex:
     def entries(self):
         """Snapshot of all entries, in insertion order."""
         return list(self._index.values())
+
+    @property
+    def roots(self):
+        """The registry roots this index was built from, resolved, in order."""
+        return self._roots
 
     def extra_deps(self, nid):
         """Implicit-parent dependency lookup, suitable as `NfxTree(..., extra_deps=)`.

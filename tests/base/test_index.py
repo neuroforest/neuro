@@ -9,6 +9,7 @@ import uuid
 import pytest
 
 from neuro.base.index import KnowledgeIndex, NfxIndex, OntologyIndex, PluginIndex
+from neuro.utils import exceptions
 
 pytestmark = pytest.mark.unit
 
@@ -87,6 +88,69 @@ class TestOntologyIndexMetaontology:
     def test_metaontology_path_none_when_absent(self, tmp_path):
         idx = OntologyIndex(tmp_path)
         assert idx.metaontology_path is None
+
+
+class TestConsolidatedRoot:
+    def test_indexes_both_kinds(self, tmp_path):
+        root = tmp_path / ".nf"
+        a = _write_nfx(root / "ontology" / "A.nfx", kind="ontology", name="A")
+        k = _write_nfx(root / "knowledge" / "K.nfx", kind="knowledge", name="K")
+        idx = NfxIndex(root)
+        by_nid = {e.nid: e for e in idx.entries()}
+        assert set(by_nid) == {a, k}
+        assert by_nid[a].registry_root == root.resolve()
+        assert by_nid[a].validators_path == (root / "validators" / "A.py").resolve()
+        assert by_nid[a].local_name == "A"
+        assert by_nid[k].plugin_root is None
+        assert idx.roots == (root.resolve(),)
+
+    def test_subdir_type_mismatch_fatal(self, tmp_path):
+        root = tmp_path / ".nf"
+        _write_nfx(root / "ontology" / "A.nfx", kind="knowledge", name="A")
+        with pytest.raises(exceptions.NfxViolation, match="ontology/"):
+            NfxIndex(root)
+
+    def test_local_name_collision_in_root_fatal(self, tmp_path):
+        root = tmp_path / ".nf"
+        _write_nfx(root / "ontology" / "A.nfx", kind="ontology", name="A")
+        _write_nfx(root / "knowledge" / "a.nfx", kind="knowledge", name="a")
+        with pytest.raises(exceptions.NfxViolation, match="local name collision"):
+            NfxIndex(root)
+
+    def test_local_name_may_repeat_across_roots(self, tmp_path):
+        r1 = tmp_path / "one" / ".nf"
+        r2 = tmp_path / "two" / ".nf"
+        _write_nfx(r1 / "ontology" / "A.nfx", kind="ontology", name="A")
+        _write_nfx(r2 / "ontology" / "A.nfx", kind="ontology", name="A")
+        idx = NfxIndex(r1, r2)
+        assert len(idx.entries()) == 2
+
+    def test_nid_collision_across_roots_fatal(self, tmp_path):
+        r1 = tmp_path / "one" / ".nf"
+        r2 = tmp_path / "plugins"
+        nid = _write_nfx(r1 / "ontology" / "A.nfx", kind="ontology", name="A")
+        (r2).mkdir()
+        (r2 / "b.nfx").write_text(json.dumps({"type": "ontology", "nid": nid, "version": "1.0", "name": "B"}))
+        with pytest.raises(exceptions.NfxViolation, match="nid collision"):
+            NfxIndex(r1, r2)
+
+    def test_validators_loaded_from_validators_dir(self, tmp_path):
+        import sys
+        from neuro.base import plugins
+        root = tmp_path / ".nf"
+        _write_nfx(root / "ontology" / "A.nfx", kind="ontology", name="A")
+        (root / "validators").mkdir()
+        (root / "validators" / "A.py").write_text(
+            "from neuro.base.plugins import register\n"
+            "register('NfTestType', lambda v, _mp: v == 'ok')\n"
+        )
+        try:
+            OntologyIndex(root)
+            assert plugins.lookup("NfTestType")("ok", None) is True
+        finally:
+            plugins.clear()
+            for name in [n for n in sys.modules if n.startswith("neuro._plugins.")]:
+                del sys.modules[name]
 
 
 class TestImplicitParent:

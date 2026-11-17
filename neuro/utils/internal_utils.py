@@ -68,22 +68,44 @@ def get_path(keyword, create_if_missing=False):
     return path
 
 
-def get_path_list(var_name):
-    """Parse colon-separated env var into list of resolved Paths."""
+def get_path_list(var_name, strict=False):
+    """Parse a colon-separated env var into a list of resolved Paths.
+
+    Entries are `~`-expanded and resolved against `APP_DIR` when relative. An
+    entry that does not exist is logged and skipped - a root listed for one
+    machine must not break another - unless `strict`, which
+    raises `InvalidPath` for it instead. `missing_path_list` names the skipped
+    ones for callers that want to report them.
+    """
+    paths = []
+    for p in _path_list_entries(var_name):
+        if not p.exists():
+            if strict:
+                raise exceptions.InvalidPath(f"Path '{p}' from {var_name} does not exist.")
+            logging.warning(f"{var_name}: '{p}' does not exist, skipped")
+            continue
+        paths.append(p.resolve())
+    return paths
+
+
+def missing_path_list(var_name):
+    """The entries of a colon-separated env var that point nowhere, unresolved."""
+    return [p for p in _path_list_entries(var_name) if not p.exists()]
+
+
+def _path_list_entries(var_name):
     raw = os.environ.get(var_name, "")
     app_dir = Path(os.environ["APP_DIR"])
-    paths = []
+    entries = []
     for entry in raw.split(os.pathsep):
         entry = entry.strip()
         if not entry:
             continue
-        p = Path(entry)
+        p = Path(entry).expanduser()
         if not p.is_absolute():
             p = app_dir / p
-        if not p.exists():
-            raise exceptions.InvalidPath(f"Path '{p}' from {var_name} does not exist.")
-        paths.append(p.resolve())
-    return paths
+        entries.append(p)
+    return entries
 
 
 def get_process(name, value):

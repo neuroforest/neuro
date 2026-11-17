@@ -236,6 +236,78 @@ class TestWalkPlugins:
         assert by_name["child.nfx"].parent_plugin_root == parent.resolve()
 
 
+def _make_nf_root(tmp_path, name=".nf"):
+    root = tmp_path / name
+    (root / "ontology").mkdir(parents=True)
+    (root / "knowledge").mkdir()
+    (root / "validators").mkdir()
+    (root / "tests").mkdir()
+    return root
+
+
+class TestConsolidatedRoot:
+    def test_is_consolidated(self, tmp_path):
+        assert plugins.is_consolidated(tmp_path / ".nf")
+        assert not plugins.is_consolidated(tmp_path / "plugins")
+
+    def test_walk_plugins(self, tmp_path):
+        root = _make_nf_root(tmp_path)
+        (root / "namespace.nfx").touch()
+        (root / "ontology" / "Math.nfx").touch()
+        (root / "knowledge" / "Antibiotics.nfx").touch()
+        (root / "tests" / "stray.nfx").touch()
+        (root / "validators" / "Math.py").touch()
+        by_name = {pf.nfx_path.name: pf for pf in plugins.walk_plugins([root])}
+        assert set(by_name) == {"namespace.nfx", "Math.nfx", "Antibiotics.nfx"}
+        math = by_name["Math.nfx"]
+        assert math.plugin_root is None and math.parent_plugin_root is None
+        assert math.expected_type == "ontology"
+        assert math.validators_path == (root / "validators" / "Math.py").resolve()
+        assert by_name["Antibiotics.nfx"].expected_type == "knowledge"
+        assert by_name["namespace.nfx"].expected_type is None
+        assert by_name["namespace.nfx"].validators_path is None
+
+    def test_validators_path_for(self, tmp_path):
+        root = _make_nf_root(tmp_path)
+        legacy = tmp_path / "plugins"
+        (legacy / "p").mkdir(parents=True)
+        roots = [root, legacy]
+        assert plugins.validators_path_for(root / "ontology" / "Math.nfx", roots) == (
+            root / "validators" / "Math.py"
+        ).resolve()
+        assert plugins.validators_path_for(root / "knowledge" / "K.nfx", roots) == (
+            root / "validators" / "K.py"
+        ).resolve()
+        assert plugins.validators_path_for(root / "namespace.nfx", roots) is None
+        assert plugins.validators_path_for(legacy / "p" / "p.nfx", roots) == (
+            legacy / "p" / "validators.py"
+        ).resolve()
+        assert plugins.validators_path_for(legacy / "bare.nfx", roots) is None
+
+    def test_mixed_roots(self, tmp_path):
+        root = _make_nf_root(tmp_path)
+        legacy = tmp_path / "plugins"
+        (legacy / "p").mkdir(parents=True)
+        (root / "ontology" / "A.nfx").touch()
+        (legacy / "p" / "p.nfx").touch()
+        by_root = {}
+        for pf in plugins.walk_plugins([legacy, root]):
+            by_root.setdefault(pf.registry_root, []).append(pf.nfx_path.name)
+        assert by_root == {legacy.resolve(): ["p.nfx"], root.resolve(): ["A.nfx"]}
+
+    def test_load_validators(self, tmp_path):
+        root = _make_nf_root(tmp_path)
+        nfx_path = root / "ontology" / "Math.nfx"
+        nfx_path.touch()
+        (root / "validators" / "Math.py").write_text(textwrap.dedent("""
+            from neuro.base.plugins import register
+            register("Posint", lambda v, _mp: isinstance(v, int) and v > 0)
+        """))
+        [pf] = plugins.walk_plugins([root])
+        assert plugins.load_validators(pf) is True
+        assert plugins.lookup("Posint")(3, None) is True
+
+
 class TestLoadValidatorsAt:
     def test_loads_at_plugin_root(self, tmp_path):
         pkg = tmp_path / "p"

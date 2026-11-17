@@ -1,8 +1,23 @@
 """
 Plugin system: validator registry and on-disk plugin discovery.
 
-A *plugin* is a directory under a PLUGINS registry root that owns one or more
-`.nfx` files. Three valid layouts are recognised:
+Two kinds of registry root exist.
+
+**Consolidated root** - a directory named `.nf`, acting as a whole:
+
+    <dir>/.nf/
+      namespace.nfx            the root's namespace declaration
+      ontology/<Name>.nfx      one module per file; local name = stem
+      knowledge/<Name>.nfx
+      validators/<name>.py     validators for ontology/<Name>.nfx; sha256 = its `hash`
+      tests/                   not scanned
+
+Only `ontology/`, `knowledge/` and the root's own `*.nfx` are read; nothing
+nests. A file's kind subdir and its `type` field must agree, and a local name
+may not repeat inside one root - both are enforced by `PluginIndex`.
+
+**Legacy root** - any other directory. A *plugin* is a subdirectory that owns
+one or more `.nfx` files, in one of three layouts, all transitional:
 
 - Bare:        `<root>/<name>.nfx`                       (no validators possible)
 - Flat-dir:    `<root>/<name>/<name>.nfx`                (validators at `<root>/<name>/validators.py`)
@@ -29,8 +44,8 @@ on the owning class kind via `metaproperty.deep_node`) need it.
     def _(v, _mp):
         return isinstance(v, int) and not isinstance(v, bool) and v > 0
 
-Loading is driven by `PluginIndex._scan` - every discovered plugin root has
-its `validators.py` imported exactly once.
+Loading is driven by `PluginIndex._scan` - every discovered validators file
+(`PluginFile.validators_path`) is imported exactly once.
 """
 
 import importlib.util
@@ -40,10 +55,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, TypeAlias
 
+from neuro.utils import internal_utils
+
 
 Validator: TypeAlias = Callable[[object, object], bool]
 
+NF_DIRNAME = ".nf"
 _VALIDATORS_FILENAME = "validators.py"
+_VALIDATORS_DIR = "validators"
 _PLUGIN_MODULE_PREFIX = "neuro._plugins"
 _KIND_SUBDIRS = ("ontology", "knowledge")
 _SUBPLUGIN_CONTAINER = "plugins"
@@ -91,17 +110,73 @@ class PluginFile:
     """One discovered `.nfx` and its enclosing plugin context.
 
     `plugin_root` is None for a bare nfx sitting directly under a registry root
-    (no validators possible). `parent_plugin_root` is None when the plugin has
-    no enclosing parent plugin (top-level under a registry root).
+    and for every file of a consolidated root (no plugin directories there).
+    `parent_plugin_root` is None when the plugin has no enclosing parent plugin
+    (top-level under a registry root). `validators_path` is where this
+    module's validators live if it has any - `<plugin>/validators.py` in a
+    legacy root, `validators/<stem>.py` in a consolidated one - whether or not
+    the file exists. `expected_type` is the `type` the file's kind subdir
+    demands in a consolidated root (`ontology/` → "ontology", `knowledge/` →
+    "knowledge"), None where the path says nothing.
     """
     nfx_path: Path
     registry_root: Path
     plugin_root: Path | None
     parent_plugin_root: Path | None
+    validators_path: Path | None = None
+    expected_type: str | None = None
 
 
 def _normalise_roots(registry_roots: Iterable[Path | str]) -> tuple[Path, ...]:
     return tuple(Path(r).resolve() for r in registry_roots)
+
+
+def is_consolidated(root: Path | str) -> bool:
+    """True for a `.nf` root - the consolidated layout."""
+    return Path(root).name == NF_DIRNAME
+
+
+def effective_roots() -> list[Path]:
+    """The PLUGINS roots in effect for this process, missing entries skipped.
+
+    The one way callers obtain the registry roots: the
+    colon-separated `PLUGINS` of the current environment, each entry resolved
+    against `APP_DIR`, an absent one logged and dropped rather than fatal, so a
+    machine without every root checked out still builds.
+    """
+    return internal_utils.get_path_list("PLUGINS")
+
+
+def registry_root_of(path: Path | str, registry_roots: Iterable[Path | str]) -> Path | None:
+    """The registry root `path` sits under, or None if it is outside all of them."""
+    resolved = Path(path).resolve()
+    for root in _normalise_roots(registry_roots):
+        if _is_under(resolved, root):
+            return root
+    return None
+
+
+def validators_path_for(
+    nfx_path: Path | str,
+    registry_roots: Iterable[Path | str],
+) -> Path | None:
+    """Where the validators for `nfx_path` live, in either kind of root.
+
+    Consolidated root: `<root>/validators/<stem>.py` for a file under
+    `ontology/` or `knowledge/`; None for the root's own files
+    (`namespace.nfx`). Legacy root: `<plugin>/validators.py`, None for a bare
+    nfx. The returned path need not exist - this is the *rule*, used by the
+    hash check and `ontology.rehash` alike.
+    """
+    path = Path(nfx_path).resolve()
+    roots = _normalise_roots(registry_roots)
+    root = registry_root_of(path, roots)
+    if root is not None and is_consolidated(root):
+        if path.parent.parent == root and path.parent.name in _KIND_SUBDIRS:
+            return root / _VALIDATORS_DIR / f"{path.stem}.py"
+        return None
+    proot = plugin_root_for(path, roots)
+    return None if proot is None else proot / _VALIDATORS_FILENAME
 
 
 def plugin_root_for(
@@ -197,61 +272,106 @@ def _is_under(path: Path, root: Path) -> bool:
     return True
 
 
+def _nfx_files(directory: Path) -> list[Path]:
+    """The `.nfx` files directly inside `directory`, sorted; [] if it is not a dir."""
+    if not directory.is_dir():
+        return []
+    return sorted(p for p in directory.iterdir() if p.is_file() and p.suffix == ".nfx")
+
+
+def _walk_consolidated(root: Path) -> Iterator[PluginFile]:
+    """Yield the files of a `.nf` root: its own `*.nfx` (the namespace
+    declaration), then `ontology/*.nfx` and `knowledge/*.nfx`. Nothing else in
+    the root is looked at - `validators/`, `tests/`, `tw5-editions/` and any
+    stray directory are not module containers."""
+    for nfx_path in _nfx_files(root):
+        yield PluginFile(nfx_path=nfx_path, registry_root=root, plugin_root=None, parent_plugin_root=None)
+    for kind in _KIND_SUBDIRS:
+        for nfx_path in _nfx_files(root / kind):
+            yield PluginFile(
+                nfx_path=nfx_path,
+                registry_root=root,
+                plugin_root=None,
+                parent_plugin_root=None,
+                validators_path=root / _VALIDATORS_DIR / f"{nfx_path.stem}.py",
+                expected_type=kind,
+            )
+
+
+def _walk_legacy(root: Path, roots: tuple[Path, ...]) -> Iterator[PluginFile]:
+    for dirpath, _dirnames, filenames in os.walk(root, followlinks=True):
+        dir_path = Path(dirpath)
+        for fname in filenames:
+            if not fname.endswith(".nfx"):
+                continue
+            nfx_path = dir_path / fname
+            proot = plugin_root_for(nfx_path, roots)
+            # For bare nfx (no plugin_root), parent linkage is still
+            # possible when nested inside a `plugins/` sub-plugin container.
+            parent_start = proot if proot is not None else nfx_path
+            parent = _enclosing_plugin(parent_start, roots)
+            yield PluginFile(
+                nfx_path=nfx_path,
+                registry_root=root,
+                plugin_root=proot,
+                parent_plugin_root=parent,
+                validators_path=None if proot is None else proot / _VALIDATORS_FILENAME,
+            )
+
+
 def walk_plugins(registry_roots: Iterable[Path | str]) -> Iterator[PluginFile]:
     """Yield every `.nfx` under each registry root, with plugin context.
 
-    Symlinks are followed (matching the prior `os.walk(..., followlinks=True)`).
-    Order is `os.walk` order per root, then root order.
+    A `.nf` root is read by the consolidated rule (`_walk_consolidated`); any
+    other root by the legacy layouts, symlinks followed, in `os.walk` order.
+    Roots come in the order given; a root that is not a directory is skipped.
     """
     roots = _normalise_roots(registry_roots)
     for root in roots:
         if not root.is_dir():
             continue
-        for dirpath, _dirnames, filenames in os.walk(root, followlinks=True):
-            dir_path = Path(dirpath)
-            for fname in filenames:
-                if not fname.endswith(".nfx"):
-                    continue
-                nfx_path = dir_path / fname
-                proot = plugin_root_for(nfx_path, roots)
-                # For bare nfx (no plugin_root), parent linkage is still
-                # possible when nested inside a `plugins/` sub-plugin container.
-                parent_start = proot if proot is not None else nfx_path
-                parent = _enclosing_plugin(parent_start, roots)
-                yield PluginFile(
-                    nfx_path=nfx_path,
-                    registry_root=root,
-                    plugin_root=proot,
-                    parent_plugin_root=parent,
-                )
+        if is_consolidated(root):
+            yield from _walk_consolidated(root)
+        else:
+            yield from _walk_legacy(root, roots)
 
 
-def load_validators_at(plugin_root: Path | str | None) -> bool:
-    """Import `validators.py` at the given plugin root, if present.
+def load_validators_file(validators_path: Path | str | None) -> bool:
+    """Import a validators module by path, if the file exists.
 
     Returns True if loaded (or already in `sys.modules`), False otherwise.
-    A `None` plugin_root (bare nfx) always returns False.
     """
-    if plugin_root is None:
+    if validators_path is None:
         return False
-    plugin_root = Path(plugin_root)
-    validators_path = plugin_root / _VALIDATORS_FILENAME
+    validators_path = Path(validators_path)
     if not validators_path.is_file():
         return False
     # Module name = absolute resolved path with separators turned into dots,
     # guaranteeing uniqueness across nested/shadowed plugin names and
-    # idempotency when the same plugin_root is loaded twice.
-    resolved = plugin_root.resolve()
-    qualified = "_".join(part for part in resolved.parts if part not in ("", "/"))
-    return _import_file_as_module(
-        f"{_PLUGIN_MODULE_PREFIX}.{qualified}",
-        validators_path,
-    )
+    # idempotency when the same file is loaded twice.
+    resolved = validators_path.resolve()
+    qualified = "_".join(part for part in resolved.with_suffix("").parts if part not in ("", "/"))
+    return _import_file_as_module(f"{_PLUGIN_MODULE_PREFIX}.{qualified}", validators_path)
+
+
+def load_validators(plugin_file: PluginFile) -> bool:
+    """Import the validators a discovered file points at, if any."""
+    return load_validators_file(plugin_file.validators_path)
+
+
+def load_validators_at(plugin_root: Path | str | None) -> bool:
+    """Import `validators.py` at the given legacy plugin root, if present.
+
+    A `None` plugin_root (bare nfx) always returns False.
+    """
+    if plugin_root is None:
+        return False
+    return load_validators_file(Path(plugin_root) / _VALIDATORS_FILENAME)
 
 
 # Legacy compat - older callers pass an nfx path and expect dir-form detection
-# via the `parent.name == stem` heuristic. Keep these until commit 3 migrates
-# all callers to the registry-aware API.
+# via the `parent.name == stem` heuristic. Not for the hash path any more:
+# `validators_path_for` knows both kinds of root.
 def plugin_dir_for(nfx_path: Path | str) -> Path | None:
     """Legacy: return plugin dir using the `parent.name == stem` heuristic."""
     return plugin_root_for(nfx_path)
