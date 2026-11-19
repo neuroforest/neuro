@@ -77,9 +77,9 @@ class Mapping:
         return [m for m in self.moves if m.nid]
 
 
-def tag_for(doc: nfx.Nfx, stem: str) -> str:
+def tag_for(kind: str, stem: str, version: str) -> str:
     """The annotated tag a module is released under."""
-    return f"{doc.type}/{stem.lower()}/{doc.version}"
+    return f"{kind}/{stem.lower()}/{version}"
 
 
 def namespace_doc(nid: str, parent_nid: str, parent_version: str, version: str = "1.0") -> nfx.Nfx:
@@ -120,9 +120,11 @@ def rewrite_test(text: str, stem: str) -> str:
     return text
 
 
-def plan_import(src_root, namespace: nfx.Nfx) -> Mapping:
+def plan_import(src_root, namespace: nfx.Nfx, type_of=None) -> Mapping:
     """Map the legacy root `src_root` onto the `.nf` layout. `namespace` is
-    the declaration to write (see `namespace_doc`)."""
+    the declaration to write (see `namespace_doc`). `type_of(nid)` places a
+    module that declares no `type` - history predating the field
+    (`nf_history`); the file's bytes are kept as they were."""
     src_root = Path(src_root).resolve()
     out = Mapping(src_root=src_root)
     if plugins.is_consolidated(src_root):
@@ -135,10 +137,12 @@ def plan_import(src_root, namespace: nfx.Nfx) -> Mapping:
 
     out.moves.append(Move(None, Path(nfx.NAMESPACE_FILENAME), nfx.dumps(namespace).encode()))
 
-    for e in sorted(entries, key=lambda e: (e.type, e.path.stem.lower())):
+    kinds = {e.nid: e.type or (type_of(e.nid) if type_of else "") for e in entries}
+    for e in sorted(entries, key=lambda e: (kinds[e.nid], e.path.stem.lower())):
         claimed.add(e.path)
-        if e.type not in _MODULE_TYPES:
-            out.issues.append(f"{e.path.relative_to(src_root)}: type {e.type!r} has no place in a .nf root")
+        kind = kinds[e.nid]
+        if kind not in _MODULE_TYPES:
+            out.issues.append(f"{e.path.relative_to(src_root)}: type {kind!r} has no place in a .nf root")
             continue
         content = e.path.read_bytes()
         doc = nfx.read(e.path)
@@ -149,21 +153,21 @@ def plan_import(src_root, namespace: nfx.Nfx) -> Mapping:
             content = nfx.dumps(doc).encode()
             note = f"pins parent {parent.path.stem}@{parent.version}"
         out.moves.append(Move(
-            e.path, Path(e.type) / f"{e.path.stem}.nfx", content,
-            nid=e.nid, tag=tag_for(doc, e.path.stem), note=note,
+            e.path, Path(kind) / f"{e.path.stem}.nfx", content,
+            nid=e.nid, tag=tag_for(kind, e.path.stem, doc.version), note=note,
         ))
 
     by_validators: dict[Path, list] = {}
     for e in entries:
         if e.validators_path is not None and e.validators_path.is_file():
             by_validators.setdefault(e.validators_path, []).append(e)
-        elif e.type == "ontology" and nfx.read(e.path).hash:
+        elif kinds[e.nid] == "ontology" and nfx.read(e.path).hash:
             out.issues.append(f"{e.path.relative_to(src_root)}: carries a hash but has no validators")
     for vpath, group in sorted(by_validators.items()):
         rel = vpath.relative_to(src_root)
         test = vpath.with_name(_TEST)
         claimed.update((vpath, test))
-        owners = [e for e in group if e.type == "ontology"]
+        owners = [e for e in group if kinds[e.nid] == "ontology"]
         if len(owners) != 1:
             out.issues.append(f"{rel}: needs exactly one ontology in its plugin to own it, found {len(owners)}")
             continue
