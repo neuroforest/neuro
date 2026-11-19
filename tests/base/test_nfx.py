@@ -279,6 +279,98 @@ def test_is_taggable():
         "has space", "a/b", "-lead", "trail-", "dot.", "a..b", "x.lock", "~tilde", "q?", ""))
 
 
+# --- namespace declaration (type: "namespace") ---
+
+NS_BASE = {"type": "namespace", "nid": LOCAL_1, "version": "1.0", "name": "Root"}
+
+
+def test_nfx_namespace_roundtrip():
+    """The silent-drop trap: an empty token must survive write → read as
+    `""`, never as an absent key, and `was` must come back intact."""
+    from neuro.base.nfx import Nfx, dumps
+    doc = Nfx.from_dict({**NS_BASE, "namespace": ""})
+    assert doc.namespace == ""
+    out = doc.to_dict()
+    assert out["namespace"] == ""
+    assert "was" not in out
+    assert Nfx.from_dict(out).namespace == ""
+    import json
+    again = Nfx.from_dict(json.loads(dumps(Nfx.from_dict(
+        {**NS_BASE, "namespace": "new", "was": ["old"], "dependencies": [f"{DEP_1}@1.0"]}))))
+    assert again.namespace == "new"
+    assert again.was == ("old",)
+    assert again.dependencies == ((DEP_1, "1.0"),)
+
+
+def test_nfx_namespace_absent_is_none():
+    from neuro.base.nfx import Nfx
+    assert Nfx.from_dict({"type": "ontology", "nid": LOCAL_1}).namespace is None
+    assert "namespace" not in Nfx.from_dict({"type": "ontology", "nid": LOCAL_1}).to_dict()
+
+
+def test_nfx_from_dict_rejects_malformed_namespace():
+    from neuro.base.nfx import Nfx
+    from neuro.utils.exceptions import NfxViolation
+    with pytest.raises(NfxViolation):
+        Nfx.from_dict({**NS_BASE, "namespace": 3})
+    with pytest.raises(NfxViolation):
+        Nfx.from_dict({**NS_BASE, "namespace": "x", "was": "old"})
+
+
+def test_is_namespace_token():
+    from neuro.base.nfx import is_namespace_token
+    assert all(is_namespace_token(t) for t in ("", "lab", "lab-ds", "x-y", "a1"))
+    assert not any(is_namespace_token(t) for t in (
+        "Lab", "lab_", "-x", "x-", "a--b", "a b", "a.b", "a/b"))
+
+
+def test_validate_namespace_clean():
+    from neuro.base.nfx import Nfx, validate
+    assert validate(Nfx.from_dict({**NS_BASE, "namespace": ""}))["namespace"] == []
+    assert validate(Nfx.from_dict(
+        {**NS_BASE, "namespace": "abc", "was": ["xyz"]}))["namespace"] == []
+
+
+def test_validate_namespace_issues():
+    from neuro.base.nfx import Nfx, validate
+    def issues(d):
+        return validate(Nfx.from_dict(d))["namespace"]
+    assert any("no 'namespace' key" in m for m in issues(NS_BASE))
+    assert any("invalid namespace token" in m for m in issues({**NS_BASE, "namespace": "Abc"}))
+    assert any("repeats the current" in m for m in issues(
+        {**NS_BASE, "namespace": "abc", "was": ["abc"]}))
+    assert any("twice" in m for m in issues(
+        {**NS_BASE, "namespace": "abc", "was": ["old", "old"]}))
+    assert any("invalid retired token" in m for m in issues(
+        {**NS_BASE, "namespace": "abc", "was": [""]}))
+    assert any("carries 'nodes'" in m for m in issues(
+        {**NS_BASE, "namespace": "abc", "nodes": [{"nid": LOCAL_2}]}))
+    assert any("carries 'hash'" in m for m in issues(
+        {**NS_BASE, "namespace": "abc", "hash": "abc"}))
+
+
+def test_validate_namespace_keys_misplaced():
+    from neuro.base.nfx import Nfx, validate
+    base = {"type": "ontology", "nid": LOCAL_1, "version": "1.0", "name": "X"}
+    assert validate(Nfx.from_dict(base))["namespace"] == []
+    msgs = validate(Nfx.from_dict({**base, "namespace": "x", "was": ["y"]}))["namespace"]
+    assert len(msgs) == 2 and all("only a namespace file" in m for m in msgs)
+
+
+def test_validate_namespace_type_allowed():
+    from neuro.base.nfx import Nfx, validate
+    assert validate(Nfx.from_dict({**NS_BASE, "namespace": ""}))["invalid_type"] is None
+
+
+def test_lint_format_namespace_key_order():
+    from neuro.base.nfx import lint_format
+    ok = {"type": "namespace", "nid": LOCAL_1, "version": "1.0", "name": "R",
+          "namespace": "", "dependencies": []}
+    assert lint_format(ok)["key_order"] == [] and lint_format(ok)["unknown_keys"] == []
+    bad = {"type": "namespace", "nid": LOCAL_1, "dependencies": [], "namespace": ""}
+    assert lint_format(bad)["key_order"]
+
+
 def test_lint_format_flags_empty_arrays():
     from neuro.base.nfx import lint_format
     assert lint_format({"nodes": [], "relationships": []})["empty"] == ["nodes", "relationships"]

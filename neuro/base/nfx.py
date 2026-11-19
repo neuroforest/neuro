@@ -16,10 +16,21 @@ from neuro.utils.exceptions import NfxCycle, NfxViolation
 
 
 # Public format spec - surfaced in callers' error messages.
-ALLOWED_TYPES = ("metaontology", "ontology", "knowledge")
+ALLOWED_TYPES = ("metaontology", "ontology", "knowledge", "namespace")
+# A `.nf` root's declaration: one reserved file at the
+# root's top, `type: "namespace"`, carrying the root's token. It declares no
+# nodes; its `dependencies` pin other namespace files (the envelope).
+NAMESPACE_TYPE = "namespace"
+NAMESPACE_FILENAME = "namespace.nfx"
+# The token: lowercase, `-` separates levels (`lab-ds`). Empty is legal - the
+# house corpus declares it so nothing there is renamed - but it must be
+# *written* (`"namespace": ""`), which is why `Nfx.namespace` is None when the
+# key is absent rather than defaulting to "".
+_NAMESPACE_TOKEN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 # Internal canonical layout - callers consume validation/lint results, not these.
-_KEY_ORDER = ("type", "nid", "version", "name", "description", "dependencies", "hash", "nodes", "relationships")
+_KEY_ORDER = ("type", "nid", "version", "name", "description", "namespace", "was",
+              "dependencies", "hash", "nodes", "relationships")
 _NODE_KEY_ORDER = ("nid", "labels", "properties")
 _REL_KEY_ORDER = ("from", "to", "type", "properties")
 # `name` earns its place here: `Metaontology.import_nfx` gates the whole
@@ -96,6 +107,10 @@ class Nfx:
 
     `dependencies` is a tuple of `(nid, version)` pairs; the raw `"nid@ver"`
     string is reconstituted by `to_dict`.
+
+    `namespace` is None when the key is absent and a string - possibly "" -
+    when it is written; `was` lists the root's retired tokens. Both belong to
+    a `type: "namespace"` document only (`validate` reports them elsewhere).
     """
 
     nid: str = ""
@@ -103,10 +118,16 @@ class Nfx:
     name: str = ""
     description: str = ""
     version: str = ""
+    namespace: str | None = None
+    was: tuple[str, ...] = ()
     dependencies: tuple[tuple[str, str], ...] = ()
     hash: str = ""
     nodes: tuple[dict, ...] = field(default_factory=tuple)
     relationships: tuple[dict, ...] = field(default_factory=tuple)
+
+    @property
+    def is_namespace(self) -> bool:
+        return self.type == NAMESPACE_TYPE
 
     @classmethod
     def from_dict(cls, data: dict) -> "Nfx":
@@ -129,6 +150,12 @@ class Nfx:
             if not d_ver:
                 raise NfxViolation(f"dependency {raw!r} has empty version")
             deps.append((d_nid, d_ver))
+        namespace = data.get("namespace")
+        if namespace is not None and not isinstance(namespace, str):
+            raise NfxViolation(f"namespace {namespace!r} is not a string")
+        was_raw = data.get("was", []) or []
+        if not isinstance(was_raw, list) or not all(isinstance(w, str) for w in was_raw):
+            raise NfxViolation(f"was {was_raw!r} is not a list of tokens")
         nodes: list[dict] = []
         for n in data.get("nodes", []) or []:
             n = dict(n)
@@ -151,6 +178,8 @@ class Nfx:
             name=data.get("name", "") or "",
             description=data.get("description", "") or "",
             version=data.get("version", "") or "",
+            namespace=namespace,
+            was=tuple(was_raw),
             dependencies=tuple(deps),
             hash=data.get("hash", "") or "",
             nodes=tuple(nodes),
@@ -181,6 +210,10 @@ class Nfx:
             out["name"] = self.name
         if self.description:
             out["description"] = self.description
+        if self.namespace is not None:
+            out["namespace"] = self.namespace
+        if self.was:
+            out["was"] = list(self.was)
         if self.dependencies:
             out["dependencies"] = [f"{n}@{v}" for n, v in self.dependencies]
         if self.hash:
@@ -271,6 +304,48 @@ def is_taggable(name: str) -> bool:
     )
 
 
+def is_namespace_token(token: str) -> bool:
+    """Whether `token` is a legal namespace token: empty, or lowercase
+    `-`-separated levels (`lab`, `lab-ds`)."""
+    return token == "" or bool(_NAMESPACE_TOKEN.match(token))
+
+
+def namespace_issues(doc: Nfx) -> list[str]:
+    """Namespace-specific checks, as messages.
+
+    A `type: "namespace"` document must *write* its token (`""` for the house
+    corpus - an absent key is the silent-drop trap, not an empty namespace),
+    the token and every `was` entry must match the token grammar, `was` must
+    not repeat itself or the current token, and the file declares no nodes,
+    relationships or hash: it is a declaration, not a schema. Any other type
+    may carry neither `namespace` nor `was`.
+    """
+    issues: list[str] = []
+    if doc.is_namespace:
+        if doc.namespace is None:
+            issues.append("namespace file declares no 'namespace' key (write \"\" for the empty token)")
+        elif not is_namespace_token(doc.namespace):
+            issues.append(f"invalid namespace token {doc.namespace!r}")
+        seen: set[str] = set()
+        for old in doc.was:
+            if not is_namespace_token(old) or old == "":
+                issues.append(f"invalid retired token {old!r} in 'was'")
+            if old == doc.namespace:
+                issues.append(f"'was' repeats the current token {old!r}")
+            if old in seen:
+                issues.append(f"'was' lists {old!r} twice")
+            seen.add(old)
+        for key in ("nodes", "relationships", "hash"):
+            if getattr(doc, key):
+                issues.append(f"namespace file carries {key!r}; a declaration has no schema")
+    else:
+        if doc.namespace is not None:
+            issues.append(f"'namespace' key on a {doc.type or 'typeless'} document; only a namespace file declares one")
+        if doc.was:
+            issues.append(f"'was' key on a {doc.type or 'typeless'} document; only a namespace file retires tokens")
+    return issues
+
+
 def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
     """Validate referential integrity of an `Nfx`.
 
@@ -283,7 +358,8 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
     'invalid_type' (the `type` value when set to something outside
     `ALLOWED_TYPES`, else None), 'untaggable_name' (an `ontology`'s `name` when it
     cannot form a git ref, else None), 'duplicate_nids' (node nids declared again),
-    and 'duplicate_relationships' (repeated `(from, to, type)` triples).
+    'duplicate_relationships' (repeated `(from, to, type)` triples), and
+    'namespace' (messages from `namespace_issues`, empty when clean).
     Duplicates list every repeat after the first occurrence. They are only
     detectable here: an import MERGEs them into a single node or edge.
     Format-level checks (key order / unknown keys / empty arrays on the raw
@@ -334,6 +410,7 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
         "untaggable_name": doc.name if untaggable else None,
         "duplicate_nids": duplicate_nids,
         "duplicate_relationships": duplicate_relationships,
+        "namespace": namespace_issues(doc),
     }
 
 

@@ -472,8 +472,15 @@ class Metaontology:
 
         Raises `NfxViolation` if the document declares no `nid` or no `name`:
         both are required to mint the `OntologyMetadata` every node hangs off.
+        Refuses a `type: "namespace"` document outright - a root's declaration
+        is not a schema; its graph form is the `:NfxPackage`
+        seeded by its own importer, not an `OntologyMetadata`.
         """
         doc = nfx.read(path)
+        if doc.is_namespace:
+            raise exceptions.NfxViolation(
+                f"{path} is a namespace declaration, not an ontology - nothing to import"
+            )
 
         # Ensure dependencies are present in the DB.
         self._import_dependencies(doc.dependencies, index, on_import, _depth=_depth + 1)
