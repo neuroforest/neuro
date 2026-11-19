@@ -90,6 +90,94 @@ class TestOntologyIndexMetaontology:
         assert idx.metaontology_path is None
 
 
+def _write_namespace(root, token, *, name="Root", nid=None, was=(), dependencies=(), type_="namespace"):
+    root.mkdir(parents=True, exist_ok=True)
+    nid = nid or str(uuid.uuid4())
+    doc = {"type": type_, "nid": nid, "version": "1.0", "name": name, "namespace": token}
+    if was:
+        doc["was"] = list(was)
+    doc["dependencies"] = list(dependencies)
+    (root / "namespace.nfx").write_text(json.dumps(doc))
+    return nid
+
+
+class TestNamespace:
+    def test_read_namespaces(self, tmp_path):
+        nf = tmp_path / "app" / ".nf"
+        home = tmp_path / "home" / ".nf"
+        nf_nid = _write_namespace(nf, "nf", name="Builtin")
+        root_nid = _write_namespace(home, "", was=("old",), dependencies=[f"{nf_nid}@1.0"])
+        a = _write_nfx(nf / "ontology" / "A.nfx", kind="ontology", name="A")
+        k = _write_nfx(home / "knowledge" / "K.nfx", kind="knowledge", name="K")
+        idx = NfxIndex(nf, home)
+        by_nid = {e.nid: e for e in idx.entries()}
+        assert set(by_nid) == {a, k}
+        assert (by_nid[a].namespace, by_nid[a].namespace_nid) == ("nf", nf_nid)
+        assert (by_nid[k].namespace, by_nid[k].namespace_nid) == ("", root_nid)
+        tokens = [ns.token for ns in idx.namespaces()]
+        assert tokens == ["nf", ""]
+        home_ns = idx.namespace_of(home)
+        assert home_ns.name == "Root" and home_ns.was == ("old",)
+        assert home_ns.dependencies == ((nf_nid, "1.0"),)
+        assert home_ns.path == (home / "namespace.nfx").resolve()
+
+    def test_missing_declaration_warns(self, tmp_path, caplog):
+        root = tmp_path / ".nf"
+        a = _write_nfx(root / "ontology" / "A.nfx", kind="ontology", name="A")
+        idx = NfxIndex(root)
+        entry = idx.entries()[0]
+        assert entry.nid == a and entry.namespace is None and entry.namespace_nid is None
+        assert idx.namespace_of(root) is None and idx.namespaces() == []
+        assert "namespace.nfx" in caplog.text
+
+    def test_legacy_root_has_none(self, tmp_path):
+        root = tmp_path / "plugins"
+        _write_nfx(root / "a.nfx", kind="ontology", name="A")
+        idx = NfxIndex(root)
+        assert idx.entries()[0].namespace is None
+        assert idx.namespace_of(root) is None
+
+    def test_token_collision_fatal(self, tmp_path):
+        r1, r2 = tmp_path / "one" / ".nf", tmp_path / "two" / ".nf"
+        _write_namespace(r1, "x")
+        _write_namespace(r2, "x")
+        with pytest.raises(exceptions.NfxViolation, match="token collision"):
+            NfxIndex(r1, r2)
+
+    def test_namespace_nid_collision_fatal(self, tmp_path):
+        r1, r2 = tmp_path / "one" / ".nf", tmp_path / "two" / ".nf"
+        nid = _write_namespace(r1, "x")
+        _write_namespace(r2, "y", nid=nid)
+        with pytest.raises(exceptions.NfxViolation, match="nid collision"):
+            NfxIndex(r1, r2)
+        r3 = tmp_path / "three" / ".nf"
+        nid3 = _write_namespace(r3, "z")
+        (r3 / "ontology").mkdir()
+        (r3 / "ontology" / "A.nfx").write_text(json.dumps(
+            {"type": "ontology", "nid": nid3, "version": "1.0", "name": "A"}))
+        with pytest.raises(exceptions.NfxViolation, match="nid collision"):
+            NfxIndex(r3)
+
+    def test_declaration_elsewhere_fatal(self, tmp_path):
+        legacy = tmp_path / "plugins"
+        _write_namespace(legacy, "x")
+        with pytest.raises(exceptions.NfxViolation, match="only <root>/namespace.nfx"):
+            NfxIndex(legacy)
+        root = tmp_path / ".nf"
+        _write_namespace(root / "ontology", "y")
+        with pytest.raises(exceptions.NfxViolation, match="namespace declaration"):
+            NfxIndex(root)
+
+    def test_malformed_declaration_fatal(self, tmp_path):
+        root = tmp_path / ".nf"
+        _write_namespace(root, "Bad Token")
+        with pytest.raises(exceptions.NfxViolation, match="invalid namespace token"):
+            NfxIndex(root)
+        _write_namespace(root, "x", type_="ontology")
+        with pytest.raises(exceptions.NfxViolation, match="reserved"):
+            NfxIndex(root)
+
+
 class TestConsolidatedRoot:
     def test_indexes_both_kinds(self, tmp_path):
         root = tmp_path / ".nf"
@@ -108,6 +196,23 @@ class TestConsolidatedRoot:
         root = tmp_path / ".nf"
         _write_nfx(root / "ontology" / "A.nfx", kind="knowledge", name="A")
         with pytest.raises(exceptions.NfxViolation, match="ontology/"):
+            NfxIndex(root)
+
+    def test_subdir_typeless_fatal(self, tmp_path):
+        root = tmp_path / ".nf"
+        (root / "knowledge").mkdir(parents=True)
+        (root / "knowledge" / "K.nfx").write_text(json.dumps(
+            {"nid": str(uuid.uuid4()), "version": "1.0", "name": "K"}))
+        with pytest.raises(exceptions.NfxViolation, match="knowledge/ but declares type ''"):
+            NfxIndex(root)
+
+    def test_ontology_subdir_admits_metaontology(self, tmp_path):
+        root = tmp_path / ".nf"
+        _write_nfx(root / "ontology" / "metaontology.nfx", kind="metaontology", name="Metaontology")
+        idx = OntologyIndex(root)
+        assert idx.metaontology_path == root / "ontology" / "metaontology.nfx"
+        _write_nfx(root / "knowledge" / "M.nfx", kind="metaontology", name="M")
+        with pytest.raises(exceptions.NfxViolation, match="knowledge/"):
             NfxIndex(root)
 
     def test_local_name_collision_in_root_fatal(self, tmp_path):

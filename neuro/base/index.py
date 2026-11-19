@@ -18,14 +18,49 @@ files anywhere; a local name (file stem, case-insensitive) used twice inside
 one registry root - across roots it may repeat, the roots' namespaces tell
 them apart; and, in a consolidated root, a file whose
 kind subdir disagrees with its `type` field.
+
+Before the modules, a pre-pass reads each consolidated root's `namespace.nfx`
+into a `Namespace`; every `Entry` of that root carries its
+token and nid. Fatal there: a declaration that is not `type: "namespace"` or
+fails `nfx.namespace_issues`, two roots claiming one token, a namespace nid
+also claimed elsewhere. A missing declaration is a warning and leaves the
+root's entries with `namespace None` until `nf.import` writes one
+a legacy root never has one.
 """
 
 import dataclasses
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from neuro.base import nfx, plugins
 from neuro.utils import exceptions
+
+# The `type` values a kind subdir admits. `ontology/` holds the metaontology
+# too - in the app's own root it is the one module there -
+# until `metaontology` turns from a type into a property.
+_KIND_TYPES = {
+    "ontology": ("ontology", "metaontology"),
+    "knowledge": ("knowledge",),
+}
+
+
+@dataclass(frozen=True)
+class Namespace:
+    """One root's `namespace.nfx`, read.
+
+    `token` is the written token - "" for the root namespace - and
+    `dependencies` the envelope: `(nid, version)` pins on other namespace
+    files. `was` lists the tokens this root retired.
+    """
+    root: Path
+    path: Path
+    nid: str
+    token: str
+    version: str
+    name: str
+    was: tuple[str, ...] = ()
+    dependencies: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -40,6 +75,8 @@ class Entry:
     implicit_parent_nid: str | None = None
     registry_root: Path | None = None
     validators_path: Path | None = None
+    namespace: str | None = None
+    namespace_nid: str | None = None
 
     @property
     def local_name(self) -> str:
@@ -62,18 +99,68 @@ class PluginIndex:
         self._index: dict[str, Entry] = {}
         self._by_plugin_root: dict[Path, Entry] = {}
         self._by_local_name: dict[tuple[Path, str], Path] = {}
+        self._namespaces: dict[Path, Namespace] = {}
         self._roots = tuple(Path(r).resolve() for r in roots)
+        self._read_namespaces()
         self._scan()
         self._resolve_implicit_parents()
 
     # ---- registration ----------------------------------------------------------
 
+    def _read_namespaces(self) -> None:
+        """Pre-pass: one `Namespace` per consolidated root that declares one."""
+        by_token: dict[str, Path] = {}
+        by_nid: dict[str, Path] = {}
+        for root in self._roots:
+            path = plugins.namespace_path(root)
+            if path is None:
+                continue
+            if not path.is_file():
+                if root.is_dir():
+                    logging.warning(f"{root}: no {nfx.NAMESPACE_FILENAME}, its modules carry no namespace")
+                continue
+            doc = nfx.read(path)
+            if not doc.is_namespace:
+                raise exceptions.NfxViolation(
+                    f"{path} is reserved for the namespace declaration but declares type {doc.type!r}"
+                )
+            issues = nfx.namespace_issues(doc)
+            if issues:
+                raise exceptions.NfxViolation(f"{path}: " + "; ".join(issues))
+            if not doc.nid:
+                raise exceptions.NfxViolation(f"{path} declares no nid")
+            claimed = by_token.get(doc.namespace)
+            if claimed is not None:
+                raise exceptions.NfxViolation(
+                    f"namespace token collision: {doc.namespace!r} declared by {claimed} and {path}"
+                )
+            if doc.nid in by_nid:
+                raise exceptions.NfxViolation(
+                    f"nid collision: {doc.nid} claimed by {by_nid[doc.nid]} and {path}"
+                )
+            by_token[doc.namespace] = path
+            by_nid[doc.nid] = path
+            self._namespaces[root] = Namespace(
+                root=root,
+                path=path,
+                nid=doc.nid,
+                token=doc.namespace,
+                version=doc.version,
+                name=doc.name,
+                was=tuple(doc.was),
+                dependencies=tuple(doc.dependencies),
+            )
+
     def _register(self, pf: plugins.PluginFile) -> Entry | None:
         path = pf.nfx_path
         doc = nfx.read(path)
+        if doc.is_namespace:
+            raise exceptions.NfxViolation(
+                f"{path} is a namespace declaration; only <root>/{nfx.NAMESPACE_FILENAME} of a .nf root may be one"
+            )
         if not doc.nid:
             return None
-        if pf.expected_type and doc.type and doc.type != pf.expected_type:
+        if pf.expected_type and doc.type not in _KIND_TYPES[pf.expected_type]:
             raise exceptions.NfxViolation(
                 f"{path} sits in {pf.expected_type}/ but declares type {doc.type!r}"
             )
@@ -84,12 +171,18 @@ class PluginIndex:
             raise exceptions.NfxViolation(
                 f"nid collision: {doc.nid} claimed by {existing.path} and {path}"
             )
+        for ns in self._namespaces.values():
+            if ns.nid == doc.nid:
+                raise exceptions.NfxViolation(
+                    f"nid collision: {doc.nid} claimed by {ns.path} and {path}"
+                )
         name_key = (pf.registry_root, path.stem.lower())
         claimed = self._by_local_name.get(name_key)
         if claimed is not None and claimed != path:
             raise exceptions.NfxViolation(
                 f"local name collision in {pf.registry_root}: {path.stem!r} claimed by {claimed} and {path}"
             )
+        ns = self._namespaces.get(pf.registry_root)
         entry = Entry(
             path=path,
             nid=doc.nid,
@@ -100,6 +193,8 @@ class PluginIndex:
             parent_plugin_root=pf.parent_plugin_root,
             registry_root=pf.registry_root,
             validators_path=pf.validators_path,
+            namespace=None if ns is None else ns.token,
+            namespace_nid=None if ns is None else ns.nid,
         )
         self._index[doc.nid] = entry
         self._by_local_name[name_key] = path
@@ -174,6 +269,14 @@ class PluginIndex:
     def roots(self):
         """The registry roots this index was built from, resolved, in order."""
         return self._roots
+
+    def namespaces(self) -> list[Namespace]:
+        """The declarations read in the pre-pass, in root order."""
+        return [self._namespaces[r] for r in self._roots if r in self._namespaces]
+
+    def namespace_of(self, root) -> Namespace | None:
+        """The declaration of `root`, or None (legacy root, or none written yet)."""
+        return self._namespaces.get(Path(root).resolve())
 
     def extra_deps(self, nid):
         """Implicit-parent dependency lookup, suitable as `NfxTree(..., extra_deps=)`.

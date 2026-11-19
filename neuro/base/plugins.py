@@ -12,9 +12,13 @@ Two kinds of registry root exist.
       validators/<name>.py     validators for ontology/<Name>.nfx; sha256 = its `hash`
       tests/                   not scanned
 
-Only `ontology/`, `knowledge/` and the root's own `*.nfx` are read; nothing
-nests. A file's kind subdir and its `type` field must agree, and a local name
-may not repeat inside one root - both are enforced by `PluginIndex`.
+Only `ontology/` and `knowledge/` hold modules; nothing nests. The root's
+`namespace.nfx` is reserved: `walk_plugins` never yields
+it as a module - `PluginIndex` reads it in a pre-pass (`namespace_path`) and
+stamps every module of the root with its token. Any other `.nfx` at the top
+of the root is a stray and is ignored with a warning. A file's kind subdir and
+its `type` field must agree, and a local name may not repeat inside one root -
+both are enforced by `PluginIndex`.
 
 **Legacy root** - any other directory. A *plugin* is a subdirectory that owns
 one or more `.nfx` files, in one of three layouts, all transitional:
@@ -49,12 +53,14 @@ Loading is driven by `PluginIndex._scan` - every discovered validators file
 """
 
 import importlib.util
+import logging
 import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, TypeAlias
 
+from neuro.base.nfx import NAMESPACE_FILENAME
 from neuro.utils import internal_utils
 
 
@@ -110,7 +116,9 @@ class PluginFile:
     """One discovered `.nfx` and its enclosing plugin context.
 
     `plugin_root` is None for a bare nfx sitting directly under a registry root
-    and for every file of a consolidated root (no plugin directories there).
+    and for every file of a consolidated root (no plugin directories there);
+    a consolidated root's `namespace.nfx` is never one of these (see
+    `namespace_path`).
     `parent_plugin_root` is None when the plugin has no enclosing parent plugin
     (top-level under a registry root). `validators_path` is where this
     module's validators live if it has any - `<plugin>/validators.py` in a
@@ -134,6 +142,14 @@ def _normalise_roots(registry_roots: Iterable[Path | str]) -> tuple[Path, ...]:
 def is_consolidated(root: Path | str) -> bool:
     """True for a `.nf` root - the consolidated layout."""
     return Path(root).name == NF_DIRNAME
+
+
+def namespace_path(root: Path | str) -> Path | None:
+    """Where a root's namespace declaration lives: `<root>/namespace.nfx` for
+    a consolidated root (whether or not the file exists), None for a legacy
+    root - legacy layouts declare nothing."""
+    root = Path(root)
+    return root / NAMESPACE_FILENAME if is_consolidated(root) else None
 
 
 def effective_roots() -> list[Path]:
@@ -280,12 +296,15 @@ def _nfx_files(directory: Path) -> list[Path]:
 
 
 def _walk_consolidated(root: Path) -> Iterator[PluginFile]:
-    """Yield the files of a `.nf` root: its own `*.nfx` (the namespace
-    declaration), then `ontology/*.nfx` and `knowledge/*.nfx`. Nothing else in
-    the root is looked at - `validators/`, `tests/`, `tw5-editions/` and any
-    stray directory are not module containers."""
-    for nfx_path in _nfx_files(root):
-        yield PluginFile(nfx_path=nfx_path, registry_root=root, plugin_root=None, parent_plugin_root=None)
+    """Yield the modules of a `.nf` root: `ontology/*.nfx` then
+    `knowledge/*.nfx`. The root's own `namespace.nfx` is a declaration, not a
+    module, and is read by the index's pre-pass instead; any other `.nfx` at
+    the top is a stray and is skipped with a warning. Nothing else in the root
+    is looked at - `validators/`, `tests/` and any stray directory are not
+    module containers."""
+    for stray in _nfx_files(root):
+        if stray.name != NAMESPACE_FILENAME:
+            logging.warning(f"{stray}: a .nfx at the top of a .nf root is not a module, skipped")
     for kind in _KIND_SUBDIRS:
         for nfx_path in _nfx_files(root / kind):
             yield PluginFile(

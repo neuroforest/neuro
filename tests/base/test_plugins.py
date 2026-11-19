@@ -250,22 +250,27 @@ class TestConsolidatedRoot:
         assert plugins.is_consolidated(tmp_path / ".nf")
         assert not plugins.is_consolidated(tmp_path / "plugins")
 
-    def test_walk_plugins(self, tmp_path):
+    def test_walk_plugins(self, tmp_path, caplog):
         root = _make_nf_root(tmp_path)
         (root / "namespace.nfx").touch()
+        (root / "Stray.nfx").touch()
         (root / "ontology" / "Math.nfx").touch()
         (root / "knowledge" / "Antibiotics.nfx").touch()
         (root / "tests" / "stray.nfx").touch()
         (root / "validators" / "Math.py").touch()
         by_name = {pf.nfx_path.name: pf for pf in plugins.walk_plugins([root])}
-        assert set(by_name) == {"namespace.nfx", "Math.nfx", "Antibiotics.nfx"}
+        assert set(by_name) == {"Math.nfx", "Antibiotics.nfx"}
+        assert "Stray.nfx" in caplog.text and "namespace.nfx" not in caplog.text
         math = by_name["Math.nfx"]
         assert math.plugin_root is None and math.parent_plugin_root is None
         assert math.expected_type == "ontology"
         assert math.validators_path == (root / "validators" / "Math.py").resolve()
         assert by_name["Antibiotics.nfx"].expected_type == "knowledge"
-        assert by_name["namespace.nfx"].expected_type is None
-        assert by_name["namespace.nfx"].validators_path is None
+
+    def test_namespace_path(self, tmp_path):
+        root = _make_nf_root(tmp_path)
+        assert plugins.namespace_path(root) == root / "namespace.nfx"
+        assert plugins.namespace_path(tmp_path / "plugins") is None
 
     def test_validators_path_for(self, tmp_path):
         root = _make_nf_root(tmp_path)

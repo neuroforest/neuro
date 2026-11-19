@@ -115,7 +115,7 @@ class TestOntologyExport:
         """The metaontology's own `nid@version`, read rather than hardcoded."""
         from neuro.base import nfx
         from neuro.utils.internal_utils import get_path
-        meta = nfx.read(get_path("assets") / "ontology" / "metaontology.nfx")
+        meta = nfx.read(get_path("app") / ".nf" / "ontology" / "metaontology.nfx")
         return f"{meta.nid}@{meta.version}"
 
     def _core(self, tmp_path):
@@ -128,7 +128,7 @@ class TestOntologyExport:
         )
 
     def test_export_reproduces_the_metaontology_source(self, nb_meta, tmp_path):
-        """The export must reproduce `assets/ontology/metaontology.nfx`.
+        """The export must reproduce `.nf/ontology/metaontology.nfx`.
 
         This replaces the old `test_nfx_integrity`, which exported through a
         second, bespoke query in `Metaontology` - retired once this path was
@@ -144,7 +144,7 @@ class TestOntologyExport:
         from neuro.base import nfx
         from neuro.utils.internal_utils import get_path
 
-        original = nfx.read(get_path("assets") / "ontology" / "metaontology.nfx")
+        original = nfx.read(get_path("app") / ".nf" / "ontology" / "metaontology.nfx")
         out = tmp_path / "Metaontology.nfx"
         doc = nb_meta.ontology.export_nfx(out, name="Metaontology")
 
