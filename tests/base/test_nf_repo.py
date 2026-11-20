@@ -372,34 +372,35 @@ def test_module_log(tmp_path, root):
     micro = _target(tmp_path, root)
     roots = [root.path, micro.root]
     root.repo.rename("b", "stains", others=roots)
-    with pytest.raises(nf_repo.ReleaseRefused, match="1 issue"):  # a rename is an unreleased edit
-        nf_repo.plan_move(root.repo, micro, "stains", others=roots)
-    root.repo.release(["stains"], others=roots)
-    nf_repo.move(root.repo, micro, "stains", others=roots)
+    nf_repo.move(root.repo, micro, "stains", others=roots)  # a rename alone is not an unreleased edit
     micro.git("config", "user.name", "T")
     micro.rename("stains", "dyes", others=roots)
-    micro.release(["dyes"], others=roots)
     nf_repo.move(micro, root.repo, "dyes", others=roots)
     entries, note = nf_repo.module_log(root.repo, "dyes", roots=roots)
     assert note is None
     assert [(e.token, e.subject) for e in entries] == [
         ("", "MIGRATE: knowledge dyes ← micro"),
         ("micro", "MIGRATE: knowledge dyes → root"),
-        ("micro", "RELEASE: knowledge dyes 1.2"),
         ("micro", "REFACTOR: knowledge stains → dyes"),
         ("micro", "MIGRATE: knowledge stains ← root"),
         ("", "MIGRATE: knowledge stains → micro"),
-        ("", "RELEASE: knowledge stains 1.1"),
         ("", "REFACTOR: knowledge b → stains"),
         ("", "ADD: root"),
     ]
-    assert [e.version for e in entries] == ["1.2", "1.2", "1.2", "1.1", "1.1", "1.1", "1.1", "1.0", "1.0"]
-    assert entries[0].tags == ["knowledge/dyes/1.2"] and entries[-1].tags == ["knowledge/stains/1.0"]
-    assert entries[4].tags == ["knowledge/dyes/1.1"]  # micro's moved-in tag, renamed with the module there
+    assert {e.version for e in entries} == {"1.0"}
+    assert entries[0].tags == ["knowledge/dyes/1.0"] and entries[-1].tags == ["knowledge/stains/1.0"]
+    assert entries[3].tags == ["knowledge/dyes/1.0"]  # micro's moved-in tag, renamed with the module there
+    # any other difference from the last tag is still refused
+    root.write("knowledge/dyes.nfx", root.doc(root.b, "dyes", "1.0", kind="knowledge", deps=[(root.a, "1.0")],
+                                              nodes=[root.bn], rels=[(root.bn, root.an)], extra="edit"))
+    root.commit("UPDATE: dyes")
+    with pytest.raises(nf_repo.ReleaseRefused) as e:
+        nf_repo.plan_move(root.repo, micro, "dyes", as_="tints", others=roots)
+    assert any("unreleased edits since knowledge/dyes/1.0" in i for i in e.value.issues)
     assert len({(e.root, e.sha) for e in entries}) == len(entries)
     # a root the chain needs is missing: the walk stops with a note
     entries, note = nf_repo.module_log(root.repo, "dyes", roots=[root.path])
-    assert len(entries) == 1 and "continues in micro" in note
+    assert len(entries) == 2 and "continues in micro" in note
 
 
 def test_rename_test():

@@ -935,7 +935,9 @@ def plan_move(source: Repo, target: Repo, key, with_dependants=False, as_="", ot
         if released:
             name = tag_name((kind, stem), released)
             released_at = source.rev(name)
-            if source._doc_by_nid(name, rel, nid) != source.doc_at(head, rel):
+            tagged = source._doc_by_nid(name, rel, nid)
+            # a difference in `name` alone is a rename (no bump) - not an unreleased edit
+            if tagged is None or {**tagged, "name": stem} != source.doc_at(head, rel):
                 issues.append(f"{source.show(rel)}: unreleased edits since {name} - `nf.release` it first")
         items.append(MoveItem(kind, stem, landed, nid, docs[nid].version, files, released and name, released_at))
 
