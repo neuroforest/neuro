@@ -36,6 +36,7 @@ from pathlib import Path
 
 from neuro.base import nf_import, nfx, plugins
 from neuro.base.index import NfxIndex
+from neuro.base.nf_history import _pins, is_repin
 from neuro.utils import exceptions
 
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
@@ -135,6 +136,31 @@ def document_failures(idx, path) -> list[str]:
 
 def _labels_split(text: str) -> list[int]:
     return [text[:m.start()].count("\n") + 1 for m in _LABELS_SPLIT.finditer(text)]
+
+
+@dataclasses.dataclass
+class Step:
+    """One document a release writes."""
+    rel: Path
+    name: str
+    type: str
+    old: str
+    new: str
+    repins: list[str]
+    seed: bool
+    carries: bool        # it also releases edits made since its last tag
+    text: str            # the document as written
+
+    def line(self) -> str:
+        """The commit-body line for a cascaded document."""
+        tail = f"re-pin {', '.join(self.repins)}" if self.repins else "re-pin"
+        return f"{self.name} {self.old} → {self.new} ({tail}{'; carries unreleased edits' if self.carries else ''})"
+
+
+class ReleaseRefused(Exception):
+    def __init__(self, issues):
+        super().__init__(f"{len(issues)} issue(s)")
+        self.issues = list(issues)
 
 
 @dataclasses.dataclass
@@ -373,18 +399,153 @@ class Repo:
         base = self.rev("HEAD^") or EMPTY_TREE
         subject = self.git("log", "-1", "--format=%s", head).strip()
         existing = set(self.git("tag", "-l").split())
+        changed = [(rel, series_of(rel)) for status, rel in self.changed(base, head) if status != "D"]
+        docs = {rel: self.doc_at(head, rel) for rel, series in changed if series}
+        stem_of = {d.get("nid"): rel.stem for rel, d in docs.items()}
         made = []
-        for status, rel in self.changed(base, head):
-            series = series_of(rel)
-            if status == "D" or series is None:
+        for rel, series in changed:
+            if series is None:
                 continue
-            name = tag_name(series, self.doc_at(head, rel).get("version", ""))
+            doc = docs[rel]
+            name = tag_name(series, doc.get("version", ""))
             if name in existing:
                 continue
-            self.git("tag", "-a", name, "-m", f"{name} — {subject}", head)
+            before = self.doc_at(base, rel)
+            if is_repin(before, doc):
+                pins = ", ".join(f"{stem_of.get(n, n[:8])}@{v}" for n, v in _pins(doc).items()
+                                 if _pins(before).get(n) != v)
+                note = f"re-pin {pins} · {subject}"
+            else:
+                note = subject
+            self.git("tag", "-a", name, "-m", f"{name} — {note}", head)
             existing.add(name)
             made.append(name)
         return made
+
+    # ---- release ---------------------------------------------------------
+
+    def plan_release(self, targets, major=False, others=()) -> list["Step"]:
+        """What releasing `targets` (stems, names or nids of this root) writes:
+        each target at the next version after its latest tag, then every
+        in-root dependant, deps first, re-pinned and bumped to its own next
+        minor. Reads the worktree; writes nothing."""
+        idx = NfxIndex(*self._others(others, self.root), self.root)
+        local = {e.nid: e for e in idx.entries() if e.registry_root == self.root}
+        docs = {nid: nfx.read(e.path) for nid, e in local.items()}
+        rel_of = {nid: e.path.relative_to(self.root) for nid, e in local.items()}
+        tags = self.tags()
+
+        def find(key):
+            k = key.lower()
+            for nid, e in local.items():
+                if k in (nid, e.path.stem.lower(), (docs[nid].name or "").lower()):
+                    return nid
+            raise ValueError(f"{key}: no such document in {self.root}")
+
+        def latest(nid):
+            seen = tags.get(series_of(rel_of[nid]), set())
+            return max(seen, key=version_key) if seen else None
+
+        seeds = [find(t) for t in targets]
+        new: dict[str, str] = {}
+        for nid in seeds:
+            doc, last = docs[nid], latest(nid)
+            if last is None:
+                new[nid] = doc.version
+                continue
+            major_, minor = version_key(last)
+            want = f"{major_ + 1}.0" if major else f"{major_}.{minor + 1}"
+            if doc.version not in (last, want):
+                raise ValueError(f"{rel_of[nid]}: version {doc.version} is neither the released {last} nor "
+                                 f"the next {want} - leave `version` alone, release writes it")
+            tagged = self.doc_at(tag_name(series_of(rel_of[nid]), last), rel_of[nid])
+            if tagged == {**json.loads(local[nid].path.read_text()), "version": last}:
+                raise ValueError(f"{rel_of[nid]}: unchanged since {tag_name(series_of(rel_of[nid]), last)} - "
+                                 f"nothing to release")
+            new[nid] = want
+
+        dependants: dict[str, set[str]] = {}
+        for nid, doc in docs.items():
+            for dep, _ in doc.dependencies:
+                dependants.setdefault(dep, set()).add(nid)
+        closure, todo = set(seeds), list(seeds)
+        while todo:
+            for d in dependants.get(todo.pop(), ()):
+                if d not in closure:
+                    closure.add(d)
+                    todo.append(d)
+
+        order: list[str] = []
+        done: set[str] = set()
+
+        def visit(nid):
+            if nid in done:
+                return
+            done.add(nid)
+            for dep, _ in docs[nid].dependencies:
+                if dep in closure:
+                    visit(dep)
+            order.append(nid)
+
+        for nid in sorted(closure, key=lambda n: str(rel_of[n])):
+            visit(nid)
+
+        steps = []
+        for nid in order:
+            doc, last = docs[nid], latest(nid)
+            pins = tuple((d, new.get(d, v)) for d, v in doc.dependencies)
+            repins = [f"{rel_of[d].stem}@{new[d]}" for d, v in doc.dependencies if d in new and new[d] != v]
+            if nid not in new:
+                new[nid] = doc.version if last is None else f"{version_key(last)[0]}.{version_key(last)[1] + 1}"
+            carries = False
+            if nid not in seeds and last is not None:
+                tagged = self.doc_at(tag_name(series_of(rel_of[nid]), last), rel_of[nid])
+                after = {**json.loads(local[nid].path.read_text()), "version": last}
+                after.pop("dependencies", None)
+                if tagged is not None:
+                    tagged = {k: v for k, v in tagged.items() if k != "dependencies"}
+                    carries = tagged != after
+            steps.append(Step(rel_of[nid], doc.name or rel_of[nid].stem, doc.type, doc.version, new[nid],
+                              repins, nid in seeds, carries,
+                              nfx.dumps(dataclasses.replace(doc, version=new[nid], dependencies=pins))))
+        return steps
+
+    def release(self, targets, major=False, others=(), message=None) -> tuple[str, list["Step"], list[str]]:
+        """Write, validate, commit and tag the release `plan_release` computes -
+        one commit, one annotated tag per document. Refuses an index holding
+        anything else; on a refused verdict the worktree and index are put back."""
+        steps = self.plan_release(targets, major, others)
+        paths = [self._path(s.rel.as_posix()) for s in steps]
+        staged = set(self.git("diff", "--cached", "--name-only").split())
+        foreign = sorted(staged - set(paths))
+        if foreign:
+            raise ValueError(f"the index already holds {', '.join(foreign)} - commit or unstage it first")
+        saved = {s.rel: (self.root / s.rel).read_text() for s in steps}
+        for s in steps:
+            (self.root / s.rel).write_text(s.text)
+        self.git("add", "--", *paths)
+        verdict = self.check(others=others)
+        if verdict.issues:
+            self._restore(saved, paths)
+            raise ReleaseRefused(verdict.issues)
+        seeds = [s for s in steps if s.seed]
+        kinds = {s.type for s in seeds}
+        subject = message or ("RELEASE: " + (f"{kinds.pop()} " if len(kinds) == 1 else "")
+                              + ", ".join(f"{s.name} {s.new}" for s in seeds))
+        body = [s.line() for s in steps if not s.seed]
+        r = subprocess.run(["git", "commit", "-q", "-F", "-"], cwd=self.top, env=self._env, text=True,
+                           input="\n\n".join([subject, "\n".join(body)]) if body else subject, capture_output=True)
+        if r.returncode:
+            self._restore(saved, paths)
+            raise ReleaseRefused([line for line in (r.stdout + r.stderr).splitlines() if line.strip()])
+        self.tag()  # a no-op when the post-commit hook already ran
+        head = self.rev("HEAD")
+        return head, steps, sorted(self.git("tag", "--points-at", head).split())
+
+    def _restore(self, saved, paths):
+        self.git("reset", "-q", "--", *paths)
+        for rel, text in saved.items():
+            (self.root / rel).write_text(text)
 
     # ---- commit order ----------------------------------------------------------------
 
@@ -439,21 +600,23 @@ class Repo:
         return (
             "#!/bin/sh\n"
             f"{_SENTINEL} - versioned with the root; the code is neuro's `{task}`.\n"
-            "# The wrapper is per clone: `git config nf.runner <wrapper>` (default invoke).\n"
+            "# The wrapper is per clone, `git config nf.runner <wrapper>`, and has no default:\n"
+            "# a guess could run another line's code (a legacy runner during the parallel period).\n"
+            'runner="$(git config nf.runner)" || { echo "nf hook: nf.runner is not set - run nf.hooks-install" >&2; exit 1; }\n'
             "# git hands a hook relative paths; the wrapper changes directory before Python starts.\n"
             f"for v in {' '.join(_GIT_PATH_VARS)}; do\n"
             '    eval "p=\\${$v:-}"\n'
             '    case "$p" in ""|/*) ;; *) export "$v=$PWD/$p" ;; esac\n'
             "done\n"
             'root="$(cd "$(dirname "$0")/.." && pwd)"\n'
-            f'exec "$(git config nf.runner || echo invoke)" {task} --root "$root"\n'
+            f'exec "$runner" {task} --root "$root"\n'
         )
 
     def stub(self, hook) -> str:
         target = f"$(git rev-parse --show-toplevel)/{self._path(SHIM_DIR)}/{hook}"
         return f'#!/bin/sh\n{_SENTINEL} - installed by `nf.hooks-install`.\nexec "{target}" "$@"\n'
 
-    def install(self, runner="invoke") -> list[str]:
+    def install(self, runner) -> list[str]:
         """Write the versioned shims into `<root>/.githooks/`, a stub per hook
         into `hooks_dir()`, and `nf.runner`. Refuses to replace a hook it did
         not write. Returns what it wrote."""

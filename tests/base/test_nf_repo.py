@@ -156,6 +156,46 @@ def test_tag(root):
     assert "RELEASE: ontology P 1.1" in _git(root.path, "cat-file", "-p", "ontology/a/1.1")
 
 
+def test_release(root):
+    _git(root.path, "config", "user.name", "T")
+    _git(root.path, "config", "user.email", "t@example.org")
+    with pytest.raises(ValueError, match="nothing to release"):
+        root.repo.release(["p"])
+    # P edited (unreleased), B edited too; releasing P carries the closure in one commit
+    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.0", nodes=[root.pn], extra="edited"), add=False)
+    root.write("knowledge/b.nfx", root.doc(root.b, "B", "1.0", kind="knowledge", deps=[(root.a, "1.0")],
+                                           nodes=[root.bn], rels=[(root.bn, root.an)], extra="b edit"), add=False)
+    steps = root.repo.plan_release(["P"])
+    assert [(s.rel.stem, s.old, s.new, s.repins, s.carries) for s in steps] == [
+        ("p", "1.0", "1.1", [], False), ("a", "1.0", "1.1", ["p@1.1"], False), ("b", "1.0", "1.1", ["a@1.1"], True)]
+    sha, steps, tags = root.repo.release(["p"])
+    assert tags == ["knowledge/b/1.1", "ontology/a/1.1", "ontology/p/1.1"]
+    assert _git(root.path, "show", "--name-only", "--format=%s", sha).split("\n")[0] == "RELEASE: ontology P 1.1"
+    body = _git(root.path, "log", "-1", "--format=%b").strip().splitlines()
+    assert body == ["A 1.0 → 1.1 (re-pin p@1.1)", "B 1.0 → 1.1 (re-pin a@1.1; carries unreleased edits)"]
+    assert "re-pin p@1.1" in _git(root.path, "cat-file", "-p", "ontology/a/1.1")
+    assert root.repo.check("HEAD").issues == []
+    assert _git(root.path, "status", "--short") == ""
+
+
+def test_release_refused(root):
+    _git(root.path, "config", "user.name", "T")
+    _git(root.path, "config", "user.email", "t@example.org")
+    # P drops the node A references: refused, worktree and index put back
+    edited = root.doc(root.p, "P", "1.0", nodes=[str(uuid.uuid4())])
+    root.write("ontology/p.nfx", edited, add=False)
+    before = (root.path / "ontology/p.nfx").read_text()
+    with pytest.raises(nf_repo.ReleaseRefused) as e:
+        root.repo.release(["p"])
+    assert any(i.startswith("ontology/a.nfx: unresolved") for i in e.value.issues)
+    assert (root.path / "ontology/p.nfx").read_text() == before
+    assert _git(root.path, "diff", "--cached", "--name-only") == ""
+    # a foreign staged file blocks the release
+    root.write("ruff.toml", "[lint]\n")
+    with pytest.raises(ValueError, match="already holds ruff.toml"):
+        root.repo.release(["p"])
+
+
 def test_install(root):
     hooks = root.path / ".git" / "hooks"
     wrote = root.repo.install(runner="wrapper")
@@ -166,7 +206,8 @@ def test_install(root):
     assert root.repo.install(runner="wrapper") == []
     (hooks / "pre-commit").write_text("#!/bin/sh\necho mine\n")
     with pytest.raises(FileExistsError):
-        root.repo.install()
+        root.repo.install(runner="wrapper")
+    assert "echo invoke" not in (root.path / ".githooks" / "pre-commit").read_text()
 
 
 def test_series():
