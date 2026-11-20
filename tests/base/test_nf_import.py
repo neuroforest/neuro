@@ -84,11 +84,26 @@ def test_plan_import(tmp_path):
 
     inner = next(m for m in mapping.modules if m.rel.name == "inner.nfx")
     assert (parent_nid, "1.0") in nfx.Nfx.from_dict(json.loads(inner.content)).dependencies
-    assert inner.note == "pins parent outer@1.0"
+    assert inner.note == "pins parent outer@1.0; name 'Inner' → 'inner'"
+    # name = stem in every module; the source name is kept for legacy tags
+    for m in mapping.modules:
+        assert json.loads(m.content)["name"] == m.rel.stem
+    alpha = next(m for m in mapping.modules if m.rel.name == "alpha.nfx")
+    assert alpha.name == "Alpha"
 
     ns = nfx.Nfx.from_dict(json.loads(mapping.moves[0].content))
     assert ns.is_namespace and ns.namespace == "" and ns.name == "Root"
     assert ns.dependencies == ((PARENT_NID, "1.0"),)
+
+
+def test_rename_to_stem():
+    raw = b'{\n    "type": "ontology",\n    "name": "Demo Records",\n    "nodes": [{"properties": {"name": "x"}}]\n}\n'
+    new, old = nf_import.rename_to_stem(raw, "demo-records")
+    assert old == "Demo Records"
+    assert new == raw.replace(b'"Demo Records"', b'"demo-records"')
+    assert nf_import.rename_to_stem(new, "demo-records") == (new, "")
+    with pytest.raises(ValueError):
+        nf_import.rename_to_stem(b'{"type": "ontology"}', "x")
 
 
 def test_plan_import_unmapped(tmp_path):

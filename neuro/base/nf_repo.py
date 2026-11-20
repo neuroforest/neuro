@@ -332,6 +332,8 @@ class Repo:
             issues += [f"{where}:{line}: labels array must be on one line" for line in _labels_split(path.read_text())]
             if rel in touched:
                 issues += [f"{where}: {e}" for e in idx.check_dependency_versions(path)]
+                if not doc.is_namespace and doc.name != rel.stem:
+                    issues.append(f"{where}: name {doc.name!r} must be its stem {rel.stem!r}")
             for dep, _ in doc.dependencies:
                 if doc.type == "ontology" and dep in by_nid and by_nid[dep].type == "knowledge":
                     issues.append(f"{where}: an ontology may not pin knowledge ({by_nid[dep].path.stem})")

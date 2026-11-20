@@ -35,10 +35,10 @@ class _Root:
         self.pn, self.an, self.bn = (str(uuid.uuid4()) for _ in range(3))
         self.write("namespace.nfx", {"type": "namespace", "nid": str(uuid.uuid4()), "version": "1.0",
                                      "name": "Root", "namespace": ""})
-        self.write("ontology/p.nfx", self.doc(self.p, "P", "1.0", nodes=[self.pn]))
-        self.write("ontology/a.nfx", self.doc(self.a, "A", "1.0", deps=[(self.p, "1.0")], nodes=[self.an],
+        self.write("ontology/p.nfx", self.doc(self.p, "p", "1.0", nodes=[self.pn]))
+        self.write("ontology/a.nfx", self.doc(self.a, "a", "1.0", deps=[(self.p, "1.0")], nodes=[self.an],
                                               rels=[(self.an, self.pn)]))
-        self.write("knowledge/b.nfx", self.doc(self.b, "B", "1.0", kind="knowledge", deps=[(self.a, "1.0")],
+        self.write("knowledge/b.nfx", self.doc(self.b, "b", "1.0", kind="knowledge", deps=[(self.a, "1.0")],
                                                nodes=[self.bn], rels=[(self.bn, self.an)]))
         self.commit("ADD: root")
         for t in ("ontology/p/1.0", "ontology/a/1.0", "knowledge/b/1.0", "namespace/1.0"):
@@ -82,78 +82,84 @@ def root(tmp_path):
 def test_check(root):
     assert root.check() == []
     # an unreleased edit: content changes, version stays at its tag
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.0", nodes=[root.pn], extra="edited"))
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], extra="edited"))
     assert root.check() == []
     # a skipped version, then an already released one
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.2", nodes=[root.pn]))
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.2", nodes=[root.pn]))
     assert any("skips past the latest release 1.0" in i for i in root.check())
     _git(root.path, "tag", "-a", "ontology/p/1.1", "-m", "x", "HEAD")
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.0", nodes=[root.pn], extra="edited"))
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], extra="edited"))
     assert any("version 1.0 is already released" in i for i in root.check())
 
 
 def test_check_closure(root):
     # bumping P without re-pinning A is refused, naming A; with the closure it passes
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.1", nodes=[root.pn]))
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.1", nodes=[root.pn]))
     issues = root.check()
     assert len(issues) == 1 and "ontology/a.nfx: pins p@1.0" in issues[0]
-    root.write("ontology/a.nfx", root.doc(root.a, "A", "1.1", deps=[(root.p, "1.1")], nodes=[root.an],
+    root.write("ontology/a.nfx", root.doc(root.a, "a", "1.1", deps=[(root.p, "1.1")], nodes=[root.an],
                                           rels=[(root.an, root.pn)]))
-    root.write("knowledge/b.nfx", root.doc(root.b, "B", "1.1", kind="knowledge", deps=[(root.a, "1.1")],
+    root.write("knowledge/b.nfx", root.doc(root.b, "b", "1.1", kind="knowledge", deps=[(root.a, "1.1")],
                                            nodes=[root.bn], rels=[(root.bn, root.an)]))
     verdict = root.repo.check()
     assert verdict.issues == []
     assert set(verdict.released) == {"ontology/p/1.1", "ontology/a/1.1", "knowledge/b/1.1"}
 
 
+def test_check_name(root):
+    # name = stem on every touched document
+    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.0", nodes=[root.pn], extra="edited"))
+    assert any("name 'P' must be its stem 'p'" in i for i in root.check())
+
+
 def test_check_dependants(root):
     # A drops the node B references: refused at A's commit, naming B
-    root.write("ontology/a.nfx", root.doc(root.a, "A", "1.0", deps=[(root.p, "1.0")]))
+    root.write("ontology/a.nfx", root.doc(root.a, "a", "1.0", deps=[(root.p, "1.0")]))
     issues = root.check()
     assert any(i.startswith("knowledge/b.nfx: unresolved") for i in issues)
 
 
 def test_check_rules(root):
     # an ontology may not pin knowledge
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.0", deps=[(root.b, "1.0")], nodes=[root.pn]))
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", deps=[(root.b, "1.0")], nodes=[root.pn]))
     assert any("may not pin knowledge" in i for i in root.check())
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.0", nodes=[root.pn]))
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn]))
     # validators hash follows the validators file
     root.write("validators/p.py", "# v1\n")
     assert any("is not sha256(validators/p.py)" in i for i in root.check())
     digest = hashlib.sha256(b"# v1\n").hexdigest()
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.0", nodes=[root.pn], hash_=digest))
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], hash_=digest))
     assert root.check() == []
     # the index is judged, not the worktree
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "9.9", nodes=[root.pn], hash_=digest), add=False)
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "9.9", nodes=[root.pn], hash_=digest), add=False)
     assert root.check() == []
     # labels split over lines
-    text = json.dumps(root.doc(root.p, "P", "1.0", nodes=[root.pn], hash_=digest), indent=4)
+    text = json.dumps(root.doc(root.p, "p", "1.0", nodes=[root.pn], hash_=digest), indent=4)
     root.write("ontology/p.nfx", text)
     assert any("labels array must be on one line" in i for i in root.check())
 
 
 def test_check_rev(root):
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.1", nodes=[root.pn]))
-    root.commit("RELEASE: ontology P 1.1")
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.1", nodes=[root.pn]))
+    root.commit("RELEASE: ontology p 1.1")
     assert any("pins p@1.0" in i for i in root.repo.check("HEAD").issues)
     assert root.repo.check("HEAD^").issues == []
 
 
 def test_tag(root):
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.0", nodes=[root.pn], extra="unreleased"))
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], extra="unreleased"))
     root.commit("UPDATE: p")
     assert root.repo.tag() == []
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.1", nodes=[root.pn]))
-    root.write("ontology/a.nfx", root.doc(root.a, "A", "1.1", deps=[(root.p, "1.1")], nodes=[root.an],
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.1", nodes=[root.pn]))
+    root.write("ontology/a.nfx", root.doc(root.a, "a", "1.1", deps=[(root.p, "1.1")], nodes=[root.an],
                                           rels=[(root.an, root.pn)]))
-    root.write("knowledge/b.nfx", root.doc(root.b, "B", "1.1", kind="knowledge", deps=[(root.a, "1.1")],
+    root.write("knowledge/b.nfx", root.doc(root.b, "b", "1.1", kind="knowledge", deps=[(root.a, "1.1")],
                                            nodes=[root.bn], rels=[(root.bn, root.an)]))
-    root.commit("RELEASE: ontology P 1.1")
+    root.commit("RELEASE: ontology p 1.1")
     assert sorted(root.repo.tag()) == ["knowledge/b/1.1", "ontology/a/1.1", "ontology/p/1.1"]
     assert root.repo.tag() == []
     assert _git(root.path, "cat-file", "-t", "ontology/p/1.1").strip() == "tag"
-    assert "RELEASE: ontology P 1.1" in _git(root.path, "cat-file", "-p", "ontology/a/1.1")
+    assert "RELEASE: ontology p 1.1" in _git(root.path, "cat-file", "-p", "ontology/a/1.1")
 
 
 def test_release(root):
@@ -162,17 +168,17 @@ def test_release(root):
     with pytest.raises(ValueError, match="nothing to release"):
         root.repo.release(["p"])
     # P edited (unreleased), B edited too; releasing P carries the closure in one commit
-    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.0", nodes=[root.pn], extra="edited"), add=False)
-    root.write("knowledge/b.nfx", root.doc(root.b, "B", "1.0", kind="knowledge", deps=[(root.a, "1.0")],
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], extra="edited"), add=False)
+    root.write("knowledge/b.nfx", root.doc(root.b, "b", "1.0", kind="knowledge", deps=[(root.a, "1.0")],
                                            nodes=[root.bn], rels=[(root.bn, root.an)], extra="b edit"), add=False)
     steps = root.repo.plan_release(["P"])
     assert [(s.rel.stem, s.old, s.new, s.repins, s.carries) for s in steps] == [
         ("p", "1.0", "1.1", [], False), ("a", "1.0", "1.1", ["p@1.1"], False), ("b", "1.0", "1.1", ["a@1.1"], True)]
     sha, steps, tags = root.repo.release(["p"])
     assert tags == ["knowledge/b/1.1", "ontology/a/1.1", "ontology/p/1.1"]
-    assert _git(root.path, "show", "--name-only", "--format=%s", sha).split("\n")[0] == "RELEASE: ontology P 1.1"
+    assert _git(root.path, "show", "--name-only", "--format=%s", sha).split("\n")[0] == "RELEASE: ontology p 1.1"
     body = _git(root.path, "log", "-1", "--format=%b").strip().splitlines()
-    assert body == ["A 1.0 → 1.1 (re-pin p@1.1)", "B 1.0 → 1.1 (re-pin a@1.1; carries unreleased edits)"]
+    assert body == ["a 1.0 → 1.1 (re-pin p@1.1)", "b 1.0 → 1.1 (re-pin a@1.1; carries unreleased edits)"]
     assert "re-pin p@1.1" in _git(root.path, "cat-file", "-p", "ontology/a/1.1")
     assert root.repo.check("HEAD").issues == []
     assert _git(root.path, "status", "--short") == ""
@@ -182,7 +188,7 @@ def test_release_refused(root):
     _git(root.path, "config", "user.name", "T")
     _git(root.path, "config", "user.email", "t@example.org")
     # P drops the node A references: refused, worktree and index put back
-    edited = root.doc(root.p, "P", "1.0", nodes=[str(uuid.uuid4())])
+    edited = root.doc(root.p, "p", "1.0", nodes=[str(uuid.uuid4())])
     root.write("ontology/p.nfx", edited, add=False)
     before = (root.path / "ontology/p.nfx").read_text()
     with pytest.raises(nf_repo.ReleaseRefused) as e:

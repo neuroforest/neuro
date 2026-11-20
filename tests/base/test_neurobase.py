@@ -176,8 +176,8 @@ class TestOntologyExport:
         nb_meta.metaontology.import_nfx(self._core(tmp_path))
         out = tmp_path / "out"
         docs = nb_meta.ontology.export_nfx(out)
-        assert {d.name for d in docs} == {"Metaontology", "core"}
-        assert {p.name for p in out.glob("*.nfx")} == {"Metaontology.nfx", "core.nfx"}
+        assert {d.name for d in docs} == {"metaontology", "core"}
+        assert {p.name for p in out.glob("*.nfx")} == {"metaontology.nfx", "core.nfx"}
 
     def test_export_assigns_a_cross_module_edge_to_the_dependent(self, nb_meta, tmp_path):
         """An edge out of a dependency's node belongs to the file that can declare it.
@@ -205,7 +205,7 @@ class TestOntologyExport:
         assert edge not in {(r["from"], r["to"], r["type"]) for r in by_name["core"].relationships}
         # and core is importable on its own terms
         core_doc = nfx.read(out / "core.nfx")
-        meta_nids = {n["nid"] for n in by_name["Metaontology"].nodes}
+        meta_nids = {n["nid"] for n in by_name["metaontology"].nodes}
         assert nfx.validate(core_doc, meta_nids)["unresolved"] == []
 
     def test_export_round_trips_the_whole_ontology_layer(self, nb_meta, tmp_path):

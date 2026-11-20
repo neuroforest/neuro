@@ -8,6 +8,8 @@ rules:
 
 - a module goes to `ontology/` or `knowledge/` by its own `type` field, under
   its file stem - the local name, which may not repeat (the index refuses it);
+- its `name` becomes that stem (name = stem), rewritten in
+  place so the rest of the file keeps its bytes;
 - a module nested in a parent plugin gets that parent as an explicit pin,
   since the `.nf` layout has no nesting to imply it;
 - `<plugin>/validators.py` becomes `validators/<stem>.py`, `<stem>` being the
@@ -32,6 +34,7 @@ period (C5).
 """
 
 import hashlib
+import json
 import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -55,14 +58,16 @@ _NFX_LINE = re.compile(r'^(?P<var>_\w+)_NFX = Path\(__file__\)\.with_name\("(?P<
 @dataclass(frozen=True)
 class Move:
     """One file of the `.nf` root. `src` is None for a generated file; `rel`
-    is the path inside the root. A module move carries its nid and the tag
-    C2 cuts for it; `note` says what changed on the way, if anything."""
+    is the path inside the root. A module move carries its nid, the tag C2
+    cuts for it and the `name` it had in the source (legacy tags and
+    messages use it); `note` says what changed on the way, if anything."""
     src: Path | None
     rel: Path
     content: bytes
     nid: str = ""
     tag: str = ""
     note: str = ""
+    name: str = ""
 
 
 @dataclass
@@ -92,6 +97,26 @@ def namespace_doc(nid: str, parent_nid: str, parent_version: str, version: str =
         namespace="",
         dependencies=((parent_nid, parent_version),),
     )
+
+
+def rename_to_stem(content: bytes, stem: str) -> tuple[bytes, str]:
+    """Set the document's top-level `name` to `stem`, touching only that value.
+    Returns the new bytes and the old name ("" when it already was `stem`).
+    The top-level key precedes `nodes` in every document, so the first
+    `"name": …` pair is it; the result must parse to the same document with
+    only `name` changed, else ValueError."""
+    doc = json.loads(content)
+    old = doc.get("name")
+    if old == stem:
+        return content, ""
+    text = content.decode()
+    if old is None:
+        raise ValueError("declares no name")
+    pair = re.compile(r'"name"(\s*):(\s*)' + re.escape(json.dumps(old, ensure_ascii=False)))
+    new, count = pair.subn(lambda m: f'"name"{m[1]}:{m[2]}{json.dumps(stem)}', text, count=1)
+    if count != 1 or json.loads(new) != {**doc, "name": stem}:
+        raise ValueError(f"cannot rewrite name {old!r} in place")
+    return new.encode(), old
 
 
 def rewrite_test(text: str, stem: str) -> str:
@@ -146,15 +171,24 @@ def plan_import(src_root, namespace: nfx.Nfx, type_of=None) -> Mapping:
             continue
         content = e.path.read_bytes()
         doc = nfx.read(e.path)
-        note = ""
+        notes = []
         parent = by_nid.get(e.implicit_parent_nid) if e.implicit_parent_nid else None
         if parent is not None and parent.nid not in {n for n, _ in doc.dependencies}:
             doc = replace(doc, dependencies=(*doc.dependencies, (parent.nid, parent.version)))
             content = nfx.dumps(doc).encode()
-            note = f"pins parent {parent.path.stem}@{parent.version}"
+            notes.append(f"pins parent {parent.path.stem}@{parent.version}")
+        source_name = doc.name or ""
+        try:
+            content, old = rename_to_stem(content, e.path.stem)
+        except ValueError as err:
+            out.issues.append(f"{e.path.relative_to(src_root)}: {err}")
+            continue
+        if old:
+            notes.append(f"name {old!r} → {e.path.stem!r}")
         out.moves.append(Move(
             e.path, Path(kind) / f"{e.path.stem}.nfx", content,
-            nid=e.nid, tag=tag_for(kind, e.path.stem, doc.version), note=note,
+            nid=e.nid, tag=tag_for(kind, e.path.stem, doc.version), note="; ".join(notes),
+            name=source_name,
         ))
 
     by_validators: dict[Path, list] = {}
@@ -292,6 +326,8 @@ def verify(staged, src_root, *base_roots) -> list[str]:
         if (s.path.stem, s.type, s.version) != (d.path.stem, d.type, d.version):
             issues.append(f"{d.path.name}: {s.path.stem}/{s.type}@{s.version} became "
                           f"{d.path.stem}/{d.type}@{d.version}")
+        if d.name != d.path.stem:
+            issues.append(f"{d.path.name}: name {d.name!r} is not its stem")
         vpath = plugins.validators_path_for(d.path, idx.roots)
         doc_hash = nfx.read(d.path).hash
         if vpath is not None and vpath.is_file():

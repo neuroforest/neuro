@@ -96,6 +96,19 @@ def test_group(tmp_path):
     ]
 
 
+def test_rename_in():
+    table = {"Antimicrobial agents": "antimicrobial-agents", "Custom antimicrobial agents": "custom-antimicrobial-agents",
+             "LAB": "lab", "Blob": "blob"}
+    assert nf_history.rename_in("RELEASE: knowledge Custom antimicrobial agents 1.7", table) \
+        == "RELEASE: knowledge custom-antimicrobial-agents 1.7"
+    assert nf_history.rename_in("UPDATE: dependency - re-pin Blob@2.1 for LAB", table) \
+        == "UPDATE: dependency - re-pin blob@2.1 for lab"
+    assert nf_history.rename_in("ADD: LAB-DS, Blobs", table) == "ADD: LAB-DS, Blobs"   # inside a longer name
+    table[""] = {"demo", "kappa"}
+    # a stem in another case only in the subject's module slot; the project name Kappa stays
+    assert nf_history.rename_in("RELEASE: ontology Demo 3.0 for Kappa", table) == "RELEASE: ontology demo 3.0 for Kappa"
+
+
 def test_drop_duplicates(tmp_path):
     nid = str(uuid.uuid4())
     (tmp_path / "tw5").mkdir()
@@ -117,19 +130,28 @@ def test_build(tmp_path):
                 {"facts.nfx": _doc(k, "Facts", "1.1", kind="knowledge", deps=[f"{p}@1.1"])})
     repo.commit("ADD: a", {"alpha/alpha.nfx": _doc(a, "Alpha", "1.0", deps=[f"{p}@1.1"])},
                 tag="alpha/1.0", gap=3600)
+    repo.commit("ADD: notes on Alpha", {".scripts/notes.txt": "only unmapped files"}, gap=3600)
 
     dst = tmp_path / "out" / ".nf"
     report = nf_history.build(repo.path, dst, _ns(), tmp_path / "scratch")
-    assert (report.commits, report.events, report.legacy_tags) == (5, 4, 3)
-    assert (report.tags, report.synthesized) == (5, 2)
+    assert (report.commits, report.events, report.legacy_tags, report.empty) == (6, 4, 3, 1)
+    assert (report.tags, report.synthesized) == (6, 3)
     assert report.fatal == [] and report.unmapped_tags == []
     log = _git(dst, "log", "--format=%s").splitlines()
-    assert log == ["ADD: a", "RELEASE: P 1.1", "ADD: k", "ADD: p"]
+    assert log == ["ADD: a", "RELEASE: p 1.1", "ADD: k", "ADD: p"]   # names → stems, the empty commit dropped
     assert set(_git(dst, "tag").split()) == {
         "ontology/p/1.0", "ontology/p/1.1", "ontology/alpha/1.0",
         "knowledge/facts/1.0", "knowledge/facts/1.1",   # untagged in the legacy repo
+        "namespace/1.0",                                # the declaration, on the first commit
     }
     assert "synthesized" in _git(dst, "cat-file", "-p", "knowledge/facts/1.1")
+    assert "RELEASE: p 1.1" in _git(dst, "cat-file", "-p", "ontology/p/1.1")
+    assert _git(dst, "rev-list", "-n1", "namespace/1.0") == _git(dst, "rev-list", "--max-parents=0", "HEAD")
+    # every name, in every commit, is its stem
+    for sha in _git(dst, "rev-list", "HEAD").split():
+        for rel in _git(dst, "ls-tree", "-r", "--name-only", sha).split():
+            if rel.endswith(".nfx") and rel != "namespace.nfx":
+                assert json.loads(_git(dst, "show", f"{sha}:{rel}"))["name"] == rel.rsplit("/", 1)[1][:-4]
     # the typeless first P is placed by the type it later declared
     assert "ontology/p.nfx" in _git(dst, "ls-tree", "-r", "--name-only", "ontology/p/1.0")
     assert _git(dst, "cat-file", "-t", "ontology/p/1.1").strip() == "tag"

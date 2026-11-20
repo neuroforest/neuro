@@ -31,6 +31,14 @@ version the legacy repo never tagged (the old hook did not tag knowledge
 cascade bumps) is tagged on the event where it first appears, its message
 saying it is synthesized.
 
+Names: every module's `name` is its stem in every commit
+(`plan_import` rewrites it), and the messages follow - a module's old name in
+a commit message or tag message becomes its stem (`renames`, `rename_in`), so
+no historical name survives. The namespace declaration is tagged
+`namespace/<version>` on the first commit. An event whose mapped tree equals
+the previous one and that carries no tag (a legacy commit that touched only
+unmapped files) is dropped.
+
 The early history predates the `type` field: a typeless module is placed by
 the first type its nid later declares (`declared_types`), its bytes kept. A
 tree holding one nid in two files (a move done as a copy) keeps the higher
@@ -43,8 +51,10 @@ tree the index refuses outright (`NfxViolation`) keeps the previous event's
 tree and is reported as fatal.
 """
 
+import hashlib
 import io
 import json
+import re
 import shutil
 import subprocess
 import tarfile
@@ -104,6 +114,8 @@ class Report:
     tags: int = 0
     legacy_tags: int = 0
     synthesized: int = 0
+    empty: int = 0          # events dropped: same tree as the previous one, no tag
+    renamed: int = 0        # messages whose module names were rewritten
     warnings: list[str] = field(default_factory=list)
     fatal: list[str] = field(default_factory=list)
     unmapped_tags: list[str] = field(default_factory=list)
@@ -244,6 +256,47 @@ def declared_types(commits: list[Commit]) -> dict[str, str]:
     return out
 
 
+# Not in the plugins repo, but named in its messages.
+_EXTRA_RENAMES = {"Metaontology": "metaontology"}
+
+
+def renames(commits: list[Commit]) -> dict[str, str]:
+    """Every module name the history ever declared that differs from the
+    module's stem → that stem. Under the key `""`, the set of stems itself,
+    for the module slot of a release subject (`rename_in`)."""
+    out: dict = dict(_EXTRA_RENAMES)
+    stems = set()
+    for c in commits:
+        for ch in c.changes:
+            name = (ch.after or {}).get("name")
+            stem = Path(ch.path).stem
+            if ch.is_nfx:
+                stems.add(stem)
+                if isinstance(name, str) and name and name != stem:
+                    out[name] = stem
+    out[""] = stems
+    return out
+
+
+# `RELEASE: ontology Demo 3.0` - the module slot of a subject, whatever case the message used
+_SUBJECT_SLOT = re.compile(r"^([A-Z]+: (?:ontology|knowledge|metaontology) )(\S+)", re.M)
+
+
+def rename_in(text: str, table: dict) -> str:
+    """`text` with each whole-word old module name replaced by its stem,
+    longest names first (`Custom antimicrobial agents` before `Antimicrobial
+    agents`). A name inside a longer word or hyphenated name is left alone.
+    In the module slot of a subject line, a stem in another case (`Demo`) is
+    lowercased too; elsewhere a word is only replaced when it was a name."""
+    names = {k: v for k, v in table.items() if k}
+    stems = {s.lower(): s for s in table.get("", ())}
+    if names:
+        pattern = re.compile(r"(?<![\w-])(" + "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+                             + r")(?![\w-])")
+        text = pattern.sub(lambda m: names[m[1]], text)
+    return _SUBJECT_SLOT.sub(lambda m: m[1] + stems.get(m[2].lower(), m[2]), text)
+
+
 def legacy_tags(repo) -> dict[str, list[str]]:
     """Commit sha → the tag names pointing at it (lightweight or annotated)."""
     out: dict[str, list[str]] = {}
@@ -313,15 +366,15 @@ def _data(payload: bytes) -> bytes:
 
 def _module_index(moves) -> dict[tuple[str, str], tuple[str, str]]:
     """(legacy tag name, version) → (type, stem) for the modules of one mapped tree.
-    A legacy tag is named after the module's `name` lowercased (the old
-    hook) - the stem is accepted too."""
+    A legacy tag is named after the module's source `name` lowercased (the
+    old hook) - the stem is accepted too."""
     out = {}
     for m in moves:
         if not m.nid:
             continue
         doc = json.loads(m.content)
         stem = m.rel.stem
-        for key in {str(doc.get("name", "")).lower(), stem.lower()}:
+        for key in {m.name.lower(), stem.lower()}:
             if key:
                 out[(key, str(doc.get("version", "")))] = (m.rel.parent.name, stem)
     return out
@@ -349,8 +402,11 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
     moves = None
     previous: dict[Path, str] = {}
     legacy_keys = {(t.rpartition("/")[0].lower(), t.rpartition("/")[2]) for ts in tags_at.values() for t in ts}
+    table = renames(commits)
     made: dict[str, str] = {}
-    for n, ev in enumerate(events, start=1):
+    mark = 0                      # the last commit written
+    signature = None              # its tree
+    for i, ev in enumerate(events, start=1):
         for path in extract(src, ev.last.sha, tree_dir):
             report.warnings.append(f"{ev.last.sha[:7]}: skipped non-file {path}")
         for path in drop_duplicates(tree_dir):
@@ -367,16 +423,11 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
         extra = [c.subject for c in ev.members[1:] if not _commit_is_repin(c)]
         if extra:
             message += "\n\n" + "\n".join(extra)
-        out = [b"commit refs/heads/%s\n" % branch.encode(), b"mark :%d\n" % n,
-               b"author %s\n" % ev.opener.author.encode(),
-               b"committer %s\n" % ev.last.committer.encode(),
-               _data(message.encode() + b"\n")]
-        if n > 1:
-            out.append(b"from :%d\n" % (n - 1))
-        out.append(b"deleteall\n")
-        for m in moves:
-            out.append(b"M 100644 inline %s\n" % str(m.rel).encode())
-            out.append(_data(m.content))
+        renamed = rename_in(message, table)
+        subject_of = lambda c: rename_in(c.subject, table)  # noqa: E731
+
+        # tags first: an event without a tree change is dropped only when it tags nothing
+        tags: list[tuple[str, str, str]] = []   # (name, tagger, message)
         index = _module_index(moves)
         for c in ev.members:
             for legacy in tags_at.get(c.sha, []):
@@ -390,9 +441,7 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
                     report.unmapped_tags.append(f"{legacy} → {new} already made from {made[new]}")
                     continue
                 made[new] = legacy
-                out += [b"tag %s\n" % new.encode(), b"from :%d\n" % n,
-                        b"tagger %s\n" % c.committer.encode(),
-                        _data(f"{new} — {c.subject}\n".encode())]
+                tags.append((new, c.committer, f"{new} — {subject_of(c)}"))
         # A version the legacy hook never tagged (knowledge cascade bumps)
         # is tagged where it first appears, and says so.
         current = {}
@@ -402,34 +451,70 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
                 version = str(doc.get("version", ""))
                 current[m.rel] = version
                 new = f"{m.rel.parent.name}/{m.rel.stem.lower()}/{version}"
-                keys = {(m.rel.stem.lower(), version), (str(doc.get("name", "")).lower(), version)}
+                keys = {(m.rel.stem.lower(), version), (m.name.lower(), version)}
                 if version and previous.get(m.rel) != version and new not in made \
                         and not keys & legacy_keys:
                     made[new] = "(synthesized)"
                     report.synthesized += 1
-                    out += [b"tag %s\n" % new.encode(), b"from :%d\n" % n,
-                            b"tagger %s\n" % ev.last.committer.encode(),
-                            _data(f"{new} — synthesized: untagged in the legacy repo; {ev.opener.subject}\n".encode())]
+                    tags.append((new, ev.last.committer,
+                                 f"{new} — synthesized: untagged in the legacy repo; {subject_of(ev.opener)}"))
         previous = current
+        if mark == 0:
+            new = f"namespace/{namespace.version}"
+            made[new] = "(synthesized)"
+            report.synthesized += 1
+            tags.append((new, ev.last.committer,
+                         f"{new} — synthesized: the root's declaration, in every commit; {subject_of(ev.opener)}"))
+
+        tree = hashlib.sha256(b"".join(str(m.rel).encode() + b"\0" + m.content + b"\0" for m in moves)).digest()
+        if tree == signature and not tags:
+            report.empty += 1
+            if progress:
+                progress(i, len(events))
+            continue
+        signature = tree
+        mark += 1
+        report.renamed += renamed != message
+        out = [b"commit refs/heads/%s\n" % branch.encode(), b"mark :%d\n" % mark,
+               b"author %s\n" % ev.opener.author.encode(),
+               b"committer %s\n" % ev.last.committer.encode(),
+               _data(renamed.encode() + b"\n")]
+        if mark > 1:
+            out.append(b"from :%d\n" % (mark - 1))
+        out.append(b"deleteall\n")
+        for m in moves:
+            out.append(b"M 100644 inline %s\n" % str(m.rel).encode())
+            out.append(_data(m.content))
+        for name, tagger, text in tags:
+            out += [b"tag %s\n" % name.encode(), b"from :%d\n" % mark,
+                    b"tagger %s\n" % tagger.encode(), _data(text.encode() + b"\n")]
         fi.stdin.write(b"".join(out))
         if progress:
-            progress(n, len(events))
+            progress(i, len(events))
     fi.stdin.write(b"done\n")
     fi.stdin.close()
     if fi.wait() != 0:
         raise RuntimeError("git fast-import failed")
     _git(dst, "checkout", "-q", branch)
     report.tags = len(made)
+    report.events = mark
     return report
 
 
 def check_tags(dst) -> list[str]:
     """Every `<type>/<stem>/<version>` tag names a commit where
-    `<type>/<stem>.nfx` is at that version."""
+    `<type>/<stem>.nfx` is at that version; `namespace/<version>` names one
+    where `namespace.nfx` is."""
     cat = _Cat(dst)
     issues = []
     for tag in _git(dst, "tag").split():
-        kind, stem, version = tag.split("/")
+        parts = tag.split("/")
+        if len(parts) == 2 and parts[0] == "namespace":
+            doc = cat.json(f"{tag}:{nfx.NAMESPACE_FILENAME}")
+            if doc is None or str(doc.get("version")) != parts[1]:
+                issues.append(f"{tag}: {nfx.NAMESPACE_FILENAME} is not at {parts[1]} there")
+            continue
+        kind, stem, version = parts
         doc = cat.json(f"{tag}:{kind}/{stem}.nfx")
         if doc is None:
             # the stem was lowercased for the tag; find the file case-insensitively
