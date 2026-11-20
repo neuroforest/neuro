@@ -340,7 +340,7 @@ class Repo:
                 digest = hashlib.sha256(vpath.read_bytes()).hexdigest()
                 if doc.hash != digest:
                     issues.append(f"{where}: hash {doc.hash or '(missing)'} is not sha256(validators/{vpath.name}) "
-                                  f"{digest[:12]}… - run `invoke ontology.rehash`")
+                                  f"{digest[:12]}… - run `ontology.rehash` (`git config nf.runner` names the wrapper)")
             elif doc.hash:
                 issues.append(f"{where}: carries a hash but validators/{path.stem}.py does not exist")
 

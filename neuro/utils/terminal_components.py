@@ -2,6 +2,7 @@
 General terminal interaction components.
 """
 
+import re
 from contextlib import contextmanager
 
 from rich.console import Console
@@ -86,19 +87,30 @@ def bool_prompt_show(question, file_path):
             return False
 
 
+_ANSI = re.compile(r"\033\[[0-9;]*m")
+
+
+def _visible(val) -> int:
+    """Printed width of a cell: its length without ANSI colour codes."""
+    return len(_ANSI.sub("", str(val)))
+
+
 def table(rows, header=None, indent=2):
-    """Print aligned columns from a list of tuples with optional header."""
+    """Print aligned columns from a list of tuples with optional header.
+    Cells may carry ANSI colour codes; columns align on what is printed."""
     if not rows:
         return
     all_rows = [header] + rows if header else rows
-    widths = [max(len(str(r[i])) for r in all_rows) for i in range(len(all_rows[0]))]
+    widths = [max(_visible(r[i]) for r in all_rows) for i in range(len(all_rows[0]))]
     prefix = " " * indent
+
+    def line(row):
+        return "  ".join(f"{val}{' ' * (widths[i] - _visible(val))}" for i, val in enumerate(row))
+
     if header:
-        cells = "  ".join(f"{str(val):<{widths[i]}}" for i, val in enumerate(header))
-        print(f"{prefix}{terminal_style.BOLD}{cells}{terminal_style.RESET}")
+        print(f"{prefix}{terminal_style.BOLD}{line(header)}{terminal_style.RESET}")
     for row in rows:
-        cells = "  ".join(f"{str(val):<{widths[i]}}" for i, val in enumerate(row))
-        print(f"{prefix}{cells}")
+        print(f"{prefix}{line(row)}")
 
 
 def selector(options, metadata=None):
