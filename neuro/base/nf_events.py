@@ -136,6 +136,18 @@ def parse(subject: str) -> Rename | Departure | Arrival | None:
     return None
 
 
+def parse_all(message: str) -> list[Rename | Departure | Arrival]:
+    """Every event a commit message records: its subject's, then one per body
+    line in the grammar (a set moves in one commit), a line's
+    ` · <note>` tail aside. Repeats dropped, order kept."""
+    events = []
+    for line in message.split("\n"):
+        event = parse(line.split(" · ", 1)[0].strip())
+        if event is not None and event not in events:
+            events.append(event)
+    return events
+
+
 def _git(repo, *args) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True)
 
@@ -157,13 +169,12 @@ def departure_of(repo, prefix: str, arrival: Arrival, nid: str, token: str) -> s
     dir, "" for a root that is its repo) whose parent held `nid` at the path.
     `token` is the arrival's own root, the departure's `to`."""
     path = str(PurePosixPath(prefix, Event(arrival.kind, arrival.stem).path))
-    log = _git(repo, "log", "--format=%H%x00%s", "--", path)
+    log = _git(repo, "log", "--format=%H%x00%B%x1e", "--", path)
     if log.returncode:
         return None
-    for line in log.stdout.decode().splitlines():
-        sha, _, subject = line.partition("\0")
-        event = parse(subject)
-        if (isinstance(event, Departure) and event.kind == arrival.kind and event.stem == arrival.stem
-                and event.to == token and nid_at(repo, f"{sha}^", path) == nid):
+    want = Departure(arrival.kind, arrival.stem, token)
+    for record in log.stdout.decode().split("\x1e"):
+        sha, _, message = record.strip("\n").partition("\0")
+        if sha and want in parse_all(message) and nid_at(repo, f"{sha}^", path) == nid:
             return sha
     return None

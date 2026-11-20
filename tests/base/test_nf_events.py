@@ -41,6 +41,14 @@ def test_parse_other(subject):
     assert nf_events.parse(subject) is None
 
 
+def test_parse_all():
+    message = ("MIGRATE: ontology p ← root\n\nMIGRATE: ontology p ← root · released in root as ontology/p/1.0\n"
+               "MIGRATE: ontology a ← root · never released in root\nnot an event\n")
+    assert nf_events.parse_all(message) == [nf_events.Arrival("ontology", "p", ""),
+                                            nf_events.Arrival("ontology", "a", "")]
+    assert nf_events.parse_all("FIX: x") == []
+
+
 def test_event():
     arrival = nf_events.Arrival("ontology", "a", "", "a")
     assert arrival.subject == "MIGRATE: ontology a ← root"

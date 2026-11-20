@@ -442,6 +442,12 @@ class Repo:
                 note = f"re-pin {pins} · {subject}"
             else:
                 note = subject
+                if isinstance(nf_events.parse(subject), nf_events.Arrival):
+                    for line in self.git("log", "-1", "--format=%b", head).splitlines():
+                        event = nf_events.parse(line.split(" · ", 1)[0])
+                        if isinstance(event, nf_events.Arrival) and Path(event.path) == rel:
+                            note = line
+                            break
             self.git("tag", "-a", name, "-m", f"{name} — {note}", head)
             existing.add(name)
             made.append(name)
@@ -662,6 +668,14 @@ class Repo:
             self.git("tag", "-d", old_tag)
         return self.rev("HEAD"), plan
 
+    def _commit(self, message) -> str:
+        """Commit the index (hooks and all); ReleaseRefused with git's output on failure."""
+        r = subprocess.run(["git", "commit", "-q", "-F", "-"], cwd=self.top, env=self._env, text=True,
+                           input=message, capture_output=True)
+        if r.returncode:
+            raise ReleaseRefused([line for line in (r.stdout + r.stderr).splitlines() if line.strip()])
+        return self.rev("HEAD")
+
     def _copy_tag(self, old, new, note):
         """`new` on `old`'s commit; an annotated one keeps its tagger and date,
         its message gets `note` appended."""
@@ -770,3 +784,221 @@ class Repo:
                 path.chmod(0o755)
         self.git("config", "nf.runner", runner)
         return wrote
+
+
+# ---- move between roots -------------------------------------------------------
+
+
+@dataclasses.dataclass
+class MoveItem:
+    kind: str
+    stem: str                       # in the source
+    landed: str                     # in the target (== stem unless --as)
+    nid: str
+    version: str
+    files: list[tuple[Path, Path]]  # source-relative → target-relative, the .nfx first
+    released: str | None            # the source's latest tag, None if never released
+    released_at: str | None         # its commit
+
+
+@dataclasses.dataclass
+class MovePlan:
+    source: "Repo"
+    target: "Repo"
+    source_token: str
+    target_token: str
+    items: list[MoveItem]           # dependencies first
+    seed: str                       # the nid asked for
+
+    def _messages(self, line) -> str:
+        """The seed's line as the subject, then one line per module in the body."""
+        seed = next(i for i in self.items if i.nid == self.seed)
+        return f"{line(seed).split(' · ')[0]}\n\n" + "\n".join(line(i) for i in self.items)
+
+    @property
+    def departure_message(self) -> str:
+        if len(self.items) == 1:
+            return self.departure(self.items[0]).subject
+        return self._messages(lambda i: self.departure(i).subject)
+
+    @property
+    def arrival_message(self) -> str:
+        return self._messages(lambda i: f"{self.arrival(i).subject} · {self.whence(i)}")
+
+    def departure(self, item) -> nf_events.Departure:
+        return nf_events.Departure(item.kind, item.stem, self.target_token)
+
+    def arrival(self, item) -> nf_events.Arrival:
+        return nf_events.Arrival(item.kind, item.stem, self.source_token,
+                                 item.landed if item.landed != item.stem else "")
+
+    def whence(self, item) -> str:
+        word = self.source_token or nf_events.ROOT_WORD
+        if item.released is None:
+            return f"never released in {word}"
+        return f"released in {word} as {item.released} at {item.released_at[:12]}"
+
+
+def _rest(others, *repos) -> list[Path]:
+    rest = list(others)
+    for repo in repos:
+        rest = repo._others(rest, repo.root)
+    return rest
+
+
+def plan_move(source: Repo, target: Repo, key, with_dependants=False, as_="", others=()) -> MovePlan:
+    """What moving `key` (stem, name or nid) from `source` into `target` writes -
+    with `with_dependants`, together with everything in the source that depends
+    on it. Reads HEAD, the worktrees and the tags; writes nothing."""
+    if source.root == target.root:
+        raise ValueError("source and target are the same root")
+    idx = NfxIndex(*_rest(others, source, target), target.root, source.root)
+    ns_src, ns_dst = idx.namespace_of(source.root), idx.namespace_of(target.root)
+    if ns_src is None or ns_dst is None:
+        raise ValueError("both roots need a namespace.nfx")
+    if ns_src.nid == ns_dst.nid:
+        raise ValueError("source and target are checkouts of the same namespace")
+    head = source.rev("HEAD")
+    if head is None:
+        raise ValueError(f"{source.root}: nothing committed yet")
+    seed_rel = source._find(key, head)
+    seed = source.doc_at(head, seed_rel)["nid"]
+    local = {e.nid: e for e in idx.entries() if e.registry_root == source.root}
+    by_nid = {e.nid: e for e in idx.entries()}
+    docs = {nid: nfx.read(e.path) for nid, e in local.items()}
+    rel_of = {nid: e.path.relative_to(source.root) for nid, e in local.items()}
+
+    dependants: dict[str, set[str]] = {}
+    for nid, doc in docs.items():
+        for dep, _ in doc.dependencies:
+            dependants.setdefault(dep, set()).add(nid)
+    closure, todo = {seed}, [seed]
+    while todo:
+        for d in dependants.get(todo.pop(), ()):
+            if d not in closure:
+                closure.add(d)
+                todo.append(d)
+    if len(closure) > 1 and not with_dependants:
+        names = ", ".join(sorted(str(rel_of[n]) for n in closure - {seed}))
+        raise ValueError(f"{source.show(seed_rel)} cannot leave alone - in-root dependants: {names} "
+                         f"(--with-dependants moves the set)")
+    if as_ and not nf_events.is_stem(as_):
+        raise ValueError(f"{as_!r} is not a stem - lowercase kebab")
+
+    order: list[str] = []
+
+    def visit(nid):
+        if nid not in order:
+            for dep, _ in docs[nid].dependencies:
+                if dep in closure:
+                    visit(dep)
+            order.append(nid)
+
+    for nid in sorted(closure, key=lambda n: str(rel_of[n])):
+        visit(nid)
+
+    src_tags, dst_tags = source.tags(), target.tags()
+    issues, items = [], []
+    for nid in order:
+        rel = rel_of[nid]
+        kind, stem = rel.parts[0], rel.stem
+        landed = as_ if nid == seed and as_ else stem
+        files = [(rel, Path(kind) / f"{landed}.nfx")]
+        for d, name in ((plugins._VALIDATORS_DIR, "{}.py"), ("tests", "test_{}.py")):
+            if source.blob(head, Path(d) / name.format(stem)) is not None:
+                files.append((Path(d) / name.format(stem), Path(d) / name.format(landed)))
+        if source.git("status", "--porcelain", "--", *(source._path(a.as_posix()) for a, _ in files)).strip():
+            issues.append(f"{source.show(rel)}: uncommitted changes - commit or drop them first")
+        for _, b in files:
+            if (target.root / b).exists():
+                issues.append(f"{target.show(b)} exists in the target{' - pass --as' if nid == seed else ''}")
+        if (kind, landed) in dst_tags:
+            back = target.doc_at(tag_name((kind, landed), max(dst_tags[(kind, landed)], key=version_key)),
+                                 Path(kind) / f"{landed}.nfx")
+            if (back or {}).get("nid") != nid:
+                issues.append(f"{kind}/{landed} is reserved in the target by its tags"
+                              f"{' - pass --as' if nid == seed else ''}")
+        seen = src_tags.get((kind, stem), set())
+        released = max(seen, key=version_key) if seen else None
+        released_at = None
+        if released:
+            name = tag_name((kind, stem), released)
+            released_at = source.rev(name)
+            if source.doc_at(name, rel) != source.doc_at(head, rel):
+                issues.append(f"{source.show(rel)}: unreleased edits since {name} - `nf.release` it first")
+        items.append(MoveItem(kind, stem, landed, nid, docs[nid].version, files, released and name, released_at))
+
+    namespaces = {ns.nid: ns for ns in idx.namespaces()}
+    reach, todo = {ns_dst.nid}, [ns_dst.nid]
+    while todo:
+        ns = namespaces.get(todo.pop())
+        for dep, _ in (ns.dependencies if ns else ()):
+            if dep not in reach:
+                reach.add(dep)
+                todo.append(dep)
+    for nid in order:
+        for dep, _ in docs[nid].dependencies:
+            entry = by_nid.get(dep)
+            if dep in closure or entry is None or entry.namespace_nid in reach:
+                continue
+            ns = namespaces.get(entry.namespace_nid)
+            pin = f"{(ns.token or nf_events.ROOT_WORD) if ns else '?'}@{ns.version if ns else '?'}"
+            issues.append(f"{source.show(rel_of[nid])} pins {entry.path.stem}, whose namespace the target does "
+                          f"not reach - add {pin} ({entry.namespace_nid}) to {target.show(nfx.NAMESPACE_FILENAME)}")
+    if issues:
+        raise ReleaseRefused(sorted(set(issues)))
+    return MovePlan(source, target, ns_src.token, ns_dst.token, items, seed)
+
+
+def move(source: Repo, target: Repo, key, with_dependants=False, as_="", others=()) -> tuple[MovePlan, str, str]:
+    """Move a module (or a dependant set) into another root: one
+    `MIGRATE: … →` commit removing it from the source, then one `MIGRATE: … ←`
+    commit adding it to the target, each module tagged at its version there. A
+    set moves in one commit at each end - the modules pin one another, so no
+    order of single moves keeps both roots valid - with one event line per
+    module in the body. History stays where it was; the source keeps its tags.
+    A refusal anywhere puts both back. Returns the plan and the two commits."""
+    plan = plan_move(source, target, key, with_dependants, as_, others)
+    for repo in (source, target):
+        if repo.git("diff", "--cached", "--name-only").strip():
+            raise ValueError(f"{repo.root}: the index is not empty - commit or unstage it first")
+    src_pre, dst_pre = source.rev("HEAD"), target.rev("HEAD")
+    src_paths = [source._path(a.as_posix()) for i in plan.items for a, _ in i.files]
+    dst_paths = [target._path(b.as_posix()) for i in plan.items for _, b in i.files]
+    dst_tags_pre = set(target.git("tag", "-l").split())
+    rest = _rest(others, source, target)
+    try:
+        source.git("rm", "-q", "--", *src_paths)
+        verdict = source.check(others=[*rest, target.root])
+        if verdict.issues:
+            raise ReleaseRefused(verdict.issues)
+        departed = source._commit(plan.departure_message)
+        for item in plan.items:
+            for a, b in item.files:
+                data = source.blob(src_pre, a)
+                if b.suffix == ".nfx" and item.landed != item.stem:
+                    data = nf_import.rename_to_stem(data, item.landed)[0]
+                elif b.parts[0] == "tests" and item.landed != item.stem:
+                    data = rename_test(data.decode(), item.stem, item.landed).encode()
+                path = target.root / b
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+        target.git("add", "--", *dst_paths)
+        verdict = target.check(others=[*rest, source.root])
+        if verdict.issues:
+            raise ReleaseRefused(verdict.issues)
+        arrived = target._commit(plan.arrival_message)
+        target.tag()  # a no-op when the post-commit hook already ran
+    except Exception:
+        for t in set(target.git("tag", "-l").split()) - dst_tags_pre:
+            target.git("tag", "-d", t, check=False)
+        if dst_pre:
+            target.git("reset", "-q", "--soft", dst_pre, check=False)
+        target.git("reset", "-q", "--", *dst_paths, check=False)
+        for p in dst_paths:
+            (target.top / p).unlink(missing_ok=True)
+        source.git("reset", "-q", "--soft", src_pre, check=False)
+        source.git("reset", "-q", "--", *src_paths, check=False)
+        source.git("checkout", src_pre, "--", *src_paths, check=False)
+        raise
+    return plan, departed, arrived

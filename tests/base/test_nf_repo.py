@@ -258,6 +258,113 @@ def test_rename_refused(root):
     assert _git(root.path, "status", "--short") == ""
 
 
+def _target(tmp_path, root, pin=True):
+    """A second root, token `micro`, its envelope pinning the first one's namespace."""
+    path = tmp_path / "micro" / ".nf"
+    path.parent.mkdir()
+    path.mkdir()
+    _git(path, "init", "-q", "-b", "master")
+    _git(path, "config", "core.hooksPath", "/dev/null")
+    _git(path, "config", "user.name", "T")
+    _git(path, "config", "user.email", "t@example.org")
+    ns = json.loads((root.path / "namespace.nfx").read_text())
+    doc = {"type": "namespace", "nid": str(uuid.uuid4()), "version": "1.0", "name": "Micro", "namespace": "micro"}
+    if pin:
+        doc["dependencies"] = [f"{ns['nid']}@{ns['version']}"]
+    (path / "namespace.nfx").write_text(nfx.dumps(nfx.Nfx.from_dict(doc)))
+    _git(path, "add", "namespace.nfx")
+    _git(path, "commit", "-q", "-m", "ADD: namespace")
+    return nf_repo.Repo(path)
+
+
+def test_move(tmp_path, root):
+    _git(root.path, "config", "user.name", "T")
+    _git(root.path, "config", "user.email", "t@example.org")
+    micro = _target(tmp_path, root)
+    roots = [root.path, micro.root]
+    # A has a dependant (B) in the source: refused alone, named
+    with pytest.raises(ValueError, match="in-root dependants: knowledge/b.nfx"):
+        nf_repo.plan_move(root.repo, micro, "a", others=roots)
+
+    plan, departed, arrived = nf_repo.move(root.repo, micro, "b", as_="stains", others=roots)
+    assert _git(root.path, "log", "-1", "--format=%s").strip() == "MIGRATE: knowledge b → micro"
+    assert _git(micro.root, "log", "-1", "--format=%s%n%b").split("\n")[:2] == [
+        "MIGRATE: knowledge b ← root as stains",
+        f"MIGRATE: knowledge b ← root as stains · released in root as knowledge/b/1.0 at "
+        f"{plan.items[0].released_at[:12]}"]
+    assert not (root.path / "knowledge/b.nfx").exists()
+    assert json.loads((micro.root / "knowledge/stains.nfx").read_text())["name"] == "stains"
+    assert _git(root.path, "tag", "-l", "knowledge/*").split() == ["knowledge/b/1.0"]  # the source keeps its past
+    assert "MIGRATE: knowledge b ← root as stains · released in root" in _git(
+        micro.root, "cat-file", "-p", "knowledge/stains/1.0")
+    assert root.repo.check("HEAD").issues == [] and micro.check("HEAD", others=roots).issues == []
+    from neuro.base import nf_events
+    arrival = nf_events.parse(_git(micro.root, "log", "-1", "--format=%s"))
+    assert nf_events.departure_of(root.path, "", arrival, root.b, "micro") == departed
+
+    # P with its dependant A as a set, while micro's stains already pins A: one commit at each end
+    plan, departed, arrived = nf_repo.move(root.repo, micro, "p", with_dependants=True, others=roots)
+    assert [i.stem for i in plan.items] == ["p", "a"]
+    assert _git(root.path, "log", "-1", "--format=%B").strip().split("\n") == [
+        "MIGRATE: ontology p → micro", "", "MIGRATE: ontology p → micro", "MIGRATE: ontology a → micro"]
+    message = _git(micro.root, "log", "-1", "--format=%B")
+    assert [e.subject for e in nf_events.parse_all(message)] == [
+        "MIGRATE: ontology p ← root", "MIGRATE: ontology a ← root"]
+    assert "MIGRATE: ontology a ← root · released in root as ontology/a/1.0" in _git(
+        micro.root, "cat-file", "-p", "ontology/a/1.0")
+    a_arrival = nf_events.parse_all(message)[1]
+    assert nf_events.departure_of(root.path, "", a_arrival, root.a, "micro") == departed
+    assert micro.check("HEAD", others=roots).issues == []
+
+    # stains alone cannot go back: it pins A, now in micro, which the root's envelope does not reach
+    with pytest.raises(nf_repo.ReleaseRefused) as e:
+        nf_repo.plan_move(micro, root.repo, "stains", as_="b", others=roots)
+    assert any("add micro@1.0" in i for i in e.value.issues)
+    # the whole set goes back; the root's own tags of the same nids do not reserve p and a against them
+    plan, _, _ = nf_repo.move(micro, root.repo, "p", with_dependants=True, others=roots)
+    assert [(i.stem, i.landed) for i in plan.items] == [("p", "p"), ("a", "a"), ("stains", "stains")]
+    assert _git(root.path, "log", "-1", "--format=%s").strip() == "MIGRATE: ontology p ← micro"
+    assert root.repo.check("HEAD").issues == [] and micro.check("HEAD", others=roots).issues == []
+    assert sorted(_git(root.path, "tag", "-l", "ontology/*").split()) == [
+        "ontology/a/1.0", "ontology/p/1.0"]  # versions unchanged: nothing new to tag
+
+
+def test_move_refused(tmp_path, root):
+    _git(root.path, "config", "user.name", "T")
+    _git(root.path, "config", "user.email", "t@example.org")
+    micro = _target(tmp_path, root, pin=False)
+    roots = [root.path, micro.root]
+    with pytest.raises(nf_repo.ReleaseRefused) as e:
+        nf_repo.plan_move(root.repo, micro, "b", others=roots)
+    assert any("add root@1.0" in i for i in e.value.issues)
+    # unreleased edits, and a taken stem
+    (tmp_path / "x").mkdir()
+    micro = _target(tmp_path / "x", root)
+    root.write("knowledge/b.nfx", root.doc(root.b, "b", "1.0", kind="knowledge", deps=[(root.a, "1.0")],
+                                           nodes=[root.bn], rels=[(root.bn, root.an)], extra="edit"))
+    root.commit("EDIT: b")
+    (micro.root / "knowledge").mkdir()
+    (micro.root / "knowledge/b.nfx").write_text("{}")
+    with pytest.raises(nf_repo.ReleaseRefused) as e:
+        nf_repo.plan_move(root.repo, micro, "b", others=[root.path, micro.root])
+    assert any("unreleased edits since knowledge/b/1.0" in i for i in e.value.issues)
+    assert any("exists in the target - pass --as" in i for i in e.value.issues)
+
+
+def test_move_undone(tmp_path, root):
+    # the target refuses after the source committed: both are put back
+    _git(root.path, "config", "user.name", "T")
+    _git(root.path, "config", "user.email", "t@example.org")
+    micro = _target(tmp_path, root)
+    head, micro_head = _git(root.path, "rev-parse", "HEAD"), _git(micro.root, "rev-parse", "HEAD")
+    micro.check = lambda **_: nf_repo.Verdict(["refused"], [], [])
+    with pytest.raises(nf_repo.ReleaseRefused):
+        nf_repo.move(root.repo, micro, "b", others=[root.path, micro.root])
+    assert _git(root.path, "rev-parse", "HEAD") == head and _git(micro.root, "rev-parse", "HEAD") == micro_head
+    assert _git(root.path, "status", "--short") == "" and _git(micro.root, "status", "--short") == ""
+    assert (root.path / "knowledge/b.nfx").is_file() and _git(micro.root, "tag", "-l") == ""
+
+
 def test_rename_test():
     assert nf_repo.rename_test('x / "validators" / "a.py"\n', "a", "b") == 'x / "validators" / "b.py"\n'
     with pytest.raises(ValueError):
