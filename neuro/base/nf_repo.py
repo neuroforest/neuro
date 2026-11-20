@@ -1,0 +1,476 @@
+"""
+A `.nf` root's git hooks.
+
+One rule set for every document of the root - ontology, knowledge and
+`namespace.nfx` alike. `Repo.check` is the pre-commit verdict: the *new* tree
+(the index, or a commit when replaying history) is written out as a scratch
+`.nf`, indexed beside the other roots, and judged against the *base* (HEAD, or
+the commit's parent) and the release tags. `Repo.tag` is post-commit: one
+annotated tag per document whose version has none yet. `nfx` stays the
+git-free format layer; everything that reads a repository lives here.
+
+Versioning: a commit may change a document and leave `version`
+at its latest tag - an unreleased edit. A changed `version` must be the next
+one after that tag, and the commit then carries its whole re-pin closure:
+every pin on it inside the root updated in the same commit. Dependants inside
+the root are re-validated whenever something they depend on changes, so a
+document that drops a node another one still references is refused at its own
+commit. Pins into other roots are checked only on documents the commit
+touches; a stale one elsewhere is the staleness report's business (013 P9).
+
+A root is either a repository of its own (`~/.nf`) or a directory inside a
+project repository (`app-nf/.nf`): `Repo` finds the toplevel and works on the
+root's subtree only.
+"""
+
+import dataclasses
+import hashlib
+import io
+import json
+import os
+import re
+import subprocess
+import tarfile
+import tempfile
+from pathlib import Path
+
+from neuro.base import nf_import, nfx, plugins
+from neuro.base.index import NfxIndex
+from neuro.utils import exceptions
+
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+HOOKS = ("pre-commit", "post-commit")
+SHIM_DIR = ".githooks"
+_SENTINEL = "# nf hook"
+_GIT_PATH_VARS = ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY")
+_LABELS_SPLIT = re.compile(r'"labels"\s*:\s*\[[^\]]*\n')
+
+
+def version_key(version: str) -> tuple[int, ...] | None:
+    """`"1.4"` → `(1, 4)`; None for anything that is not two dotted integers."""
+    parts = version.split(".")
+    if len(parts) != 2 or not all(p.isdigit() for p in parts):
+        return None
+    return int(parts[0]), int(parts[1])
+
+
+def next_versions(version: str) -> set[str]:
+    major, minor = version_key(version)
+    return {f"{major}.{minor + 1}", f"{major + 1}.0"}
+
+
+def series_of(rel: Path) -> tuple[str, str] | None:
+    """The tag series a root-relative `.nfx` path belongs to: `(kind, stem)` for
+    `ontology/<stem>.nfx` / `knowledge/<stem>.nfx`, `("namespace", "")` for the
+    declaration, None for anything else. The kind is the subdir - the index
+    holds it equal to the `type` (the metaontology aside)."""
+    rel = Path(rel)
+    if rel == Path(nfx.NAMESPACE_FILENAME):
+        return "namespace", ""
+    if rel.suffix == ".nfx" and len(rel.parts) == 2 and rel.parts[0] in plugins._KIND_SUBDIRS:
+        return rel.parts[0], rel.stem.lower()
+    return None
+
+
+def tag_name(series: tuple[str, str], version: str) -> str:
+    kind, stem = series
+    return f"namespace/{version}" if kind == "namespace" else nf_import.tag_for(kind, stem, version)
+
+
+def parse_tag(name: str) -> tuple[tuple[str, str], str] | None:
+    parts = name.split("/")
+    if len(parts) == 2 and parts[0] == "namespace":
+        return ("namespace", ""), parts[1]
+    if len(parts) == 3 and parts[0] in plugins._KIND_SUBDIRS:
+        return (parts[0], parts[1]), parts[2]
+    return None
+
+
+def document_failures(idx, path) -> list[str]:
+    """Defects of one `.nfx` document on its own terms: structure, references
+    resolved through `idx`, canonical format. Shared by the hook, `ontology.test`
+    and `nf.import`; must run before an import, since MERGE collapses duplicates."""
+    raw = json.loads(Path(path).read_text())
+    doc = nfx.Nfx.from_dict(raw)
+
+    def resolve(nid):
+        dep_path = idx.resolve(nid)
+        return nfx.read(dep_path) if dep_path else None
+
+    try:
+        tree = nfx.NfxTree(doc, resolve)
+    except exceptions.NfxCycle as e:
+        return [f"dependency cycle {' → '.join(e.args[0])}"]
+    report = nfx.validate(doc, dependency_nids=tree.all_node_nids(scope="dependencies"))
+    lint = nfx.lint_format(raw)
+
+    failures = []
+    for bad in report["invalid_nids"]:
+        failures.append(f"invalid nid {bad} (not UUID v4)")
+    for r in report["unresolved"]:
+        failures.append(f"unresolved {r.get('type', '?')} {r['from']} → {r['to']}")
+    for r in report["foreign"]:
+        failures.append(f"foreign {r.get('type', '?')} {r['from']} → {r['to']} (both endpoints external)")
+    for nid in report["duplicate_nids"]:
+        failures.append(f"duplicate node nid {nid}")
+    for r in report["duplicate_relationships"]:
+        failures.append(f"duplicate {r.get('type', '?')} {r['from']} → {r['to']}")
+    for f in report["missing_required"]:
+        failures.append(f"missing required top-level field {f!r}")
+    if report["invalid_type"]:
+        failures.append(f"type {report['invalid_type']!r} not in {list(nfx.ALLOWED_TYPES)}")
+    if report["untaggable_name"]:
+        failures.append(
+            f"name {report['untaggable_name']!r} cannot form the release tag "
+            f"{report['untaggable_name'].lower()}/{doc.version} - git rejects the ref"
+        )
+    for u in lint["unknown_keys"]:
+        failures.append(f"{u['where']} has unknown keys {u['keys']}")
+    for ko in lint["key_order"]:
+        failures.append(f"{ko['where']} key order {ko['keys']} not canonical")
+    for f in lint["empty"]:
+        failures.append(f"{f!r} is empty - omit the key instead")
+    return failures
+
+
+def _labels_split(text: str) -> list[int]:
+    return [text[:m.start()].count("\n") + 1 for m in _LABELS_SPLIT.finditer(text)]
+
+
+@dataclasses.dataclass
+class Verdict:
+    issues: list[str]
+    checked: list[str]   # root-relative paths validated in full
+    released: list[str]  # tags the commit will make (changed versions)
+
+
+class Repo:
+    """The git side of one `.nf` root."""
+
+    def __init__(self, root):
+        self._env = os.environ.copy()  # a hook's GIT_INDEX_FILE etc., made absolute by the shim
+        self.root = Path(root).expanduser().resolve()
+        if not plugins.is_consolidated(self.root):
+            raise ValueError(f"{self.root}: not a {plugins.NF_DIRNAME} root")
+        self.top = Path(self.git("rev-parse", "--show-toplevel", cwd=self.root).strip())
+        rel = self.root.relative_to(self.top)
+        self.prefix = "" if rel == Path(".") else rel.as_posix()
+
+    # ---- git -------------------------------------------------------------------
+
+    def git(self, *args, cwd=None, check=True, data=None, text=True):
+        r = subprocess.run(["git", *args], cwd=cwd or self.top, env=self._env, input=data,
+                           capture_output=True, text=text)
+        if check and r.returncode:
+            err = r.stderr if text else r.stderr.decode(errors="replace")
+            raise RuntimeError(f"git {' '.join(args)}: {err.strip()}")
+        return r.stdout
+
+    def _path(self, rel) -> str:
+        return f"{self.prefix}/{rel}" if self.prefix else str(rel)
+
+    def show(self, rel) -> str:
+        """`rel` as the author sees it: relative to the repository toplevel."""
+        return self._path(Path(rel).as_posix())
+
+    def rev(self, ref) -> str | None:
+        out = self.git("rev-parse", "-q", "--verify", f"{ref}^{{commit}}", check=False).strip()
+        return out or None
+
+    def blob(self, treeish, rel) -> bytes | None:
+        r = subprocess.run(["git", "cat-file", "blob", f"{treeish}:{self._path(rel)}"], cwd=self.top,
+                           env=self._env, capture_output=True)
+        return r.stdout if r.returncode == 0 else None
+
+    def doc_at(self, treeish, rel) -> dict | None:
+        data = self.blob(treeish, rel)
+        return None if data is None else json.loads(data)
+
+    def changed(self, base, new) -> list[tuple[str, Path]]:
+        """`(status, root-relative path)` for every file that differs, renames split."""
+        out = self.git("diff-tree", "-r", "--no-renames", "--name-status", base, new, "--", self.prefix or ".")
+        rows = []
+        for line in out.splitlines():
+            status, path = line.split("\t", 1)
+            rows.append((status, Path(path).relative_to(self.prefix) if self.prefix else Path(path)))
+        return rows
+
+    def tags(self, merged=None) -> dict[tuple[str, str], set[str]]:
+        """Released versions per series, from the repo's annotated or lightweight tags."""
+        args = ["for-each-ref", "refs/tags", "--format=%(refname:short)"]
+        if merged:
+            args += ["--merged", merged]
+        series: dict[tuple[str, str], set[str]] = {}
+        for name in self.git(*args).split():
+            parsed = parse_tag(name)
+            if parsed:
+                series.setdefault(parsed[0], set()).add(parsed[1])
+        return series
+
+    def extract(self, tree, dst: Path) -> None:
+        """Write the root's subtree of `tree` into `dst`."""
+        data = self.git("archive", "--format=tar", f"{tree}:{self.prefix}", text=False)
+        dst.mkdir(parents=True)
+        with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+            tar.extractall(dst, filter="data")
+
+    # ---- the verdict -------------------------------------------------------------
+
+    def check(self, rev=None, others=()) -> Verdict:
+        """The pre-commit verdict on the index against HEAD, or - `rev` given -
+        on that commit against its parent, with only the tags its parent saw."""
+        if rev is None:
+            new = self.git("write-tree").strip()
+            base = self.rev("HEAD") or EMPTY_TREE
+            tags = self.tags()
+        else:
+            sha = self.rev(rev)
+            if sha is None:
+                raise ValueError(f"{rev}: no such commit")
+            new = f"{sha}^{{tree}}"
+            parent = self.rev(f"{sha}^")
+            base = parent or EMPTY_TREE
+            tags = self.tags(merged=parent) if parent else {}
+        with tempfile.TemporaryDirectory() as tmp:
+            staged = Path(tmp) / plugins.NF_DIRNAME
+            self.extract(new, staged)
+            others = self._others(others, staged)
+            return self._verdict(staged, base, self.changed(base, new), tags, others)
+
+    def _others(self, roots, own) -> list[Path]:
+        """`roots` without this root - by path, and by namespace nid: another
+        checkout of the same namespace (a clone, a worktree) is this root, and
+        `own` stands in for it."""
+        ns = Path(own) / nfx.NAMESPACE_FILENAME
+        nid = nfx.read(ns).nid if ns.is_file() else None
+        kept = []
+        for r in (Path(r).resolve() for r in roots):
+            other = r / nfx.NAMESPACE_FILENAME
+            if r == self.root or (nid and other.is_file() and nfx.read(other).nid == nid):
+                continue
+            kept.append(r)
+        return kept
+
+    def _verdict(self, staged, base, changed, tags, others) -> Verdict:
+        staged = staged.resolve()
+
+        try:
+            idx = NfxIndex(*others, staged)
+        except exceptions.NfxViolation as e:
+            return Verdict([str(e).replace(str(staged), str(self.root))], [], [])
+        by_nid = {e.nid: e for e in idx.entries()}
+        local = {nid: e for nid, e in by_nid.items() if e.registry_root == staged}
+        docs = {nid: nfx.read(e.path) for nid, e in local.items()}
+        rel_of = {nid: e.path.relative_to(staged) for nid, e in local.items()}
+        nid_at = {rel: nid for nid, rel in rel_of.items()}
+        stem_of = {e.path.stem.lower(): nid for nid, e in local.items()}
+
+        touched: set[Path] = set()
+        for status, rel in changed:
+            if status == "D":
+                continue
+            if rel.suffix == ".nfx":
+                touched.add(rel)
+            elif rel.parts[0] == plugins._VALIDATORS_DIR and rel.suffix == ".py" and rel.stem.lower() in stem_of:
+                touched.add(rel_of[stem_of[rel.stem.lower()]])
+
+        issues: list[str] = []
+        released: list[str] = []
+
+        # every pin inside the root holds - the re-pin closure is in this commit
+        for nid, doc in docs.items():
+            for dep, pin in doc.dependencies:
+                if dep in local and docs[dep].version != pin and rel_of[nid] not in touched:
+                    issues.append(f"{self.show(rel_of[nid])}: pins {rel_of[dep].stem}@{pin}, it is now "
+                                  f"{docs[dep].version} - re-pin it in this commit")
+                elif dep not in by_nid and not any(ns.nid == dep for ns in idx.namespaces()):
+                    issues.append(f"{self.show(rel_of[nid])}: pins {dep}@{pin}, which no root declares")
+
+        # in-root dependants of what changed are re-validated
+        dependants: dict[str, set[str]] = {}
+        for nid, doc in docs.items():
+            for dep, _ in doc.dependencies:
+                dependants.setdefault(dep, set()).add(nid)
+        todo = [nid_at[r] for r in touched if r in nid_at]
+        full = set(todo)
+        while todo:
+            for d in dependants.get(todo.pop(), ()):
+                if d not in full:
+                    full.add(d)
+                    todo.append(d)
+
+        for nid in sorted(full, key=lambda n: str(rel_of[n])):
+            rel, path, doc = rel_of[nid], local[nid].path, docs[nid]
+            where = self.show(rel)
+            issues += [f"{where}: {f}" for f in document_failures(idx, path)]
+            issues += [f"{where}:{line}: labels array must be on one line" for line in _labels_split(path.read_text())]
+            if rel in touched:
+                issues += [f"{where}: {e}" for e in idx.check_dependency_versions(path)]
+            for dep, _ in doc.dependencies:
+                if doc.type == "ontology" and dep in by_nid and by_nid[dep].type == "knowledge":
+                    issues.append(f"{where}: an ontology may not pin knowledge ({by_nid[dep].path.stem})")
+            vpath = plugins.validators_path_for(path, [staged])
+            if vpath is not None and vpath.is_file():
+                digest = hashlib.sha256(vpath.read_bytes()).hexdigest()
+                if doc.hash != digest:
+                    issues.append(f"{where}: hash {doc.hash or '(missing)'} is not sha256(validators/{vpath.name}) "
+                                  f"{digest[:12]}… - run `invoke ontology.rehash`")
+            elif doc.hash:
+                issues.append(f"{where}: carries a hash but validators/{path.stem}.py does not exist")
+
+        ns_rel = Path(nfx.NAMESPACE_FILENAME)
+        ns_path = staged / ns_rel
+        if ns_rel in touched and ns_path.is_file():
+            raw = json.loads(ns_path.read_text())
+            ns = nfx.Nfx.from_dict(raw)
+            where = self.show(ns_rel)
+            issues += [f"{where}: missing required top-level field {f!r}" for f in nfx.missing_fields(ns)]
+            issues += [f"{where}: {i}" for i in nfx.namespace_issues(ns)]
+            lint = nfx.lint_format(raw)
+            issues += [f"{where}: {k['where']} key order {k['keys']} not canonical" for k in lint["key_order"]]
+            issues += [f"{where}: {u['where']} has unknown keys {u['keys']}" for u in lint["unknown_keys"]]
+            declared = {n.nid: n for n in idx.namespaces()}
+            for dep, pin in ns.dependencies:
+                if dep not in declared:
+                    issues.append(f"{where}: pins namespace {dep}@{pin}, which no root declares")
+                elif declared[dep].version != pin:
+                    issues.append(f"{where}: pins {declared[dep].token or '∅'}@{pin}, it is {declared[dep].version}")
+
+        # versions: an unreleased edit, or exactly the next release
+        for rel in sorted(touched):
+            series = series_of(rel)
+            path = staged / rel
+            if series is None or not path.is_file():
+                continue
+            where = self.show(rel)
+            version = json.loads(path.read_text()).get("version", "")
+            if version_key(version) is None:
+                issues.append(f"{where}: version {version!r} is not <major>.<minor>")
+                continue
+            seen = tags.get(series, set())
+            latest = max(seen, key=version_key) if seen else None
+            if latest is None or version == latest:
+                if version not in seen:
+                    released.append(tag_name(series, version))
+                continue
+            if version in seen:
+                issues.append(f"{where}: version {version} is already released ({tag_name(series, version)}) - "
+                              f"the next is {' or '.join(sorted(next_versions(latest)))}")
+            elif version not in next_versions(latest):
+                issues.append(f"{where}: version {version} skips past the latest release {latest} - "
+                              f"expected {' or '.join(sorted(next_versions(latest)))}")
+            else:
+                released.append(tag_name(series, version))
+
+        return Verdict(issues, sorted(self.show(rel_of[n]) for n in full), released)
+
+    # ---- post-commit ---------------------------------------------------------------
+
+    def tag(self) -> list[str]:
+        """Annotate HEAD with one tag per document of the root it changed whose
+        version has no tag yet. Idempotent; returns the tags made."""
+        head = self.rev("HEAD")
+        base = self.rev("HEAD^") or EMPTY_TREE
+        subject = self.git("log", "-1", "--format=%s", head).strip()
+        existing = set(self.git("tag", "-l").split())
+        made = []
+        for status, rel in self.changed(base, head):
+            series = series_of(rel)
+            if status == "D" or series is None:
+                continue
+            name = tag_name(series, self.doc_at(head, rel).get("version", ""))
+            if name in existing:
+                continue
+            self.git("tag", "-a", name, "-m", f"{name} — {subject}", head)
+            existing.add(name)
+            made.append(name)
+        return made
+
+    # ---- commit order ----------------------------------------------------------------
+
+    def uncommitted(self) -> list[Path]:
+        """Root-relative documents that differ from HEAD (staged, unstaged or new)."""
+        out = self.git("status", "--porcelain", "--untracked-files=all", "--", self.prefix or ".")
+        rels = []
+        for line in out.splitlines():
+            path = Path(line[3:].split(" -> ", 1)[-1].strip())
+            rel = path.relative_to(self.prefix) if self.prefix else path
+            if series_of(rel) and (self.root / rel).is_file():
+                rels.append(rel)
+        return rels
+
+    def order(self, others=()) -> list[tuple[Path, str, str]]:
+        """`uncommitted()` in dependency order - a diagnostic: one commit may hold them all."""
+        rels = self.uncommitted()
+        idx = NfxIndex(*self._others(others, self.root), self.root)
+        by_nid = {nfx.read(self.root / r).nid: r for r in rels}
+
+        def resolve(nid):
+            p = idx.resolve(nid)
+            return nfx.read(p) if p else None
+
+        synth = nfx.Nfx(dependencies=tuple((nid, "") for nid in by_nid))
+        tree = nfx.NfxTree(synth, resolve, extra_deps=idx.extra_deps)
+        rows = []
+        for nid in tree.topo_order():
+            if nid in by_nid:
+                doc = nfx.read(self.root / by_nid[nid])
+                rows.append((by_nid[nid], doc.name, doc.version))
+        if (self.root / nfx.NAMESPACE_FILENAME).is_file() and Path(nfx.NAMESPACE_FILENAME) in rels:
+            ns = nfx.read(self.root / nfx.NAMESPACE_FILENAME)
+            rows.insert(0, (Path(nfx.NAMESPACE_FILENAME), ns.name, ns.version))
+        return rows
+
+    # ---- install -------------------------------------------------------------------
+
+    def hooks_dir(self) -> Path:
+        """Where git, or the global chain, will run this repo's hooks from.
+
+        With a `core.hooksPath` in effect (a global hooks directory,
+        such as `~/.config/git/hooks`) git never reads the repo's own hooks dir; the
+        global hook re-invokes `$(git rev-parse --git-dir)/hooks/<name>`. A local
+        `core.hooksPath` would cut that producer off, so it is never set here."""
+        if self.git("config", "--get", "core.hooksPath", check=False).strip():
+            return Path(self.git("rev-parse", "--absolute-git-dir").strip()) / "hooks"
+        return Path(self.git("rev-parse", "--git-path", "hooks").strip()).resolve()
+
+    def shim(self, hook) -> str:
+        task = {"pre-commit": "nf.check", "post-commit": "nf.tag"}[hook]
+        return (
+            "#!/bin/sh\n"
+            f"{_SENTINEL} - versioned with the root; the code is neuro's `{task}`.\n"
+            "# The wrapper is per clone: `git config nf.runner <wrapper>` (default invoke).\n"
+            "# git hands a hook relative paths; the wrapper changes directory before Python starts.\n"
+            f"for v in {' '.join(_GIT_PATH_VARS)}; do\n"
+            '    eval "p=\\${$v:-}"\n'
+            '    case "$p" in ""|/*) ;; *) export "$v=$PWD/$p" ;; esac\n'
+            "done\n"
+            'root="$(cd "$(dirname "$0")/.." && pwd)"\n'
+            f'exec "$(git config nf.runner || echo invoke)" {task} --root "$root"\n'
+        )
+
+    def stub(self, hook) -> str:
+        target = f"$(git rev-parse --show-toplevel)/{self._path(SHIM_DIR)}/{hook}"
+        return f'#!/bin/sh\n{_SENTINEL} - installed by `nf.hooks-install`.\nexec "{target}" "$@"\n'
+
+    def install(self, runner="invoke") -> list[str]:
+        """Write the versioned shims into `<root>/.githooks/`, a stub per hook
+        into `hooks_dir()`, and `nf.runner`. Refuses to replace a hook it did
+        not write. Returns what it wrote."""
+        hooks = self.hooks_dir()
+        for hook in HOOKS:
+            current = hooks / hook
+            if current.exists() and _SENTINEL not in current.read_text(errors="replace"):
+                raise FileExistsError(f"{current} exists and is not an nf hook - chain it by hand or move it away")
+        wrote = []
+        shims = self.root / SHIM_DIR
+        shims.mkdir(exist_ok=True)
+        hooks.mkdir(parents=True, exist_ok=True)
+        for hook in HOOKS:
+            for path, body in ((shims / hook, self.shim(hook)), (hooks / hook, self.stub(hook))):
+                if not path.exists() or path.read_text() != body:
+                    path.write_text(body)
+                    wrote.append(str(path))
+                path.chmod(0o755)
+        self.git("config", "nf.runner", runner)
+        return wrote
