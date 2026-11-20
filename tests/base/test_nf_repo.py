@@ -202,6 +202,68 @@ def test_release_refused(root):
         root.repo.release(["p"])
 
 
+def test_rename(root):
+    _git(root.path, "config", "user.name", "T")
+    _git(root.path, "config", "user.email", "t@example.org")
+    validators = "class Even:\n    pass\n"
+    digest = hashlib.sha256(validators.encode()).hexdigest()
+    root.write("validators/p.py", validators)
+    root.write("tests/test_p.py", '_P_VALIDATORS = Path(__file__).parents[1] / "validators" / "p.py"\n')
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.1", nodes=[root.pn], hash_=digest))
+    root.write("ontology/a.nfx", root.doc(root.a, "a", "1.1", deps=[(root.p, "1.1")], nodes=[root.an],
+                                          rels=[(root.an, root.pn)]))
+    root.write("knowledge/b.nfx", root.doc(root.b, "b", "1.1", kind="knowledge", deps=[(root.a, "1.1")],
+                                           nodes=[root.bn], rels=[(root.bn, root.an)]))
+    root.commit("RELEASE: ontology p 1.1")
+    for t in ("ontology/p/1.1", "ontology/a/1.1", "knowledge/b/1.1"):
+        _git(root.path, "tag", "-a", t, "-m", f"{t} — RELEASE: ontology p 1.1")
+    released = _git(root.path, "rev-parse", "ontology/p/1.1^{commit}").strip()
+
+    for bad, match in (("P2", "not a stem"), ("p", "already"), ("a", "taken"), ("zz", "no such module")):
+        with pytest.raises(ValueError, match=match):
+            root.repo.rename("zz" if bad == "zz" else "p", "q" if bad == "zz" else bad)
+
+    sha, plan = root.repo.rename("p", "probe")
+    assert _git(root.path, "log", "-1", "--format=%s", sha).strip() == "REFACTOR: ontology p → probe"
+    assert {str(b) for _, b in plan.files} == {"ontology/probe.nfx", "validators/probe.py", "tests/test_probe.py"}
+    assert json.loads((root.path / "ontology/probe.nfx").read_text())["name"] == "probe"
+    assert '"validators" / "probe.py"' in (root.path / "tests/test_probe.py").read_text()
+    assert sorted(_git(root.path, "tag", "-l", "ontology/p*").split()) == ["ontology/probe/1.0", "ontology/probe/1.1"]
+    assert _git(root.path, "rev-parse", "ontology/probe/1.1^{commit}").strip() == released
+    assert "renamed from ontology/p/1.1" in _git(root.path, "cat-file", "-p", "ontology/probe/1.1")
+    assert root.repo.check("HEAD").issues == []
+    assert _git(root.path, "status", "--short") == ""
+    follow = _git(root.path, "log", "--follow", "--format=%s", "--", "ontology/probe.nfx").splitlines()
+    assert follow[0] == "REFACTOR: ontology p → probe" and follow[-1] == "ADD: root"
+    # the next release continues the series under the new stem
+    root.write("ontology/probe.nfx", root.doc(root.p, "probe", "1.1", nodes=[root.pn], hash_=digest, extra="x"),
+               add=False)
+    assert root.repo.plan_release(["probe"])[0].new == "1.2"
+    _git(root.path, "checkout", "--", "ontology/probe.nfx")
+    root.write("ruff.toml", "[lint]\n")
+    with pytest.raises(ValueError, match="index is not empty"):
+        root.repo.rename("probe", "p")
+
+
+def test_rename_refused(root):
+    _git(root.path, "config", "user.name", "T")
+    _git(root.path, "config", "user.email", "t@example.org")
+    # a hash with no validators file: the rename's verdict refuses, and nothing moved
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], hash_="ab" * 32))
+    root.commit("EDIT: p")
+    with pytest.raises(nf_repo.ReleaseRefused):
+        root.repo.rename("p", "probe")
+    assert (root.path / "ontology/p.nfx").is_file() and not (root.path / "ontology/probe.nfx").exists()
+    assert _git(root.path, "tag", "-l", "ontology/probe/*") == ""
+    assert _git(root.path, "status", "--short") == ""
+
+
+def test_rename_test():
+    assert nf_repo.rename_test('x / "validators" / "a.py"\n', "a", "b") == 'x / "validators" / "b.py"\n'
+    with pytest.raises(ValueError):
+        nf_repo.rename_test("nothing\n", "a", "b")
+
+
 def test_install(root):
     hooks = root.path / ".git" / "hooks"
     wrote = root.repo.install(runner="wrapper")

@@ -34,7 +34,7 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from neuro.base import nf_import, nfx, plugins
+from neuro.base import nf_events, nf_import, nfx, plugins
 from neuro.base.index import NfxIndex
 from neuro.base.nf_history import _pins, is_repin
 from neuro.utils import exceptions
@@ -155,6 +155,29 @@ class Step:
         """The commit-body line for a cascaded document."""
         tail = f"re-pin {', '.join(self.repins)}" if self.repins else "re-pin"
         return f"{self.name} {self.old} → {self.new} ({tail}{'; carries unreleased edits' if self.carries else ''})"
+
+
+@dataclasses.dataclass
+class RenamePlan:
+    kind: str
+    old: str
+    new: str
+    nid: str
+    files: list[tuple[Path, Path]]  # root-relative, the .nfx first
+    tags: list[tuple[str, str]]     # old tag → new tag, oldest first
+
+    @property
+    def event(self) -> nf_events.Rename:
+        return nf_events.Rename(self.kind, self.old, self.new)
+
+
+def rename_test(text: str, old: str, new: str) -> str:
+    """Point a module's test at `validators/<new>.py`: the one line `nf.import`
+    wrote (`… / "validators" / "<old>.py"`) - exactly one, else ValueError."""
+    line = f'"{plugins._VALIDATORS_DIR}" / "{old}.py"'
+    if text.count(line) != 1:
+        raise ValueError(f"expected one `{line}` in the test, found {text.count(line)}")
+    return text.replace(line, f'"{plugins._VALIDATORS_DIR}" / "{new}.py"')
 
 
 class ReleaseRefused(Exception):
@@ -548,6 +571,114 @@ class Repo:
         self.git("reset", "-q", "--", *paths)
         for rel, text in saved.items():
             (self.root / rel).write_text(text)
+
+    # ---- rename ---------------------------------------------------------------
+
+    def plan_rename(self, target, new) -> "RenamePlan":
+        """What renaming `target` (stem, name or nid) to the stem `new` writes.
+        Reads HEAD and the tags; writes nothing."""
+        head = self.rev("HEAD")
+        if head is None:
+            raise ValueError("nothing committed yet")
+        rel = self._find(target, head)
+        kind, old = rel.parts[0], rel.stem
+        if not nf_events.is_stem(new):
+            raise ValueError(f"{new!r} is not a stem - lowercase kebab")
+        if new == old:
+            raise ValueError(f"{self.show(rel)} is already {new!r}")
+        files = [(rel, Path(kind) / f"{new}.nfx")]
+        for d, name in ((plugins._VALIDATORS_DIR, "{}.py"), ("tests", "test_{}.py")):
+            if self.blob(head, Path(d) / name.format(old)) is not None:
+                files.append((Path(d) / name.format(old), Path(d) / name.format(new)))
+        taken = [b for _, b in files if self.blob(head, b) is not None or (self.root / b).exists()]
+        if taken:
+            raise ValueError(f"{new!r} is taken: {', '.join(self.show(b) for b in taken)}")
+        if (kind, new) in self.tags():
+            raise ValueError(f"{new!r} is reserved: tags {kind}/{new}/… exist")
+        dirty = self.git("status", "--porcelain", "--", *(self._path(a.as_posix()) for a, _ in files))
+        if dirty.strip():
+            raise ValueError(f"{self.show(rel)} has uncommitted changes - commit or drop them first")
+        tags = [(tag_name((kind, old), v), tag_name((kind, new), v))
+                for v in sorted(self.tags().get((kind, old), ()), key=version_key)]
+        return RenamePlan(kind, old, new, self.doc_at(head, rel)["nid"], files, tags)
+
+    def _find(self, key, rev) -> Path:
+        k = str(key).lower()
+        out = self.git("ls-tree", "-r", "--name-only", rev, "--", *(self._path(d) for d in plugins._KIND_SUBDIRS))
+        for path in out.split():
+            rel = Path(path).relative_to(self.prefix) if self.prefix else Path(path)
+            if series_of(rel) is None:
+                continue
+            doc = self.doc_at(rev, rel) or {}
+            if k in (rel.stem, doc.get("nid"), str(doc.get("name", "")).lower()):
+                return rel
+        raise ValueError(f"{key}: no such module in {self.root}")
+
+    def rename(self, target, new, others=()) -> tuple[str, "RenamePlan"]:
+        """Rename one module inside this root in one commit: its files
+        moved, `name` and the test's validators path rewritten, its tags re-made
+        under the new stem on the same commits and the old ones deleted. No
+        version bump. Refuses an index holding anything; a refused verdict puts
+        worktree, index and tags back."""
+        plan = self.plan_rename(target, new)
+        if self.git("diff", "--cached", "--name-only").strip():
+            raise ValueError("the index is not empty - commit or unstage it first")
+        old_paths = [self._path(a.as_posix()) for a, _ in plan.files]
+        new_paths = [self._path(b.as_posix()) for _, b in plan.files]
+        made: list[str] = []
+
+        def undo():
+            for t in made:
+                self.git("tag", "-d", t, check=False)
+            self.git("reset", "-q", "--", *old_paths, *new_paths, check=False)
+            for b in new_paths:
+                (self.top / b).unlink(missing_ok=True)
+            self.git("checkout", "HEAD", "--", *old_paths, check=False)
+
+        try:
+            for a, b in zip(old_paths, new_paths):
+                (self.top / b).parent.mkdir(parents=True, exist_ok=True)
+                self.git("mv", a, b)
+            nfx_path = self.top / new_paths[0]
+            nfx_path.write_bytes(nf_import.rename_to_stem(nfx_path.read_bytes(), plan.new)[0])
+            for (_, b), path in zip(plan.files, new_paths):
+                if b.parts[0] == "tests":
+                    (self.top / path).write_text(rename_test(Path(self.top / path).read_text(), plan.old, plan.new))
+            self.git("add", "--", *new_paths)
+            for old_tag, new_tag in plan.tags:
+                self._copy_tag(old_tag, new_tag, f"renamed from {old_tag}")
+                made.append(new_tag)
+            verdict = self.check(others=others)
+            if verdict.issues:
+                raise ReleaseRefused(verdict.issues)
+            r = subprocess.run(["git", "commit", "-q", "-m", plan.event.subject], cwd=self.top, env=self._env,
+                               text=True, capture_output=True)
+            if r.returncode:
+                raise ReleaseRefused([line for line in (r.stdout + r.stderr).splitlines() if line.strip()])
+        except Exception:
+            undo()
+            raise
+        for old_tag, _ in plan.tags:
+            self.git("tag", "-d", old_tag)
+        return self.rev("HEAD"), plan
+
+    def _copy_tag(self, old, new, note):
+        """`new` on `old`'s commit; an annotated one keeps its tagger and date,
+        its message gets `note` appended."""
+        fmt = "%(objecttype)%00%(*objectname)%00%(taggername)%00%(taggeremail)%00%(taggerdate:iso-strict)%00%(contents)"
+        kind, commit, name, email, date, body = self.git(
+            "for-each-ref", f"refs/tags/{old}", f"--format={fmt}").rstrip("\n").split("\0", 5)
+        if kind != "tag":
+            self.git("tag", new, f"{old}^{{commit}}")
+            return
+        _, sep, rest = body.strip().partition(" — ")
+        message = f"{new} — {rest if sep else body.strip()} · {note}"
+        env = {**self._env, "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email.strip("<>"),
+               "GIT_COMMITTER_DATE": date}
+        r = subprocess.run(["git", "tag", "-a", new, commit, "-m", message], cwd=self.top, env=env,
+                           capture_output=True, text=True)
+        if r.returncode:
+            raise RuntimeError(f"git tag {new}: {r.stderr.strip()}")
 
     # ---- commit order ----------------------------------------------------------------
 
