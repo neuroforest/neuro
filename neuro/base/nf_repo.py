@@ -608,6 +608,17 @@ class Repo:
                 for v in sorted(self.tags().get((kind, old), ()), key=version_key)]
         return RenamePlan(kind, old, new, self.doc_at(head, rel)["nid"], files, tags)
 
+    def _doc_by_nid(self, rev, rel, nid) -> dict | None:
+        """The module `nid` at `rev`: at `rel`, else wherever its kind dir held it (before a rename)."""
+        doc = self.doc_at(rev, rel)
+        if doc is not None and doc.get("nid") == nid:
+            return doc
+        try:
+            found = self._find(nid, rev)
+        except ValueError:
+            return None
+        return self.doc_at(rev, found)
+
     def _find(self, key, rev) -> Path:
         k = str(key).lower()
         out = self.git("ls-tree", "-r", "--name-only", rev, "--", *(self._path(d) for d in plugins._KIND_SUBDIRS))
@@ -924,7 +935,7 @@ def plan_move(source: Repo, target: Repo, key, with_dependants=False, as_="", ot
         if released:
             name = tag_name((kind, stem), released)
             released_at = source.rev(name)
-            if source.doc_at(name, rel) != source.doc_at(head, rel):
+            if source._doc_by_nid(name, rel, nid) != source.doc_at(head, rel):
                 issues.append(f"{source.show(rel)}: unreleased edits since {name} - `nf.release` it first")
         items.append(MoveItem(kind, stem, landed, nid, docs[nid].version, files, released and name, released_at))
 
@@ -1002,3 +1013,89 @@ def move(source: Repo, target: Repo, key, with_dependants=False, as_="", others=
         source.git("checkout", src_pre, "--", *src_paths, check=False)
         raise
     return plan, departed, arrived
+
+
+# ---- the whole history -------------------------------------------------------
+
+
+@dataclasses.dataclass
+class LogEntry:
+    root: Path
+    token: str
+    sha: str
+    date: str
+    subject: str
+    path: str             # the module's .nfx path, root-relative, at that commit
+    version: str          # at the commit (its parent's, for a removal)
+    tags: list[str]
+
+
+def _module_paths(kind, stem) -> list[str]:
+    return [f"{kind}/{stem}.nfx", f"{plugins._VALIDATORS_DIR}/{stem}.py", f"tests/test_{stem}.py"]
+
+
+def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
+    """Every commit of a module, newest first, across its renames and moves:
+    the file log in its root, continued under the old stem at each
+    `REFACTOR:` and in the source root at each `MIGRATE: … ←` (paired by nid).
+    `roots` are the other roots the chain may pass through, found by token.
+    Returns the entries and a note when the chain leaves this machine."""
+    head = repo.rev("HEAD")
+    rel = repo._find(key, head)
+    nid = repo.doc_at(head, rel)["nid"]
+    by_token: dict[str, Repo] = {}
+    for r in [repo.root, *roots]:
+        ns = Path(r) / nfx.NAMESPACE_FILENAME
+        if ns.is_file():
+            token = nfx.read(ns).namespace or ""
+            by_token.setdefault(token, repo if Path(r).resolve() == repo.root else Repo(r))
+
+    def token_of(r: Repo) -> str:
+        return next((t for t, x in by_token.items() if x.root == r.root), "?")
+
+    entries, seen, note = [], set(), None
+    cur, rev, kind, stem = repo, head, rel.parts[0], rel.stem
+    names: dict[Path, set[str]] = {}  # every stem the module had in each root: a rename moved its tags to the newest
+    while cur is not None:
+        names.setdefault(cur.root, set()).add(stem)
+        paths = [cur._path(p) for p in _module_paths(kind, stem)]
+        out = cur.git("log", "--format=%H%x00%cs%x00%B%x1e", rev, "--", *paths)
+        tags_at: dict[str, list[str]] = {}
+        for line in cur.git("for-each-ref", "refs/tags", "--format=%(refname:short) %(*objectname)%(objectname)").splitlines():
+            name, obj = line.split(" ", 1)
+            parsed = parse_tag(name)
+            if parsed and parsed[0][0] == kind:
+                tags_at.setdefault(obj[:40], []).append(name)
+        nxt = None
+        for record in out.split("\x1e"):
+            sha, _, rest = record.strip("\n").partition("\0")
+            if not sha or (cur.root, sha) in seen:
+                continue
+            seen.add((cur.root, sha))
+            date, _, message = rest.partition("\0")
+            events = nf_events.parse_all(message)
+            path = f"{kind}/{stem}.nfx"
+            doc = cur.doc_at(sha, path) or cur.doc_at(f"{sha}^", path) or {}
+            entries.append(LogEntry(cur.root, token_of(cur), sha, date, message.split("\n", 1)[0], path,
+                                    doc.get("version", ""),
+                                    sorted(t for t in tags_at.get(sha, []) if parse_tag(t)[0][1] in names[cur.root])))
+            arrival = next((e for e in events if isinstance(e, nf_events.Arrival)
+                            and e.kind == kind and e.landed == stem), None)
+            rename = next((e for e in events if isinstance(e, nf_events.Rename)
+                           and e.kind == kind and e.new == stem), None)
+            if arrival:
+                source = by_token.get(arrival.source)
+                if source is None:
+                    note = f"the chain continues in {arrival.source or nf_events.ROOT_WORD}, not among the roots here"
+                    break
+                dep = nf_events.departure_of(source.top, source.prefix, arrival, nid, token_of(cur))
+                if dep is None:
+                    note = f"no matching departure in {source.root}"
+                    break
+                nxt = (source, dep, kind, arrival.stem)
+                break
+            if rename:
+                nxt = (cur, f"{sha}^", kind, rename.stem)
+                break
+        cur, rev, kind, stem = nxt if nxt else (None, None, None, None)
+    return entries, note

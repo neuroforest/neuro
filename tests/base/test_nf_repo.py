@@ -365,6 +365,43 @@ def test_move_undone(tmp_path, root):
     assert (root.path / "knowledge/b.nfx").is_file() and _git(micro.root, "tag", "-l") == ""
 
 
+def test_module_log(tmp_path, root):
+    # rename, move, rename, move back: every commit once, newest first, each with its root
+    _git(root.path, "config", "user.name", "T")
+    _git(root.path, "config", "user.email", "t@example.org")
+    micro = _target(tmp_path, root)
+    roots = [root.path, micro.root]
+    root.repo.rename("b", "stains", others=roots)
+    with pytest.raises(nf_repo.ReleaseRefused, match="1 issue"):  # a rename is an unreleased edit
+        nf_repo.plan_move(root.repo, micro, "stains", others=roots)
+    root.repo.release(["stains"], others=roots)
+    nf_repo.move(root.repo, micro, "stains", others=roots)
+    micro.git("config", "user.name", "T")
+    micro.rename("stains", "dyes", others=roots)
+    micro.release(["dyes"], others=roots)
+    nf_repo.move(micro, root.repo, "dyes", others=roots)
+    entries, note = nf_repo.module_log(root.repo, "dyes", roots=roots)
+    assert note is None
+    assert [(e.token, e.subject) for e in entries] == [
+        ("", "MIGRATE: knowledge dyes ← micro"),
+        ("micro", "MIGRATE: knowledge dyes → root"),
+        ("micro", "RELEASE: knowledge dyes 1.2"),
+        ("micro", "REFACTOR: knowledge stains → dyes"),
+        ("micro", "MIGRATE: knowledge stains ← root"),
+        ("", "MIGRATE: knowledge stains → micro"),
+        ("", "RELEASE: knowledge stains 1.1"),
+        ("", "REFACTOR: knowledge b → stains"),
+        ("", "ADD: root"),
+    ]
+    assert [e.version for e in entries] == ["1.2", "1.2", "1.2", "1.1", "1.1", "1.1", "1.1", "1.0", "1.0"]
+    assert entries[0].tags == ["knowledge/dyes/1.2"] and entries[-1].tags == ["knowledge/stains/1.0"]
+    assert entries[4].tags == ["knowledge/dyes/1.1"]  # micro's moved-in tag, renamed with the module there
+    assert len({(e.root, e.sha) for e in entries}) == len(entries)
+    # a root the chain needs is missing: the walk stops with a note
+    entries, note = nf_repo.module_log(root.repo, "dyes", roots=[root.path])
+    assert len(entries) == 1 and "continues in micro" in note
+
+
 def test_rename_test():
     assert nf_repo.rename_test('x / "validators" / "a.py"\n', "a", "b") == 'x / "validators" / "b.py"\n'
     with pytest.raises(ValueError):
