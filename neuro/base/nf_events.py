@@ -13,6 +13,13 @@ written only by `nf.rename` / `nf.move` and read by `nf.log`:
 (name = stem), and `<token>` names the other root, `root`
 standing for the empty token. The two ends of a move are paired by the module's
 nid in the trees either side of the commits, never by the subject alone.
+
+A split (`nf.split`) is the one case where history does travel:
+a root's repository is partitioned, and each part keeps the whole history of
+its own modules. It leaves one commit at each end too:
+
+    MIGRATE: split → <token>      in the continuation; body: `<kind> <stem>` per module given away
+    MIGRATE: split ← <token>      in the new root, naming the root it was split from
 """
 
 import dataclasses
@@ -30,6 +37,8 @@ _KIND = "|".join(KINDS)
 _RENAME = re.compile(rf"^REFACTOR: ({_KIND}) ({_STEM}) → ({_STEM})$")
 _DEPART = re.compile(rf"^MIGRATE: ({_KIND}) ({_STEM}) → ({_STEM})$")
 _ARRIVE = re.compile(rf"^MIGRATE: ({_KIND}) ({_STEM}) ← ({_STEM})(?: as ({_STEM}))?$")
+_SPLIT_OUT = re.compile(rf"^MIGRATE: split → ({_STEM})$")
+_SPLIT_IN = re.compile(rf"^MIGRATE: split ← ({_STEM})$")
 
 
 def is_stem(stem: str) -> bool:
@@ -122,10 +131,40 @@ class Arrival(Event):
         return f"MIGRATE: {self.kind} {self.stem} ← {_word(self.source)}{tail}"
 
 
-def parse(subject: str) -> Rename | Departure | Arrival | None:
+@dataclasses.dataclass(frozen=True)
+class SplitOut:
+    """The continuation's end of a split: modules left, with their history, for the root `to`."""
+    to: str
+
+    def __post_init__(self):
+        _word(self.to)
+
+    @property
+    def subject(self) -> str:
+        return f"MIGRATE: split → {_word(self.to)}"
+
+
+@dataclasses.dataclass(frozen=True)
+class SplitIn:
+    """The new root's end of a split: everything before this commit was made in the root `source`."""
+    source: str
+
+    def __post_init__(self):
+        _word(self.source)
+
+    @property
+    def subject(self) -> str:
+        return f"MIGRATE: split ← {_word(self.source)}"
+
+
+def parse(subject: str) -> Rename | Departure | Arrival | SplitOut | SplitIn | None:
     """The event a commit subject records, None for any other subject. Only the
     first line counts; anything not in the exact grammar is not an event."""
     line = subject.split("\n", 1)[0]
+    if m := _SPLIT_OUT.match(line):
+        return SplitOut(_token(m[1]))
+    if m := _SPLIT_IN.match(line):
+        return SplitIn(_token(m[1]))
     if m := _RENAME.match(line):
         return Rename(m[1], m[2], m[3]) if m[2] != m[3] else None
     if m := _DEPART.match(line):

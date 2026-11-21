@@ -1151,6 +1151,16 @@ def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
             parsed = parse_tag(name)
             if parsed and parsed[0][0] == kind:
                 tags_at.setdefault(obj[:40], []).append(name)
+        # a split brought history made in another root: every commit older than
+        # its `MIGRATE: split ← <token>` was made there, and says so in the Root column
+        order, splits = {}, []
+        for n, line in enumerate(cur.git("log", "--format=%H%x00%cs%x00%s", rev).splitlines()):
+            sha, date, subject = line.split("\0", 2)
+            order[sha] = n
+            event = nf_events.parse(subject)
+            if isinstance(event, nf_events.SplitIn):
+                splits.append((n, sha, date, subject, event.source))
+        here: list[tuple[int, LogEntry]] = []
         nxt = None
         for record in out.split("\x1e"):
             sha, _, rest = record.strip("\n").partition("\0")
@@ -1165,10 +1175,11 @@ def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
             # its validator and its test are the module too: a commit that touches them is a change of its own
             repin = is_repin(before, after) and all(
                 cur.blob(sha, p) == cur.blob(f"{sha}^", p) for p in _module_paths(kind, stem)[1:])
-            entries.append(LogEntry(cur.root, token_of(cur), sha, date, message.split("\n", 1)[0], path,
-                                    doc.get("version", ""),
-                                    sorted(t for t in tags_at.get(sha, []) if parse_tag(t)[0][1] in names[cur.root]),
-                                    repin))
+            origin = max((s for s in splits if s[0] < order[sha]), default=None)
+            here.append((order[sha], LogEntry(
+                cur.root, origin[4] if origin else token_of(cur), sha, date, message.split("\n", 1)[0], path,
+                doc.get("version", ""),
+                sorted(t for t in tags_at.get(sha, []) if parse_tag(t)[0][1] in names[cur.root]), repin)))
             arrival = next((e for e in events if isinstance(e, nf_events.Arrival)
                             and e.kind == kind and e.landed == stem), None)
             rename = next((e for e in events if isinstance(e, nf_events.Rename)
@@ -1187,6 +1198,13 @@ def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
             if rename:
                 nxt = (cur, f"{sha}^", kind, rename.stem)
                 break
+        if here:
+            oldest = max(n for n, _ in here)
+            for n, sha, date, subject, _source in splits:
+                if n < oldest and (cur.root, sha) not in seen:
+                    seen.add((cur.root, sha))
+                    here.append((n, LogEntry(cur.root, token_of(cur), sha, date, subject, f"{kind}/{stem}.nfx", "", [])))
+        entries += [entry for _n, entry in sorted(here, key=lambda item: item[0])]
         cur, rev, kind, stem = nxt if nxt else (None, None, None, None)
     return entries, note
 
