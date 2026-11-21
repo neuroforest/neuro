@@ -61,7 +61,6 @@ from pathlib import Path
 from typing import Callable, Iterable, Iterator, TypeAlias
 
 from neuro.base.nfx import NAMESPACE_FILENAME
-from neuro.utils import internal_utils
 
 
 Validator: TypeAlias = Callable[[object, object], bool]
@@ -152,15 +151,56 @@ def namespace_path(root: Path | str) -> Path | None:
     return root / NAMESPACE_FILENAME if is_consolidated(root) else None
 
 
+def scope() -> list[tuple[str, Path | None]]:
+    """The entries of `PLUGINS` as written, each with the directory it names.
+
+    `PLUGINS` is the scope of one environment: the trees it
+    may load. An entry is a path (`~` expanded, relative to `APP_DIR`) or
+    `@<token>` - the tree of that namespace token in the machine's registry
+    (`nf_trees`; `@root` or a bare `@` is the empty token), which keeps naming
+    the tree after it moves. An `@<token>` no registered tree answers to has
+    no directory (None).
+    """
+    from neuro.base import nf_trees  # imports this module
+
+    registered = None
+    entries = []
+    for entry in os.environ.get("PLUGINS", "").split(os.pathsep):
+        entry = entry.strip()
+        if not entry:
+            continue
+        if entry.startswith("@"):
+            registered = nf_trees.read() if registered is None else registered
+            tree = nf_trees.by_token(entry[1:], registered)
+            entries.append((entry, None if tree is None else tree.path))
+        else:
+            path = Path(entry).expanduser()
+            entries.append((entry, path if path.is_absolute() else Path(os.environ["APP_DIR"]) / path))
+    return entries
+
+
 def effective_roots() -> list[Path]:
     """The PLUGINS roots in effect for this process, missing entries skipped.
 
     The one way callers obtain the registry roots: the
-    colon-separated `PLUGINS` of the current environment, each entry resolved
-    against `APP_DIR`, an absent one logged and dropped rather than fatal, so a
-    machine without every root checked out still builds.
+    entries of `scope()`, an absent one logged and dropped rather than fatal,
+    so a machine without every root checked out still builds. A tree named
+    twice (by path and by `@token`) counts once.
     """
-    return internal_utils.get_path_list("PLUGINS")
+    roots = []
+    for entry, path in scope():
+        if path is None or not path.exists():
+            logging.warning(f"PLUGINS: '{entry}' does not exist, skipped")
+            continue
+        path = path.resolve()
+        if path not in roots:
+            roots.append(path)
+    return roots
+
+
+def missing_roots() -> list[str]:
+    """The `PLUGINS` entries that name nothing on this machine, as written."""
+    return [entry for entry, path in scope() if path is None or not path.exists()]
 
 
 def registry_root_of(path: Path | str, registry_roots: Iterable[Path | str]) -> Path | None:

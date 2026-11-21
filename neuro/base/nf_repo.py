@@ -43,6 +43,7 @@ from neuro.utils import exceptions
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 HOOKS = ("pre-commit", "post-commit")
 SHIM_DIR = ".githooks"
+NOTES_REF = "refs/notes/nf-origin"  # per commit: the sha and namespace it was made as, before a split or a reconcile
 _SENTINEL = "# nf hook"
 _GIT_PATH_VARS = ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY")
 _LABELS_SPLIT = re.compile(r'"labels"\s*:\s*\[[^\]]*\n')
@@ -886,7 +887,22 @@ class Repo:
                     wrote.append(str(path))
                 path.chmod(0o755)
         self.git("config", "nf.runner", runner)
+        self.track_notes()
         return wrote
+
+    def track_notes(self) -> list[str]:
+        """Make every remote fetch the origin notes: git
+        fetches no `refs/notes/*` unless told, and a clone without them shows
+        carried commits as if they were made here. Returns the remotes it
+        changed. A push still names the ref itself (`tree.split` prints it)."""
+        refspec = f"+{NOTES_REF}:{NOTES_REF}"
+        changed = []
+        for remote in self.git("remote").split():
+            key = f"remote.{remote}.fetch"
+            if refspec not in self.git("config", "--get-all", key, check=False).splitlines():
+                self.git("config", "--add", key, refspec)
+                changed.append(remote)
+        return changed
 
 
 # ---- move between roots -------------------------------------------------------

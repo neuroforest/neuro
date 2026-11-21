@@ -41,7 +41,7 @@ from neuro.base import nf_events, nf_history, nf_repo, nfx, plugins
 from neuro.base.index import NfxIndex
 from neuro.utils import exceptions
 
-NOTES_REF = "refs/notes/nf-origin"
+NOTES_REF = nf_repo.NOTES_REF
 STATE = "split.json"
 KEPT = ".pre-split"
 STAGING = ".split"
