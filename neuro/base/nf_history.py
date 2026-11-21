@@ -116,6 +116,8 @@ class Report:
     synthesized: int = 0
     empty: int = 0          # events dropped: same tree as the previous one, no tag
     renamed: int = 0        # messages whose module names were rewritten
+    bumped: int = 0         # releases written for changes the legacy repo made without one
+    head: dict = field(default_factory=dict)  # rel → content of the modules in the last commit
     warnings: list[str] = field(default_factory=list)
     fatal: list[str] = field(default_factory=list)
     unmapped_tags: list[str] = field(default_factory=list)
@@ -364,6 +366,86 @@ def _data(payload: bytes) -> bytes:
     return b"data %d\n" % len(payload) + payload + b"\n"
 
 
+@dataclass
+class Releases:
+    """What the replay has written so far, per module nid (the rule:
+    every committed change to a module is a release)."""
+    written: dict[str, str] = field(default_factory=dict)             # nid → version in the last commit
+    legacy: dict[str, str] = field(default_factory=dict)              # nid → the legacy version it had then
+    body: dict[str, dict] = field(default_factory=dict)               # nid → that document, `version` aside
+    last_for: dict[tuple[str, str], str] = field(default_factory=dict)  # (nid, legacy version) → version written
+    bumped: int = 0                                                   # releases the legacy repo never made
+
+
+def _next_minor(version: str) -> str | None:
+    key = _version_key(version)
+    return f"{key[0]}.{key[1] + 1}" if len(key) == 2 else None
+
+
+def release_changes(moves, state: Releases) -> dict[Path, bytes]:
+    """The module files of one mapped tree as the replay writes them, so that
+    no commit changes a module and leaves its version alone.
+
+    The legacy hooks re-pinned a knowledge dependant without bumping it, and
+    sometimes rewrote its content at the same version. Here a module whose
+    document differs from the one last written takes the next minor version
+    after it - or the legacy version, where the legacy repo released it and
+    that is higher. A pin on a module whose versions were shifted this way is
+    rewritten to the version written for it, which changes the dependant, so
+    the bump cascades; dependencies are settled before their dependants.
+    Bytes are edited in place - the `version` value and the pins - so the
+    formatting of history stays as it was. Returns `rel → content` for the
+    modules; `state` is advanced."""
+    by_nid = {m.nid: m for m in moves if m.nid}
+    docs = {nid: json.loads(m.content) for nid, m in by_nid.items()}
+    # a module's validators are part of it (its test is not): their change is a change of the module
+    validators = {m.rel.stem: hashlib.sha256(m.content).hexdigest() for m in moves
+                  if not m.nid and m.rel.parts[0] == "validators"}
+    out: dict[Path, bytes] = {}
+    done: set[str] = set()
+
+    def visit(nid):
+        if nid in done:
+            return
+        done.add(nid)
+        doc, content = docs[nid], by_nid[nid].content
+        pins = _pins(doc)
+        for dep in pins:
+            if dep in docs:
+                visit(dep)
+        legacy = str(doc.get("version", ""))
+        body = {k: v for k, v in doc.items() if k != "version"}
+        body["\0validators"] = validators.get(by_nid[nid].rel.stem)
+        if pins:
+            body["dependencies"] = [f"{d}@{state.last_for.get((d, v), v)}" for d, v in pins.items()]
+            for d, v in pins.items():
+                w = state.last_for.get((d, v), v)
+                if w != v:
+                    content = content.replace(f'"{d}@{v}"'.encode(), f'"{d}@{w}"'.encode())
+        before = state.written.get(nid)
+        if before is None:
+            version = legacy
+        elif body == state.body[nid] and legacy == state.legacy[nid]:
+            version = before
+        elif _version_key(legacy) > _version_key(before) or _next_minor(before) is None:
+            version = legacy
+        else:
+            version = _next_minor(before)
+            state.bumped += 1
+        if version != legacy:
+            content = re.sub(rb'("version"\s*:\s*")' + re.escape(legacy.encode()) + rb'"',
+                             rb"\g<1>" + version.encode() + b'"', content, count=1)
+            if str(json.loads(content).get("version")) != version:
+                raise RuntimeError(f"{by_nid[nid].rel}: could not write version {version} over {legacy}")
+        state.written[nid], state.legacy[nid], state.body[nid] = version, legacy, body
+        state.last_for[(nid, legacy)] = version
+        out[by_nid[nid].rel] = content
+
+    for nid in sorted(by_nid, key=lambda n: str(by_nid[n].rel)):
+        visit(nid)
+    return out
+
+
 def _module_index(moves) -> dict[tuple[str, str], tuple[str, str]]:
     """(legacy tag name, version) → (type, stem) for the modules of one mapped tree.
     A legacy tag is named after the module's source `name` lowercased (the
@@ -404,6 +486,7 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
     legacy_keys = {(t.rpartition("/")[0].lower(), t.rpartition("/")[2]) for ts in tags_at.values() for t in ts}
     table = renames(commits)
     made: dict[str, str] = {}
+    releases = Releases()
     mark = 0                      # the last commit written
     signature = None              # its tree
     for i, ev in enumerate(events, start=1):
@@ -426,6 +509,10 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
         renamed = rename_in(message, table)
         subject_of = lambda c: rename_in(c.subject, table)  # noqa: E731
 
+        # No commit changes a module and leaves its version alone
+        contents = release_changes(moves, releases)
+        nid_at = {(m.rel.parent.name, m.rel.stem): m.nid for m in moves if m.nid}
+
         # tags first: an event without a tree change is dropped only when it tags nothing
         tags: list[tuple[str, str, str]] = []   # (name, tagger, message)
         index = _module_index(moves)
@@ -436,28 +523,32 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
                 if hit is None:
                     report.unmapped_tags.append(f"{legacy} at {c.sha[:7]}")
                     continue
-                new = f"{hit[0]}/{hit[1].lower()}/{version}"
+                written = releases.last_for.get((nid_at[hit], version), version)
+                new = f"{hit[0]}/{hit[1].lower()}/{written}"
                 if new in made:
-                    report.unmapped_tags.append(f"{legacy} → {new} already made from {made[new]}")
+                    if written == version:
+                        report.unmapped_tags.append(f"{legacy} → {new} already made from {made[new]}")
                     continue
                 made[new] = legacy
                 tags.append((new, c.committer, f"{new} — {subject_of(c)}"))
         # A version the legacy hook never tagged (knowledge cascade bumps)
-        # is tagged where it first appears, and says so.
+        # is tagged where it first appears, and says so. So is a release the
+        # legacy repo never made at all.
         current = {}
         for m in moves:
             if m.nid:
-                doc = json.loads(m.content)
-                version = str(doc.get("version", ""))
+                legacy = str(json.loads(m.content).get("version", ""))
+                version = releases.written[m.nid]
                 current[m.rel] = version
                 new = f"{m.rel.parent.name}/{m.rel.stem.lower()}/{version}"
                 keys = {(m.rel.stem.lower(), version), (m.name.lower(), version)}
                 if version and previous.get(m.rel) != version and new not in made \
-                        and not keys & legacy_keys:
+                        and (version != legacy or not keys & legacy_keys):
                     made[new] = "(synthesized)"
                     report.synthesized += 1
-                    tags.append((new, ev.last.committer,
-                                 f"{new} — synthesized: untagged in the legacy repo; {subject_of(ev.opener)}"))
+                    why = "untagged in the legacy repo" if version == legacy else \
+                        f"changed in the legacy repo at version {legacy} with no release"
+                    tags.append((new, ev.last.committer, f"{new} — synthesized: {why}; {subject_of(ev.opener)}"))
         previous = current
         if mark == 0:
             new = f"namespace/{namespace.version}"
@@ -466,7 +557,8 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
             tags.append((new, ev.last.committer,
                          f"{new} — synthesized: the root's declaration, in every commit; {subject_of(ev.opener)}"))
 
-        tree = hashlib.sha256(b"".join(str(m.rel).encode() + b"\0" + m.content + b"\0" for m in moves)).digest()
+        tree = hashlib.sha256(b"".join(str(m.rel).encode() + b"\0" + contents.get(m.rel, m.content) + b"\0"
+                                       for m in moves)).digest()
         if tree == signature and not tags:
             report.empty += 1
             if progress:
@@ -484,7 +576,7 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
         out.append(b"deleteall\n")
         for m in moves:
             out.append(b"M 100644 inline %s\n" % str(m.rel).encode())
-            out.append(_data(m.content))
+            out.append(_data(contents.get(m.rel, m.content)))
         for name, tagger, text in tags:
             out += [b"tag %s\n" % name.encode(), b"from :%d\n" % mark,
                     b"tagger %s\n" % tagger.encode(), _data(text.encode() + b"\n")]
@@ -498,6 +590,8 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
     _git(dst, "checkout", "-q", branch)
     report.tags = len(made)
     report.events = mark
+    report.bumped = releases.bumped
+    report.head = contents if events else {}
     return report
 
 

@@ -158,3 +158,43 @@ def test_build(tmp_path):
     assert nf_history.check_tags(dst) == []
     head = set(_git(dst, "ls-tree", "-r", "--name-only", "HEAD").split())
     assert head == {"namespace.nfx", "ontology/p.nfx", "ontology/alpha.nfx", "knowledge/facts.nfx"}
+
+
+def test_release_changes():
+    from pathlib import Path
+
+    a, k, j = _ids()
+
+    def tree(av, kv, k_extra=None, validators=b"v1"):
+        """A ← K ← J: K pins A, J pins K; the legacy pins follow the legacy versions."""
+        def move(rel, doc, nid):
+            return nf_import.Move(None, Path(rel), json.dumps(doc, indent=4).encode(), nid=nid, name=doc["name"])
+        return [move("ontology/a.nfx", _doc(a, "a", av), a),
+                move("knowledge/k.nfx", _doc(k, "k", kv, "knowledge", [f"{a}@{av}"], k_extra), k),
+                move("knowledge/j.nfx", _doc(j, "j", "1.0", "knowledge", [f"{k}@{kv}"]), j),
+                nf_import.Move(None, Path("validators/a.py"), validators)]
+
+    state = nf_history.Releases()
+
+    def step(*args, **kwargs):
+        out = nf_history.release_changes(tree(*args, **kwargs), state)
+        docs = {rel.stem: json.loads(content) for rel, content in out.items()}
+        return {stem: d["version"] for stem, d in docs.items()}, docs
+
+    # first appearance: as the legacy repo has it
+    assert step("1.0", "1.0")[0] == {"a": "1.0", "k": "1.0", "j": "1.0"} and state.bumped == 0
+    # A released; the legacy hook re-pinned K without a bump, and never touched J
+    versions, docs = step("1.1", "1.0")
+    assert versions == {"a": "1.1", "k": "1.1", "j": "1.1"} and state.bumped == 2
+    assert docs["k"]["dependencies"] == [f"{a}@1.1"] and docs["j"]["dependencies"] == [f"{k}@1.1"]
+    # nothing changed: nothing is released
+    assert step("1.1", "1.0")[0] == versions and state.bumped == 2
+    # K rewritten at its legacy version: K and its dependant move on
+    assert step("1.1", "1.0", k_extra="x")[0] == {"a": "1.1", "k": "1.2", "j": "1.2"}
+    # the legacy repo releases K as 1.1, behind what was written: the next minor after that
+    versions, docs = step("1.1", "1.1", k_extra="y")
+    assert versions == {"a": "1.1", "k": "1.3", "j": "1.3"} and docs["j"]["dependencies"] == [f"{k}@1.3"]
+    # a legacy release that is ahead is taken as it is
+    assert step("1.1", "2.0", k_extra="y")[0] == {"a": "1.1", "k": "2.0", "j": "1.4"}
+    # the validators are part of the module: their change releases it, and the cascade follows
+    assert step("1.1", "2.0", k_extra="y", validators=b"v2")[0] == {"a": "1.2", "k": "2.1", "j": "1.5"}
