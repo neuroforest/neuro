@@ -128,7 +128,11 @@ def table(rows, header=None, indent=2, shrink=None, width=None):
                 widths[shrink] = max(widths[shrink] - over, 12)
 
     def cut(val, room):
-        return val if _visible(val) <= room else _ANSI.sub("", val)[:max(room - 1, 0)].rstrip() + "…"
+        if _visible(val) <= room:
+            return val
+        short = _ANSI.sub("", val)[:max(room - 1, 0)].rstrip() + "…"
+        lead = _ANSI.match(val)  # a cell styled as a whole keeps its style when cut
+        return f"{lead.group()}{short}\033[0m" if lead else short
 
     def line(row):
         cells = []

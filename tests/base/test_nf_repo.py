@@ -449,6 +449,18 @@ def test_module_log(tmp_path, root):
     assert len(entries) == 2 and "continues in micro" in note
 
 
+def test_module_log_repin(root):
+    # a dependency's release reaches its dependants: theirs only where the commit also carries their own edit
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], extra="edited"), add=False)
+    root.write("knowledge/b.nfx", root.doc(root.b, "b", "1.0", kind="knowledge", deps=[(root.a, "1.0")],
+                                           nodes=[root.bn], rels=[(root.bn, root.an)], extra="b edit"), add=False)
+    root.repo.release(["p"])
+    log = lambda key: [(e.version, e.repin) for e in nf_repo.module_log(root.repo, key)[0]]  # noqa: E731
+    assert log("p") == [("1.1", False), ("1.0", False)]
+    assert log("a") == [("1.1", True), ("1.0", False)]
+    assert log("b") == [("1.1", False), ("1.0", False)]
+
+
 def test_namespace_log(root):
     entries = nf_repo.namespace_log(root.repo)
     assert [(e.token, e.subject, e.path, e.version, e.tags) for e in entries] == [

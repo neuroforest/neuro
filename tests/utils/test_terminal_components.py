@@ -48,3 +48,7 @@ def test_table_shrink(capsys):
     assert wide[0].index("Tags") < len(wide[2])
     # not a terminal and no width given: nothing is cut
     assert _lines(capsys, shrink=3)[2].endswith(LONG)
+    # a cell styled as a whole keeps its style when cut
+    terminal_components.table([("a", f"\033[2m{LONG}\033[0m", "")], shrink=1, width=30)
+    out = capsys.readouterr().out.rstrip("\n")
+    assert out == f"  a  \033[2m{LONG[:24]}…\033[0m" and len(ANSI.sub("", out)) == 30

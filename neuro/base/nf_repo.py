@@ -1078,6 +1078,7 @@ class LogEntry:
     path: str             # the module's .nfx path, root-relative, at that commit
     version: str          # at the commit (its parent's, for a removal)
     tags: list[str]
+    repin: bool = False   # the commit only follows a dependency: version and pins moved, nothing of its own
 
 
 def _module_paths(kind, stem) -> list[str]:
@@ -1088,6 +1089,8 @@ def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
     """Every commit of a module, newest first, across its renames and moves:
     the file log in its root, continued under the old stem at each
     `REFACTOR:` and in the source root at each `MIGRATE: … ←` (paired by nid).
+    An entry is marked `repin` where the commit changed nothing of the module
+    but its version and the versions of its pins - a dependency's release.
     `roots` are the other roots the chain may pass through, found by token.
     Returns the entries and a note when the chain leaves this machine."""
     head = repo.rev("HEAD")
@@ -1125,10 +1128,15 @@ def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
             date, _, message = rest.partition("\0")
             events = nf_events.parse_all(message)
             path = f"{kind}/{stem}.nfx"
-            doc = cur.doc_at(sha, path) or cur.doc_at(f"{sha}^", path) or {}
+            after, before = cur.doc_at(sha, path), cur.doc_at(f"{sha}^", path)
+            doc = after or before or {}
+            # its validator and its test are the module too: a commit that touches them is a change of its own
+            repin = is_repin(before, after) and all(
+                cur.blob(sha, p) == cur.blob(f"{sha}^", p) for p in _module_paths(kind, stem)[1:])
             entries.append(LogEntry(cur.root, token_of(cur), sha, date, message.split("\n", 1)[0], path,
                                     doc.get("version", ""),
-                                    sorted(t for t in tags_at.get(sha, []) if parse_tag(t)[0][1] in names[cur.root])))
+                                    sorted(t for t in tags_at.get(sha, []) if parse_tag(t)[0][1] in names[cur.root]),
+                                    repin))
             arrival = next((e for e in events if isinstance(e, nf_events.Arrival)
                             and e.kind == kind and e.landed == stem), None)
             rename = next((e for e in events if isinstance(e, nf_events.Rename)
