@@ -1,10 +1,12 @@
 import os
 import sys
 import logging
+import time
 
 import neo4j
 
 from neuro.utils import config, terminal_style
+from neuro.base import labels
 from neuro.base.accessors.metadata import MetadataAccessor
 from neuro.base.accessors.nodes import NodeAccessor
 from neuro.base.accessors.objects import ObjectAccessor
@@ -17,6 +19,8 @@ class NeuroBase:
     """
     Simple, reusable Neo4j client wrapper.
     """
+    LABELS_TTL = 60.0  # seconds a class hierarchy is trusted before it is looked up again
+
     def __init__(self, neo4j_uri=None, neo4j_user=None, neo4j_password=None, **driver_kwargs):
         uri = neo4j_uri or os.getenv("NEO4J_URI")
         user = neo4j_user or os.getenv("NEO4J_USER")
@@ -75,10 +79,36 @@ class NeuroBase:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    def expand(self, query):
+        """
+        `query` with every `:Label+` replaced by the class and its subclasses,
+        as this base's ontology declares them (`neuro.base.labels`).
+
+        Both `run_query` and `get_data` do this, so a query string may simply
+        say `(c:GitCommit+)`. The hierarchy is looked up once per class and
+        kept for `LABELS_TTL` seconds - an ontology import in another process
+        is seen after that; `forget_labels()` drops it at once.
+        """
+        if not labels.has_placeholder(query):
+            return query
+        return labels.expand(query, self._descendants)
+
+    def _descendants(self, label):
+        cache = self.__dict__.setdefault("_labels", {})
+        hit = cache.get(label)
+        if hit is None or time.monotonic() - hit[0] > self.LABELS_TTL:
+            hit = cache[label] = (time.monotonic(), self.descendant_labels(label))
+        return hit[1]
+
+    def forget_labels(self):
+        """Drop the cached class hierarchy - after an ontology import."""
+        self.__dict__.pop("_labels", None)
+
     def run_query(self, query, parameters=None):
         """
         Run a Cypher query and return the result.
         """
+        query = self.expand(query)
         try:
             with self.driver.session() as session:
                 result = session.run(query, parameters or {})
@@ -91,6 +121,7 @@ class NeuroBase:
         """
         Run a Cypher query and return the data as a list of records.
         """
+        query = self.expand(query)
         logging.debug(f"NeuroBase.get_data query: {query}")
         try:
             with self.driver.session() as session:
