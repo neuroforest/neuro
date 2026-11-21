@@ -3,6 +3,8 @@ General terminal interaction components.
 """
 
 import re
+import shutil
+import sys
 from contextlib import contextmanager
 
 from rich.console import Console
@@ -95,17 +97,51 @@ def _visible(val) -> int:
     return len(_ANSI.sub("", str(val)))
 
 
-def table(rows, header=None, indent=2):
+def table(rows, header=None, indent=2, shrink=None, width=None):
     """Print aligned columns from a list of tuples with optional header.
-    Cells may carry ANSI colour codes; columns align on what is printed."""
+    Cells may carry ANSI colour codes; columns align on what is printed.
+
+    `shrink`: the index of one free-text column, so every row stays on one
+    line. Its cell runs over the cells to its right when those are all empty,
+    up to the terminal's edge; only where something follows it is it held to
+    the column, and cut with an ellipsis when the row would not fit. So one
+    long value further right does not squeeze every row. `width` overrides the
+    terminal's; output that is not a terminal (a pipe, a file) is never cut.
+    Lines carry no trailing padding."""
     if not rows:
         return
     all_rows = [header] + rows if header else rows
     widths = [max(_visible(r[i]) for r in all_rows) for i in range(len(all_rows[0]))]
     prefix = " " * indent
+    if shrink is not None and width is None and sys.stdout.isatty():
+        width = shutil.get_terminal_size().columns
+
+    def alone(row):
+        return shrink is not None and not any(str(v) for v in row[shrink + 1:])
+
+    if shrink is not None:
+        held = [_visible(r[shrink]) for r in all_rows if not alone(r)]
+        widths[shrink] = max(held, default=0)
+        if width:
+            over = indent + sum(widths) + 2 * (len(widths) - 1) - width
+            if over > 0:
+                widths[shrink] = max(widths[shrink] - over, 12)
+
+    def cut(val, room):
+        return val if _visible(val) <= room else _ANSI.sub("", val)[:max(room - 1, 0)].rstrip() + "…"
 
     def line(row):
-        return "  ".join(f"{val}{' ' * (widths[i] - _visible(val))}" for i, val in enumerate(row))
+        cells = []
+        for i, val in enumerate(row):
+            val = str(val)
+            if i == shrink and alone(row):
+                room = width - indent - sum(widths[:i]) - 2 * i if width else _visible(val)
+                cells.append(cut(val, max(room, 12)))
+                break
+            if i == shrink:
+                val = cut(val, widths[i])
+            cells.append(f"{val}{' ' * (widths[i] - _visible(val))}")
+        return "  ".join(cells).rstrip()
 
     if header:
         print(f"{prefix}{terminal_style.BOLD}{line(header)}{terminal_style.RESET}")
