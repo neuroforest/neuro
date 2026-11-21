@@ -226,33 +226,51 @@ class PluginIndex:
 
     # ---- public API ------------------------------------------------------------
 
-    def resolve(self, key):
-        """Resolve a path, nid, name, stem, or filename to a Path.
+    def qualified(self, entry) -> str:
+        """`<namespace>-<stem>`: how a module is named across trees. A stem is
+        unique inside its tree only; the root namespace is written `root`."""
+        return f"{entry.namespace or 'root'}-{entry.path.stem}"
 
-        Priority: existing filesystem path > nid > name > stem > filename.
-        Nid/name/stem/filename matching is case-insensitive.
+    def matches(self, key) -> list:
+        """The entries `key` names, best kind of match only: nid, then name,
+        stem or filename (a stem may live in several trees), then the qualified
+        `<namespace>-<stem>`. Case-insensitive."""
+        entry = self._index.get(key)
+        if entry:
+            return [entry]
+        low = str(key).lower()
+        entries = list(self._index.values())
+        for test in (lambda e: e.nid.lower() == low,
+                     lambda e: low in ((e.name or "").lower(), e.path.stem.lower(), e.path.name.lower()),
+                     lambda e: self.qualified(e).lower() == low):
+            found = [e for e in entries if test(e)]
+            if found:
+                return found
+        return []
+
+    def suggest(self, key) -> list:
+        """Entries whose stem, name or qualified name contains `key` - what to
+        offer when nothing matches."""
+        low = str(key).lower()
+        return sorted((e for e in self._index.values()
+                       if low and (low in self.qualified(e).lower() or low in (e.name or "").lower())),
+                      key=lambda e: self.qualified(e))
+
+    def resolve(self, key):
+        """Resolve a path, nid, name, stem, filename or `<namespace>-<stem>` to
+        a Path; None when nothing matches.
+
+        Priority: existing filesystem path > nid > name, stem or filename >
+        qualified name. Matching is case-insensitive. A stem that lives in more
+        than one tree raises `AmbiguousModule`: name it `<namespace>-<stem>`.
         """
         p = Path(key)
         if p.exists():
             return p
-        entry = self._index.get(key)
-        if entry:
-            return entry.path
-        key_lower = key.lower()
-        entries = list(self._index.values())
-        for e in entries:
-            if e.nid.lower() == key_lower:
-                return e.path
-        for e in entries:
-            if (e.name or "").lower() == key_lower:
-                return e.path
-        for e in entries:
-            if e.path.stem.lower() == key_lower:
-                return e.path
-        for e in entries:
-            if e.path.name.lower() == key_lower:
-                return e.path
-        return None
+        found = self.matches(key)
+        if len(found) > 1:
+            raise exceptions.AmbiguousModule(str(key), sorted(self.qualified(e) for e in found))
+        return found[0].path if found else None
 
     def all_targets(self, exclude_nid=None):
         """Return sorted list of all indexed paths."""

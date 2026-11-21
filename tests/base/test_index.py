@@ -65,6 +65,30 @@ class TestPluginIndexKindFilter:
         assert idx.resolve("A") == path
         assert idx.resolve("a") == path  # case-insensitive
 
+    def test_qualified(self, tmp_path):
+        from neuro.base import nfx
+
+        trees = {}
+        for token, stems in (("", ("social", "time")), ("side", ("social", "git"))):
+            root = tmp_path / (token or "home") / ".nf"
+            root.mkdir(parents=True)
+            nfx.write(root / nfx.NAMESPACE_FILENAME, nfx.Nfx(type=nfx.NAMESPACE_TYPE, nid=str(uuid.uuid4()),
+                                                            version="1.0", name=token or "Root", namespace=token))
+            for stem in stems:
+                _write_nfx(root / "ontology" / f"{stem}.nfx", kind="ontology", name=stem)
+            trees[token] = root
+        idx = NfxIndex(*trees.values())
+        # a stem is unique in its tree only: across trees a module is `<namespace>-<stem>`
+        assert idx.resolve("git") == trees["side"] / "ontology" / "git.nfx" == idx.resolve("side-git")
+        assert idx.resolve("root-social") == trees[""] / "ontology" / "social.nfx"
+        assert idx.resolve("side-social") == trees["side"] / "ontology" / "social.nfx"
+        with pytest.raises(exceptions.AmbiguousModule) as e:
+            idx.resolve("social")
+        assert e.value.candidates == ["root-social", "side-social"]
+        assert idx.resolve("nope") is None
+        assert [idx.qualified(m) for m in idx.suggest("soc")] == ["root-social", "side-social"]
+        assert [idx.qualified(m) for m in idx.suggest("side-")] == ["side-git", "side-social"]
+
 
 class TestOntologyIndexMetaontology:
     def test_metaontology_discovered_via_roots(self, tmp_path):
