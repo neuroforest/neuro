@@ -9,9 +9,10 @@ the commit's parent) and the release tags. `Repo.tag` is post-commit: one
 annotated tag per document whose version has none yet. `nfx` stays the
 git-free format layer; everything that reads a repository lives here.
 
-Versioning: a commit may change a document and leave `version`
-at its latest tag - an unreleased edit. A changed `version` must be the next
-one after that tag, and the commit then carries its whole re-pin closure:
+Versioning: every committed change to
+a document is a release. A commit that changes one must carry the next version
+after its latest tag - there is no unreleased edit; only a module's test file
+may change alone. The commit then carries its whole re-pin closure:
 every pin on it inside the root updated in the same commit. Dependants inside
 the root are re-validated whenever something they depend on changes, so a
 document that drops a node another one still references is refused at its own
@@ -387,14 +388,17 @@ class Repo:
                 elif declared[dep].version != pin:
                     issues.append(f"{where}: pins {declared[dep].token or '∅'}@{pin}, it is {declared[dep].version}")
 
-        # versions: an unreleased edit, or exactly the next release
+        # versions: every committed change to a document is a release - the next
+        # version after its latest tag, nothing else.
+        # Its test file is not part of the document and may change alone.
         for rel in sorted(touched):
             series = series_of(rel)
             path = staged / rel
             if series is None or not path.is_file():
                 continue
             where = self.show(rel)
-            version = json.loads(path.read_text()).get("version", "")
+            doc = json.loads(path.read_text())
+            version = doc.get("version", "")
             if version_key(version) is None:
                 issues.append(f"{where}: version {version!r} is not <major>.<minor>")
                 continue
@@ -403,6 +407,12 @@ class Repo:
             if latest is None or version == latest:
                 if version not in seen:
                     released.append(tag_name(series, version))
+                else:
+                    tagged = self._doc_by_nid(tag_name(series, version), rel, doc.get("nid"))
+                    if tagged is not None and tagged != doc:
+                        issues.append(f"{where}: changed since {tag_name(series, version)} but still version "
+                                      f"{version} - every change is a release: `nf.release {rel.stem or 'namespace'}` "
+                                      f"(the next is {' or '.join(sorted(next_versions(latest)))})")
                 continue
             if version in seen:
                 issues.append(f"{where}: version {version} is already released ({tag_name(series, version)}) - "
@@ -490,7 +500,10 @@ class Repo:
                 raise ValueError(f"{rel_of[nid]}: version {doc.version} is neither the released {last} nor "
                                  f"the next {want} - leave `version` alone, release writes it")
             tagged = self.doc_at(tag_name(series_of(rel_of[nid]), last), rel_of[nid])
-            if tagged == {**json.loads(local[nid].path.read_text()), "version": last}:
+            current = {**json.loads(local[nid].path.read_text()), "version": last}
+            if self._digest(rel_of[nid]):
+                current["hash"] = self._digest(rel_of[nid])  # an edited validator is a change of the module
+            if tagged == current:
                 raise ValueError(f"{rel_of[nid]}: unchanged since {tag_name(series_of(rel_of[nid]), last)} - "
                                  f"nothing to release")
             new[nid] = want
@@ -538,15 +551,36 @@ class Repo:
                     carries = tagged != after
             steps.append(Step(rel_of[nid], doc.name or rel_of[nid].stem, doc.type, doc.version, new[nid],
                               repins, nid in seeds, carries,
-                              nfx.dumps(dataclasses.replace(doc, version=new[nid], dependencies=pins))))
+                              nfx.dumps(dataclasses.replace(doc, version=new[nid], dependencies=pins,
+                                                            hash=self._digest(rel_of[nid]) or doc.hash))))
         return steps
+
+    def _digest(self, rel) -> str | None:
+        """sha256 of a module's validators file in the worktree - what its
+        `hash` must be; None when it has no validators."""
+        v = plugins.validators_path_for(self.root / rel, [self.root])
+        return hashlib.sha256(v.read_bytes()).hexdigest() if v is not None and v.is_file() else None
+
+    def _companions(self, rels) -> list[str]:
+        """The validators and test files of these modules that differ from HEAD:
+        they travel in the module's release commit."""
+        out = []
+        for rel in rels:
+            if len(rel.parts) != 2:
+                continue  # the namespace declaration has none
+            for p in _module_paths(rel.parts[0], rel.stem)[1:]:
+                if self.git("status", "--porcelain", "--untracked-files=all", "--", self._path(p)).strip():
+                    out.append(self._path(p))
+        return out
 
     def release(self, targets, major=False, others=(), message=None) -> tuple[str, list["Step"], list[str]]:
         """Write, validate, commit and tag the release `plan_release` computes -
-        one commit, one annotated tag per document. Refuses an index holding
+        one commit, one annotated tag per document. An edited validators or
+        test file of a released module goes into the same commit, and `hash`
+        is rewritten to match the validators. Refuses an index holding
         anything else; on a refused verdict the worktree and index are put back."""
         steps = self.plan_release(targets, major, others)
-        paths = [self._path(s.rel.as_posix()) for s in steps]
+        paths = [self._path(s.rel.as_posix()) for s in steps] + self._companions([s.rel for s in steps])
         staged = set(self.git("diff", "--cached", "--name-only").split())
         foreign = sorted(staged - set(paths))
         if foreign:
@@ -634,19 +668,25 @@ class Repo:
     def rename(self, target, new, others=()) -> tuple[str, "RenamePlan"]:
         """Rename one module inside this root in one commit: its files
         moved, `name` and the test's validators path rewritten, its tags re-made
-        under the new stem on the same commits and the old ones deleted. No
-        version bump. Refuses an index holding anything; a refused verdict puts
-        worktree, index and tags back."""
+        under the new stem on the same commits and the old ones deleted. A
+        rename changes the document, so it is a release like any other change
+       : the module takes its next version and its in-root
+        dependants are re-pinned and bumped in the same commit. Refuses an
+        index holding anything; a refused verdict puts worktree, index and
+        tags back."""
         plan = self.plan_rename(target, new)
         if self.git("diff", "--cached", "--name-only").strip():
             raise ValueError("the index is not empty - commit or unstage it first")
         old_paths = [self._path(a.as_posix()) for a, _ in plan.files]
         new_paths = [self._path(b.as_posix()) for _, b in plan.files]
         made: list[str] = []
+        saved: dict[Path, str] = {}  # the dependants the release rewrites
 
         def undo():
             for t in made:
                 self.git("tag", "-d", t, check=False)
+            if saved:
+                self._restore(saved, [self._path(r.as_posix()) for r in saved])
             self.git("reset", "-q", "--", *old_paths, *new_paths, check=False)
             for b in new_paths:
                 (self.top / b).unlink(missing_ok=True)
@@ -665,16 +705,24 @@ class Repo:
             for old_tag, new_tag in plan.tags:
                 self._copy_tag(old_tag, new_tag, f"renamed from {old_tag}")
                 made.append(new_tag)
+            # released before: the rename is its next version, with the re-pin closure.
+            # Never released: the commit is its first release, at the version it has.
+            steps = self.plan_release([plan.nid], others=others) if plan.tags else []
+            for s in steps:
+                if s.rel != plan.files[0][1]:
+                    saved[s.rel] = (self.root / s.rel).read_text()
+                (self.root / s.rel).write_text(s.text)
+            if steps:
+                self.git("add", "--", *(self._path(s.rel.as_posix()) for s in steps))
             verdict = self.check(others=others)
             if verdict.issues:
                 raise ReleaseRefused(verdict.issues)
-            r = subprocess.run(["git", "commit", "-q", "-m", plan.event.subject], cwd=self.top, env=self._env,
-                               text=True, capture_output=True)
-            if r.returncode:
-                raise ReleaseRefused([line for line in (r.stdout + r.stderr).splitlines() if line.strip()])
+            body = [s.line() for s in steps if not s.seed]
+            self._commit("\n\n".join([plan.event.subject, "\n".join(body)]) if body else plan.event.subject)
         except Exception:
             undo()
             raise
+        self.tag()  # a no-op when the post-commit hook already ran
         for old_tag, _ in plan.tags:
             self.git("tag", "-d", old_tag)
         return self.rev("HEAD"), plan
@@ -936,8 +984,8 @@ def plan_move(source: Repo, target: Repo, key, with_dependants=False, as_="", ot
             name = tag_name((kind, stem), released)
             released_at = source.rev(name)
             tagged = source._doc_by_nid(name, rel, nid)
-            # a difference in `name` alone is a rename (no bump) - not an unreleased edit
-            if tagged is None or {**tagged, "name": stem} != source.doc_at(head, rel):
+            # history made before every change was a release can still hold such a module
+            if tagged is None or tagged != source.doc_at(head, rel):
                 issues.append(f"{source.show(rel)}: unreleased edits since {name} - `nf.release` it first")
         items.append(MoveItem(kind, stem, landed, nid, docs[nid].version, files, released and name, released_at))
 
@@ -1101,3 +1149,31 @@ def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
                 break
         cur, rev, kind, stem = nxt if nxt else (None, None, None, None)
     return entries, note
+
+
+def namespace_log(repo: Repo) -> list[LogEntry]:
+    """Every commit of a root's `namespace.nfx`, newest first. A namespace is
+    not renamed or moved, so its history is the one file in the one root."""
+    head = repo.rev("HEAD")
+    if head is None:
+        raise ValueError("nothing committed yet")
+    path = nfx.NAMESPACE_FILENAME
+    if repo.blob(head, Path(path)) is None:
+        raise ValueError(f"{repo.root}: no {path}")
+    token = (repo.doc_at(head, path) or {}).get("namespace", "")
+    tags_at: dict[str, list[str]] = {}
+    for line in repo.git("for-each-ref", "refs/tags", "--format=%(refname:short) %(*objectname)%(objectname)").splitlines():
+        name, obj = line.split(" ", 1)
+        parsed = parse_tag(name)
+        if parsed and parsed[0][0] == "namespace":
+            tags_at.setdefault(obj[:40], []).append(name)
+    entries = []
+    for record in repo.git("log", "--format=%H%x00%cs%x00%s%x1e", head, "--", repo._path(path)).split("\x1e"):
+        sha, _, rest = record.strip("\n").partition("\0")
+        if not sha:
+            continue
+        date, _, subject = rest.partition("\0")
+        doc = repo.doc_at(sha, path) or repo.doc_at(f"{sha}^", path) or {}
+        entries.append(LogEntry(repo.root, token, sha, date, subject, path, doc.get("version", ""),
+                                sorted(tags_at.get(sha, []))))
+    return entries

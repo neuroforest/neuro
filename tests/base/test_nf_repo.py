@@ -81,8 +81,20 @@ def root(tmp_path):
 
 def test_check(root):
     assert root.check() == []
-    # an unreleased edit: content changes, version stays at its tag
+    # every change is a release: content changes, version stays at its tag - refused
     root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], extra="edited"))
+    assert root.check() == ["ontology/p.nfx: changed since ontology/p/1.0 but still version 1.0 - every change "
+                            "is a release: `nf.release p` (the next is 1.1 or 2.0)"]
+    # the same content written differently is not a change
+    root.write("ontology/p.nfx", json.dumps(root.doc(root.p, "p", "1.0", nodes=[root.pn])).replace(", ", ",\n"))
+    assert not any("changed since" in i for i in root.check())
+    # the declaration follows the same rule; a test file is not the module and changes alone
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn]))
+    root.write("namespace.nfx", {"type": "namespace", "nid": json.loads((root.path / "namespace.nfx").read_text())["nid"],
+                                 "version": "1.0", "name": "Root", "namespace": "", "description": "edited"})
+    assert any("namespace.nfx: changed since namespace/1.0" in i for i in root.check())
+    _git(root.path, "checkout", "-q", "HEAD", "--", "namespace.nfx")
+    root.write("tests/test_p.py", "def test_p():\n    pass\n")
     assert root.check() == []
     # a skipped version, then an already released one
     root.write("ontology/p.nfx", root.doc(root.p, "p", "1.2", nodes=[root.pn]))
@@ -129,10 +141,11 @@ def test_check_rules(root):
     assert any("is not sha256(validators/p.py)" in i for i in root.check())
     digest = hashlib.sha256(b"# v1\n").hexdigest()
     root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], hash_=digest))
-    assert root.check() == []
+    staged = root.check()
+    assert not any("sha256" in i for i in staged)
     # the index is judged, not the worktree
     root.write("ontology/p.nfx", root.doc(root.p, "p", "9.9", nodes=[root.pn], hash_=digest), add=False)
-    assert root.check() == []
+    assert root.check() == staged
     # labels split over lines
     text = json.dumps(root.doc(root.p, "p", "1.0", nodes=[root.pn], hash_=digest), indent=4)
     root.write("ontology/p.nfx", text)
@@ -184,6 +197,28 @@ def test_release(root):
     assert _git(root.path, "status", "--short") == ""
 
 
+def test_release_companions(root):
+    _git(root.path, "config", "user.name", "T")
+    _git(root.path, "config", "user.email", "t@example.org")
+    # a validators edit is a change of the module: one commit holds it, the rewritten hash and the test
+    root.write("validators/p.py", "# v1\n", add=False)
+    root.write("tests/test_p.py", "def test_p():\n    pass\n", add=False)
+    sha, steps, tags = root.repo.release(["p"])
+    assert set(_git(root.path, "show", "--name-only", "--format=", sha).split()) == {
+        "ontology/p.nfx", "ontology/a.nfx", "knowledge/b.nfx", "validators/p.py", "tests/test_p.py"}
+    doc = json.loads((root.path / "ontology/p.nfx").read_text())
+    assert (doc["version"], doc["hash"]) == ("1.1", hashlib.sha256(b"# v1\n").hexdigest())
+    assert "ontology/p/1.1" in tags and root.repo.check("HEAD").issues == []
+    assert [line for line in _git(root.path, "status", "--short").splitlines() if "__pycache__" not in line] == []
+    with pytest.raises(ValueError, match="nothing to release"):
+        root.repo.plan_release(["p"])
+    # edited again: staged alone it is refused, released it is the next version
+    root.write("validators/p.py", "# v2\n")
+    assert any("is not sha256(validators/p.py)" in i for i in root.check())
+    _git(root.path, "reset", "-q", "--", "validators/p.py")
+    assert root.repo.plan_release(["p"])[0].new == "1.2"
+
+
 def test_release_refused(root):
     _git(root.path, "config", "user.name", "T")
     _git(root.path, "config", "user.email", "t@example.org")
@@ -228,17 +263,26 @@ def test_rename(root):
     assert {str(b) for _, b in plan.files} == {"ontology/probe.nfx", "validators/probe.py", "tests/test_probe.py"}
     assert json.loads((root.path / "ontology/probe.nfx").read_text())["name"] == "probe"
     assert '"validators" / "probe.py"' in (root.path / "tests/test_probe.py").read_text()
-    assert sorted(_git(root.path, "tag", "-l", "ontology/p*").split()) == ["ontology/probe/1.0", "ontology/probe/1.1"]
+    # the old tags moved to the new stem on their commits; the rename itself is the next release
+    assert sorted(_git(root.path, "tag", "-l", "ontology/p*").split()) == [
+        "ontology/probe/1.0", "ontology/probe/1.1", "ontology/probe/1.2"]
     assert _git(root.path, "rev-parse", "ontology/probe/1.1^{commit}").strip() == released
+    assert _git(root.path, "rev-parse", "ontology/probe/1.2^{commit}").strip() == sha
     assert "renamed from ontology/p/1.1" in _git(root.path, "cat-file", "-p", "ontology/probe/1.1")
+    assert json.loads((root.path / "ontology/probe.nfx").read_text())["version"] == "1.2"
+    # its dependants are re-pinned and released in the same commit
+    assert _git(root.path, "log", "-1", "--format=%b", sha).strip().splitlines() == [
+        "a 1.1 → 1.2 (re-pin probe@1.2)", "b 1.1 → 1.2 (re-pin a@1.2)"]
+    assert _git(root.path, "rev-parse", "knowledge/b/1.2^{commit}").strip() == sha
     assert root.repo.check("HEAD").issues == []
-    assert _git(root.path, "status", "--short") == ""
+    # (validating the dependants imports the validators: a root ignores the bytecode that leaves)
+    assert [line for line in _git(root.path, "status", "--short").splitlines() if "__pycache__" not in line] == []
     follow = _git(root.path, "log", "--follow", "--format=%s", "--", "ontology/probe.nfx").splitlines()
     assert follow[0] == "REFACTOR: ontology p → probe" and follow[-1] == "ADD: root"
     # the next release continues the series under the new stem
-    root.write("ontology/probe.nfx", root.doc(root.p, "probe", "1.1", nodes=[root.pn], hash_=digest, extra="x"),
+    root.write("ontology/probe.nfx", root.doc(root.p, "probe", "1.2", nodes=[root.pn], hash_=digest, extra="x"),
                add=False)
-    assert root.repo.plan_release(["probe"])[0].new == "1.2"
+    assert root.repo.plan_release(["probe"])[0].new == "1.3"
     _git(root.path, "checkout", "--", "ontology/probe.nfx")
     root.write("ruff.toml", "[lint]\n")
     with pytest.raises(ValueError, match="index is not empty"):
@@ -372,7 +416,7 @@ def test_module_log(tmp_path, root):
     micro = _target(tmp_path, root)
     roots = [root.path, micro.root]
     root.repo.rename("b", "stains", others=roots)
-    nf_repo.move(root.repo, micro, "stains", others=roots)  # a rename alone is not an unreleased edit
+    nf_repo.move(root.repo, micro, "stains", others=roots)  # a rename is a release, so the module is clean
     micro.git("config", "user.name", "T")
     micro.rename("stains", "dyes", others=roots)
     nf_repo.move(micro, root.repo, "dyes", others=roots)
@@ -387,20 +431,31 @@ def test_module_log(tmp_path, root):
         ("", "REFACTOR: knowledge b → stains"),
         ("", "ADD: root"),
     ]
-    assert {e.version for e in entries} == {"1.0"}
-    assert entries[0].tags == ["knowledge/dyes/1.0"] and entries[-1].tags == ["knowledge/stains/1.0"]
-    assert entries[3].tags == ["knowledge/dyes/1.0"]  # micro's moved-in tag, renamed with the module there
-    # any other difference from the last tag is still refused
-    root.write("knowledge/dyes.nfx", root.doc(root.b, "dyes", "1.0", kind="knowledge", deps=[(root.a, "1.0")],
+    # each rename is a release; a move carries the version across unchanged
+    assert [e.version for e in entries] == ["1.2", "1.2", "1.2", "1.1", "1.1", "1.1", "1.0"]
+    assert entries[0].tags == ["knowledge/dyes/1.2"] and entries[-1].tags == ["knowledge/stains/1.0"]
+    assert entries[5].tags == ["knowledge/stains/1.1"] and entries[2].tags == ["knowledge/dyes/1.2"]
+    assert entries[3].tags == ["knowledge/dyes/1.1"]  # micro's moved-in tag, renamed with the module there
+    # history made without the hook can hold a change with no release: such a module does not move
+    root.write("knowledge/dyes.nfx", root.doc(root.b, "dyes", "1.2", kind="knowledge", deps=[(root.a, "1.0")],
                                               nodes=[root.bn], rels=[(root.bn, root.an)], extra="edit"))
     root.commit("UPDATE: dyes")
     with pytest.raises(nf_repo.ReleaseRefused) as e:
         nf_repo.plan_move(root.repo, micro, "dyes", as_="tints", others=roots)
-    assert any("unreleased edits since knowledge/dyes/1.0" in i for i in e.value.issues)
+    assert any("unreleased edits since knowledge/dyes/1.2" in i for i in e.value.issues)
     assert len({(e.root, e.sha) for e in entries}) == len(entries)
     # a root the chain needs is missing: the walk stops with a note
     entries, note = nf_repo.module_log(root.repo, "dyes", roots=[root.path])
     assert len(entries) == 2 and "continues in micro" in note
+
+
+def test_namespace_log(root):
+    entries = nf_repo.namespace_log(root.repo)
+    assert [(e.token, e.subject, e.path, e.version, e.tags) for e in entries] == [
+        ("", "ADD: root", "namespace.nfx", "1.0", ["namespace/1.0"])]
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], extra="edit"))
+    root.commit("UPDATE: p")
+    assert len(nf_repo.namespace_log(root.repo)) == 1  # a commit that leaves the declaration alone is not its history
 
 
 def test_rename_test():
