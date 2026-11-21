@@ -137,6 +137,43 @@ def test_rename(root):
         "RELEASE: ontology b-x 1.1 - re-pin bee 1.1\nabout b\n"
 
 
+def test_gone(root):
+    """A module the head no longer has goes with the part that names it, a stem
+    the continuation once had is renamed there, and no commit speaks of the split."""
+    import uuid
+
+    dead, old = str(uuid.uuid4()), str(uuid.uuid4())
+    root.write("knowledge/kb-d.nfx", root.doc(dead, "kb-d", "1.0", kind="knowledge", nodes=[str(uuid.uuid4())]))
+    root.write("knowledge/kb-o.nfx", root.doc(old, "kb-o", "1.0", kind="knowledge", nodes=[str(uuid.uuid4())]))
+    root.commit("ADD: kb-d knowledge, and kb-o")
+    _git(root.path, "tag", "-a", "knowledge/kb-d/1.0", "-m", "knowledge/kb-d/1.0 — ADD: kb-d knowledge")
+    _git(root.path, "rm", "-q", "knowledge/kb-d.nfx", "knowledge/kb-o.nfx")
+    root.commit("DELETE: knowledge kb-o")
+    to = _released(root)
+    to.parent.mkdir()
+    part = {"token": "kb", "to": to, "modules": ["b"], "strip_prefix": "kb-"}
+    with pytest.raises(nf_split.SplitRefused) as e:
+        nf_split.plan(root.repo, [{**part, "gone": [root.a, str(uuid.uuid4()), "x"]}], rename={"never": "was"})
+    assert len(e.value.issues) == 2
+    with pytest.raises(nf_split.SplitRefused) as e:
+        nf_split.plan(root.repo, [{**part, "gone": [str(uuid.uuid4())]}], rename={"never": "was"})
+    assert len(e.value.issues) == 2
+
+    p = nf_split.plan(root.repo, [{**part, "gone": [dead]}], rename={"kb-o": "o"}, events=False)
+    state = nf_split.build(p)
+    cont, kb = (o["dir"] for o in state["outputs"])
+    assert _subjects(kb) == [nf_split.FURNITURE_SUBJECT, "RELEASE: ontology p 1.1", "DELETE: knowledge o",
+                             "ADD: d knowledge, and kb-o", "ADD: root"]
+    assert _subjects(cont) == ["RELEASE: ontology p 1.1", "ADD: ruff", "DELETE: knowledge o",
+                               "ADD: kb-d knowledge, and kb-o", "ADD: root"]
+    assert _git(kb, "show", "--format=", "--name-only", "HEAD~3").split() == ["knowledge/d.nfx"]
+    assert _git(cont, "show", "--format=", "--name-only", "HEAD~3").split() == ["knowledge/o.nfx"]
+    assert "knowledge/d/1.0" in _git(kb, "tag").split() and "kb-d" not in _git(cont, "tag")
+    assert _git(kb, "cat-file", "-p", "knowledge/d/1.0").splitlines()[-1] == "knowledge/d/1.0 — ADD: d knowledge"
+    assert "split" not in _git(kb, "cat-file", "-p", "namespace/1.0")
+    assert nf_split.verify(p.staging) == []
+
+
 def test_message():
     message = "RELEASE: ontology p 1.1\n\na 1.0 → 1.1 (re-pin p@1.1)\nb 1.0 → 1.1 (re-pin a@1.1)\nfree text\n"
     assert nf_split._message(message, {"b"}, {"p", "a"}) == \

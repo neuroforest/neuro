@@ -87,6 +87,9 @@ class Plan:
     renamed: dict[str, dict[str, str]] = dataclasses.field(default_factory=dict)  # token → {a source stem: the new one}
     commits: int = 0
     shared: int = 0               # source commits that became a commit in more than one output
+    events: bool = True           # False: no event commit at either end - the histories do not speak of the split
+    gone: dict[str, str] = dataclasses.field(default_factory=dict)   # nid of a module the head no longer has → token
+    seen: set[str] = dataclasses.field(default_factory=set)          # every module nid the history holds
 
     def stem_for(self, token: str, stem: str) -> str | None:
         """The stem a module of `token` gets in place of `stem`, at whatever
@@ -120,7 +123,8 @@ def _next_minor(version: str) -> str:
     return f"{major}.{minor + 1}"
 
 
-def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_published=False) -> Plan:
+def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_published=False,
+         rename=None, events=True) -> Plan:
     """What splitting `source` writes. `parts`: one dict per new root -
     `token`, `to`, `modules` (stems, names or nids), optional `name`,
     `description` and `nid` (the namespace's, else minted). Everything not
@@ -131,7 +135,15 @@ def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_
     and `strip_prefix` (every stem that starts with it loses it). That is not
     an event: the new root's history is written as if the module had always
     had that stem - paths, the documents' `name`, tags, and the structured
-    lines of messages.
+    lines of messages. `rename` (`{stem: stem}`) does the same in the
+    continuation, for a stem its modules have or once had.
+
+    A module the head no longer has was made and deleted in the history; it
+    has no owner and stays with the continuation unless a part names its nid
+    under `gone`.
+
+    `events` False leaves the event commits out: the continuation gets none,
+    a new root's furniture arrives in a plain commit.
 
     A source with a remote has been published: its continuation is new
     history, every clone of it stops matching and the remote takes a
@@ -219,8 +231,21 @@ def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_
     outputs[0].modules = [nid for nid in local if nid not in owner]
     by_token = {o.token: o for o in outputs}
 
+    gone: dict[str, str] = {}
+    for part in parts:
+        for key in part.get("gone") or ():
+            try:
+                nid = str(uuid.UUID(str(key)))
+            except ValueError:
+                issues.append(f"{part.get('token')}: gone {key!r} is not a nid")
+                continue
+            if nid in local:
+                issues.append(f"{part.get('token')}: {stems[nid][1]} is still a module - name it under modules")
+            elif gone.setdefault(nid, part.get("token")) != part.get("token"):
+                issues.append(f"gone {nid} is assigned to both {gone[nid]} and {part.get('token')}")
+
     # renames on the way: a rule per part, applied to whatever stem its modules have at each commit
-    rename: dict[str, str] = {}
+    rename_cont, rename = dict(rename or {}), {}
     rules: dict[str, tuple[str, dict[str, str]]] = {}
     nids: dict[str, str] = {}
     for part in parts:
@@ -260,6 +285,17 @@ def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_
             if final.lower() in taken:
                 issues.append(f"{t}: {stems[nid][1]} and {taken[final.lower()]} would both be named {final}")
             taken[final.lower()] = stems[nid][1]
+    kept = {}
+    for old, new in rename_cont.items():
+        if not nf_events.is_stem(new):
+            issues.append(f"{outputs[0].word}: {old} → {new!r} is not a stem")
+            continue
+        kept[str(old).lower()] = new
+        nid = find(old)
+        if nid is not None and nid not in owner:
+            rename[nid] = new
+    if kept:
+        rules[token] = ("", kept)
     stems = {nid: (kind, rename.get(nid, stem)) for nid, (kind, stem) in stems.items()}
 
     # which output pins which: a module depending on one that lives elsewhere
@@ -311,8 +347,13 @@ def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_
         dependencies=tuple(declared.dependencies) + tuple((by_token[t].namespace.nid, "1.0") for t in cont.needs))
 
     branch = source.git("rev-parse", "--abbrev-ref", "HEAD").strip()
-    p = Plan(source, head, branch, token, outputs, owner, stems, rules)
+    p = Plan(source, head, branch, token, outputs, {**owner, **gone}, stems, rules, events=events, gone=gone)
     _count(p)
+    issues = [f"{t}: gone {nid} is in no commit of {source.root}" for nid, t in gone.items() if nid not in p.seen]
+    issues += [f"{outputs[0].word}: no module of it ever had the stem {old}" for old in kept
+               if old not in p.renamed.get(token, {})]
+    if issues:
+        raise SplitRefused(issues)
     return p
 
 
@@ -347,6 +388,8 @@ def _walk(p: Plan):
                 if len(path.parts) == 2 and path.parts[0] in nf_events.KINDS and path.suffix == ".nfx":
                     if blob not in nid_of:
                         nid_of[blob] = (cat.json(blob) or {}).get("nid")
+                        if nid_of[blob]:
+                            p.seen.add(nid_of[blob])
                     t = owners[(path.parts[0], path.stem.lower())] = p.owner.get(nid_of[blob], default)
                     new = p.stem_for(t, path.stem)
                     if new:
@@ -479,6 +522,21 @@ def _restem(text: str, restem: dict[str, str]) -> str:
                      for line in text.split("\n"))
 
 
+def _unprefix(text: str, prefix: str, renamed: dict[str, str]) -> str:
+    """`text` as one output words it: a stem that lost the output's prefix
+    loses it wherever it is written, prose included. Only there - elsewhere
+    `<prefix><stem>` is how another root names that module."""
+    own = [old for old, new in renamed.items() if prefix and old == prefix + new]
+    if not own:
+        return text
+    word = re.compile(r"(?<![A-Za-z0-9-])(" + "|".join(sorted(map(re.escape, own), key=len, reverse=True))
+                      + r")(?![A-Za-z0-9-])")
+    return word.sub(lambda m: renamed[m[1]], text)
+
+
+FURNITURE_SUBJECT = "ADD: hooks and lint configuration"
+
+
 def _retag(name: str, restem: dict[str, str]) -> str:
     parsed = nf_repo.parse_tag(name)
     if parsed is None or parsed[0][1].lower() not in restem:
@@ -553,6 +611,9 @@ def build(p: Plan, progress=None) -> dict:
     latest: dict[str, dict] = {}                     # token → its tree as last written, edits applied
     restem = p.restem                                # complete: `plan` walked the history once
 
+    def worded(t, text):
+        return _unprefix(_restem(text, restem), p.rules.get(t, ("", {}))[0], p.renamed.get(t, {}))
+
     def edited(t, path, blob, edit):
         key = (t, blob, edit)
         if key not in rewritten:
@@ -594,7 +655,7 @@ def build(p: Plan, progress=None) -> dict:
                     "GIT_COMMITTER_NAME": cn, "GIT_COMMITTER_EMAIL": ce, "GIT_COMMITTER_DATE": cd}
             parent = ["-p", heads[t]] if t in heads else []
             new = _run(dirs[t], "commit-tree", tree, *parent, "-F", "-", env=cenv,
-                       data=_restem(_message(message, stems_of[t], theirs), restem)).strip()
+                       data=worded(t, _message(message, stems_of[t], theirs))).strip()
             heads[t] = new
             first.setdefault(t, (new, f"{cn} <{ce}> {cd}"))
             pairs[t].append((sha, new))
@@ -618,11 +679,20 @@ def build(p: Plan, progress=None) -> dict:
         t = out.token
         entries = {**latest[t], **furniture, nfx.NAMESPACE_FILENAME: ("100644", ns_blob[t])}
         tree = _tree(dirs[t], entries, env)
+        subject = nf_events.SplitIn(p.token).subject if p.events else FURNITURE_SUBJECT
         heads[t] = _run(dirs[t], "commit-tree", tree, "-p", heads[t], "-F", "-", env=env,
-                        data=nf_events.SplitIn(p.token).subject + "\n").strip()
+                        data=subject + "\n").strip()
         extra_tags.append((t, "namespace/1.0", first[t][0],
-                           f"namespace/1.0 — the root's declaration, in every commit · split from {cont.word}"))
-    for n, out in enumerate(p.outputs[1:], start=1):
+                           "namespace/1.0 — the root's declaration, in every commit"
+                           + (f" · split from {cont.word}" if p.events else "")))
+    if not p.events and cont.namespace.version != source_ns.version:
+        entries = {**latest[p.token], nfx.NAMESPACE_FILENAME: ("100644", ns_blob[p.token])}
+        pins = ", ".join(by.word for by in p.outputs[1:] if by.token in cont.needs)
+        heads[p.token] = _run(dirs[p.token], "commit-tree", _tree(dirs[p.token], entries, env), "-p", heads[p.token],
+                              "-F", "-", env=env, data=f"UPDATE: namespace pins {pins}\n").strip()
+        name = f"namespace/{cont.namespace.version}"
+        extra_tags.append((p.token, name, heads[p.token], f"{name} — pins {pins}"))
+    for n, out in enumerate(p.outputs[1:] if p.events else (), start=1):
         entries = dict(latest[p.token])
         last = n == len(p.outputs) - 1
         if last and cont.namespace.version != source_ns.version:
@@ -647,7 +717,7 @@ def build(p: Plan, progress=None) -> dict:
         if target is None:
             skipped.append(f"{name}: its commit {commit[:7]} has no counterpart in {p.continuation.word if t == p.token else t}")
             continue
-        name, message = _retag(name, p.renamed.get(t, {})), message and _restem(message, restem)
+        name, message = _retag(name, p.renamed.get(t, {})), message and worded(t, message)
         if tagger is None:
             streams[t] += [b"reset refs/tags/%s\n" % name.encode(), b"from %s\n\n" % target.encode()]
         else:
