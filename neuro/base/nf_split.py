@@ -1,7 +1,7 @@
 """
 Split a `.nf` root's repository into several, history and all.
 
-`nf.move` carries a module's files and leaves its history where it was made.
+`nfx.move` carries a module's files and leaves its history where it was made.
 A split is for the other case - modules spun off into a root that is
 distributed on its own: every commit and tag of those modules goes with them,
 and the root they leave keeps none of it.
@@ -317,7 +317,7 @@ def _tags(repo):
 
 def _tag_owner(name, owners, series, default) -> str:
     """The output a tag belongs to: the one holding its document at the tagged
-    commit - or, for a tag `nf.rename` re-made under a later stem, the one
+    commit - or, for a tag `nfx.rename` re-made under a later stem, the one
     that holds that series where it last existed (`series`)."""
     parsed = nf_repo.parse_tag(name)
     if parsed is None or parsed[0][0] == "namespace":

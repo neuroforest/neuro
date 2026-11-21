@@ -84,7 +84,7 @@ def test_check(root):
     # every change is a release: content changes, version stays at its tag - refused
     root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], extra="edited"))
     assert root.check() == ["ontology/p.nfx: changed since ontology/p/1.0 but still version 1.0 - every change "
-                            "is a release: `nf.release p` (the next is 1.1 or 2.0)"]
+                            "is a release: `nfx.release p` (the next is 1.1 or 2.0)"]
     # the same content written differently is not a change
     root.write("ontology/p.nfx", json.dumps(root.doc(root.p, "p", "1.0", nodes=[root.pn])).replace(", ", ",\n"))
     assert not any("changed since" in i for i in root.check())
@@ -492,9 +492,11 @@ def test_rename_test():
 
 def test_install(root):
     hooks = root.path / ".git" / "hooks"
+    assert root.repo.hooks_state() == "none"
     wrote = root.repo.install(runner="wrapper")
+    assert root.repo.hooks_state() == "current"
     assert {p.split("/")[-1] for p in wrote} == {"pre-commit", "post-commit"}
-    assert (root.path / ".githooks" / "pre-commit").read_text().count("nf.check --root") == 1
+    assert (root.path / ".githooks" / "pre-commit").read_text().count("tree.check --tree") == 1
     assert ".githooks/post-commit" in (hooks / "post-commit").read_text()
     assert _git(root.path, "config", "nf.runner").strip() == "wrapper"
     assert root.repo.install(runner="wrapper") == []

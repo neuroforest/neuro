@@ -24,7 +24,7 @@ into a `Namespace`; every `Entry` of that root carries its
 token and nid. Fatal there: a declaration that is not `type: "namespace"` or
 fails `nfx.namespace_issues`, two roots claiming one token, a namespace nid
 also claimed elsewhere. A missing declaration is a warning and leaves the
-root's entries with `namespace None` until `nf.import` writes one
+root's entries with `namespace None` until `tree.import` writes one
 a legacy root never has one.
 """
 

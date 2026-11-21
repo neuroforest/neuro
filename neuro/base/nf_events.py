@@ -3,7 +3,7 @@ The commit subjects that record a module's rename or move.
 
 History is never copied between `.nf` roots: each rename and each move is one
 commit at each end, and its subject is the record. Three forms, one line each,
-written only by `nf.rename` / `nf.move` and read by `nf.log`:
+written only by `nfx.rename` / `nfx.move` and read by `nfx.log`:
 
     REFACTOR: <kind> <old> → <new>                 a rename inside one root
     MIGRATE: <kind> <stem> → <token>               the source end of a move
@@ -14,7 +14,7 @@ written only by `nf.rename` / `nf.move` and read by `nf.log`:
 standing for the empty token. The two ends of a move are paired by the module's
 nid in the trees either side of the commits, never by the subject alone.
 
-A split (`nf.split`) is the one case where history does travel:
+A split (`tree.split`) is the one case where history does travel:
 a root's repository is partitioned, and each part keeps the whole history of
 its own modules. It leaves one commit at each end too:
 

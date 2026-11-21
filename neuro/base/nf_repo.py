@@ -91,7 +91,7 @@ def parse_tag(name: str) -> tuple[tuple[str, str], str] | None:
 def document_failures(idx, path) -> list[str]:
     """Defects of one `.nfx` document on its own terms: structure, references
     resolved through `idx`, canonical format. Shared by the hook, `ontology.test`
-    and `nf.import`; must run before an import, since MERGE collapses duplicates."""
+    and `tree.import`; must run before an import, since MERGE collapses duplicates."""
     raw = json.loads(Path(path).read_text())
     doc = nfx.Nfx.from_dict(raw)
 
@@ -204,7 +204,7 @@ class RenamePlan:
 
 
 def rename_test(text: str, old: str, new: str) -> str:
-    """Point a module's test at `validators/<new>.py`: the one line `nf.import`
+    """Point a module's test at `validators/<new>.py`: the one line `tree.import`
     wrote (`… / "validators" / "<old>.py"`) - exactly one, else ValueError."""
     line = f'"{plugins._VALIDATORS_DIR}" / "{old}.py"'
     if text.count(line) != 1:
@@ -429,7 +429,7 @@ class Repo:
                     tagged = self._doc_by_nid(tag_name(series, version), rel, doc.get("nid"))
                     if tagged is not None and tagged != doc:
                         issues.append(f"{where}: changed since {tag_name(series, version)} but still version "
-                                      f"{version} - every change is a release: `nf.release {rel.stem or 'namespace'}` "
+                                      f"{version} - every change is a release: `nfx.release {rel.stem or 'namespace'}` "
                                       f"(the next is {' or '.join(sorted(next_versions(latest)))})")
                 continue
             if version in seen:
@@ -834,25 +834,37 @@ class Repo:
         return Path(self.git("rev-parse", "--git-path", "hooks").strip()).resolve()
 
     def shim(self, hook) -> str:
-        task = {"pre-commit": "nf.check", "post-commit": "nf.tag"}[hook]
+        task = {"pre-commit": "tree.check", "post-commit": "tree.tag"}[hook]
         return (
             "#!/bin/sh\n"
             f"{_SENTINEL} - versioned with the root; the code is neuro's `{task}`.\n"
             "# The wrapper is per clone, `git config nf.runner <wrapper>`, and has no default:\n"
             "# a guess could run another line's code (a legacy runner during the parallel period).\n"
-            'runner="$(git config nf.runner)" || { echo "nf hook: nf.runner is not set - run nf.hooks-install" >&2; exit 1; }\n'
+            'runner="$(git config nf.runner)" || { echo "nf hook: nf.runner is not set - run tree.hooks" >&2; exit 1; }\n'
             "# git hands a hook relative paths; the wrapper changes directory before Python starts.\n"
             f"for v in {' '.join(_GIT_PATH_VARS)}; do\n"
             '    eval "p=\\${$v:-}"\n'
             '    case "$p" in ""|/*) ;; *) export "$v=$PWD/$p" ;; esac\n'
             "done\n"
             'root="$(cd "$(dirname "$0")/.." && pwd)"\n'
-            f'exec "$runner" {task} --root "$root"\n'
+            f'exec "$runner" {task} --tree "$root"\n'
         )
 
     def stub(self, hook) -> str:
         target = f"$(git rev-parse --show-toplevel)/{self._path(SHIM_DIR)}/{hook}"
-        return f'#!/bin/sh\n{_SENTINEL} - installed by `nf.hooks-install`.\nexec "{target}" "$@"\n'
+        return f'#!/bin/sh\n{_SENTINEL} - installed by `tree.hooks`.\nexec "{target}" "$@"\n'
+
+    def hooks_state(self) -> str:
+        """`current` when every shim and stub is what `install` would write and
+        the wrapper is named, `none` when no hook is there, else `stale` - a
+        shim from before a task was renamed calls a task that no longer exists."""
+        hooks, shims = self.hooks_dir(), self.root / SHIM_DIR
+        files = [(path, body) for hook in HOOKS
+                 for path, body in ((shims / hook, self.shim(hook)), (hooks / hook, self.stub(hook)))]
+        if not any(path.exists() for path, _ in files):
+            return "none"
+        same = all(path.is_file() and path.read_text(errors="replace") == body for path, body in files)
+        return "current" if same and self.git("config", "--get", "nf.runner", check=False).strip() else "stale"
 
     def install(self, runner) -> list[str]:
         """Write the versioned shims into `<root>/.githooks/`, a stub per hook
@@ -1018,7 +1030,7 @@ def plan_move(source: Repo, target: Repo, key, with_dependants=False, as_="", ot
             tagged = source._doc_by_nid(name, rel, nid)
             # history made before every change was a release can still hold such a module
             if tagged is None or tagged != source.doc_at(head, rel):
-                issues.append(f"{source.show(rel)}: unreleased edits since {name} - `nf.release` it first")
+                issues.append(f"{source.show(rel)}: unreleased edits since {name} - `nfx.release` it first")
         items.append(MoveItem(kind, stem, landed, nid, docs[nid].version, files, released and name, released_at))
 
     namespaces = {ns.nid: ns for ns in idx.namespaces()}
