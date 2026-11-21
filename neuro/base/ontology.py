@@ -74,7 +74,7 @@ class Ontology:
         """
         rows = self._nb.get_data(
             """
-            MATCH (m:OntologyMetadata|KnowledgeMetadata)
+            MATCH (m:Metadata+)
             WHERE $name = "" OR toLower(m.name) = toLower($name)
             RETURN m.nid AS nid, m.type AS type, m.name AS name,
                    m.version AS version, m.description AS description
@@ -119,7 +119,7 @@ class Ontology:
         for meta in targets:
             nodes = self._nb.get_data(
                 """
-                MATCH (:OntologyMetadata|KnowledgeMetadata {nid: $nid})-[:DEFINES]->(n)
+                MATCH (:Metadata+ {nid: $nid})-[:DEFINES]->(n)
                 RETURN DISTINCT n.nid AS nid, labels(n) AS labels,
                        properties(n) AS properties
                 ORDER BY n.nid
@@ -137,13 +137,13 @@ class Ontology:
             # its declared dependencies.
             relationships = self._nb.get_data(
                 """
-                MATCH (m:OntologyMetadata|KnowledgeMetadata {nid: $nid})
-                      -[:DEPENDS_ON*0..]->(dep:OntologyMetadata|KnowledgeMetadata)
+                MATCH (m:Metadata+ {nid: $nid})
+                      -[:DEPENDS_ON*0..]->(dep:Metadata+)
                 WITH m, collect(DISTINCT dep) AS scope
                 MATCH (a)-[r]->(b)
                 WHERE a.nid IS NOT NULL AND b.nid IS NOT NULL
-                  AND NOT (a:OntologyMetadata|KnowledgeMetadata)
-                  AND NOT (b:OntologyMetadata|KnowledgeMetadata)
+                  AND NOT (a:Metadata+)
+                  AND NOT (b:Metadata+)
                   AND ((EXISTS { (m)-[:DEFINES]->(a) }
                         AND any(s IN scope WHERE EXISTS { (s)-[:DEFINES]->(b) }))
                     OR (EXISTS { (m)-[:DEFINES]->(b) }
@@ -157,8 +157,8 @@ class Ontology:
             dependencies = [
                 f"{r['nid']}@{r['version']}" for r in self._nb.get_data(
                     """
-                    MATCH (:OntologyMetadata|KnowledgeMetadata {nid: $nid})
-                          -[:DEPENDS_ON]->(d:OntologyMetadata|KnowledgeMetadata)
+                    MATCH (:Metadata+ {nid: $nid})
+                          -[:DEPENDS_ON]->(d:Metadata+)
                     RETURN d.nid AS nid, d.version AS version ORDER BY d.name
                     """,
                     {"nid": meta["nid"]},

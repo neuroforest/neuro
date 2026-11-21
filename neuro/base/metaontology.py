@@ -422,8 +422,7 @@ class Metaontology:
             """
             MATCH (n)<-[r]-(o)
             WHERE n.nid IN $nids
-              AND NOT any(lbl IN labels(o) WHERE lbl IN
-                    ['OntologyMetadata', 'KnowledgeMetadata'])
+              AND NOT (o:Metadata+)
               AND NOT (o)<-[:DEFINES]-(:OntologyMetadata)
               AND NOT o.nid IN $nids
             RETURN n.nid AS nid, count(r) AS edges

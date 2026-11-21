@@ -94,6 +94,10 @@ def test_neurobase_expand():
     assert nb.expand("MATCH (p:Metadata+), (q:Metadata+) RETURN p") == "MATCH (p:Metadata|KnowledgeMetadata|OntologyMetadata), (q:Metadata|KnowledgeMetadata|OntologyMetadata) RETURN p"
     assert calls == ["Metadata"]
     assert nb.expand("MATCH (p:Metadata) RETURN p") == "MATCH (p:Metadata) RETURN p"
+    # only an expanded query silences "label does not exist"
+    assert nb._expanded("MATCH (p:Metadata) RETURN p") == ("MATCH (p:Metadata) RETURN p", {})
+    assert nb._expanded("MATCH (p:Metadata+) RETURN p") == (
+        "MATCH (p:Metadata|KnowledgeMetadata|OntologyMetadata) RETURN p", {"notifications_disabled_classifications": ["UNRECOGNIZED"]})
     nb.forget_labels()
     nb.expand("MATCH (p:Metadata+) RETURN p")
     assert calls == ["Metadata", "Metadata"]

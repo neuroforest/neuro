@@ -104,13 +104,22 @@ class NeuroBase:
         """Drop the cached class hierarchy - after an ontology import."""
         self.__dict__.pop("_labels", None)
 
+    def _expanded(self, query):
+        """The query to send and the session options for it. An expanded union
+        names every class of a hierarchy, and an abstract one has no instances -
+        Neo4j would warn "label does not exist" on each. That is expected here,
+        so the warning is off for an expanded query and for no other."""
+        expanded = self.expand(query)
+        quiet = {"notifications_disabled_classifications": ["UNRECOGNIZED"]} if expanded != query else {}
+        return expanded, quiet
+
     def run_query(self, query, parameters=None):
         """
         Run a Cypher query and return the result.
         """
-        query = self.expand(query)
+        query, quiet = self._expanded(query)
         try:
-            with self.driver.session() as session:
+            with self.driver.session(**quiet) as session:
                 result = session.run(query, parameters or {})
                 return result
         except neo4j.exceptions.ServiceUnavailable:
@@ -121,10 +130,10 @@ class NeuroBase:
         """
         Run a Cypher query and return the data as a list of records.
         """
-        query = self.expand(query)
+        query, quiet = self._expanded(query)
         logging.debug(f"NeuroBase.get_data query: {query}")
         try:
-            with self.driver.session() as session:
+            with self.driver.session(**quiet) as session:
                 result = session.run(query, parameters or {})
                 records = [record.data() for record in result]
                 return records
@@ -153,14 +162,12 @@ class NeuroBase:
         Every class label at or below `label` in the ontology hierarchy.
 
         Instances carry only their own leaf label, so `MATCH (n:PipelineRun)`
-        matches nothing even though every `*Run` class subclasses it. Resolve
-        the archetype to its concrete labels first:
+        matches nothing even though every `*Run` class subclasses it. In a
+        query, write a plus after the label and let `expand` resolve it:
 
-            labels = nb.descendant_labels("PipelineRun")
-            nb.get_data(
-                "MATCH (n) WHERE any(l IN labels(n) WHERE l IN $labels) "
-                "RETURN n", {"labels": labels}
-            )
+            nb.get_data("MATCH (n:PipelineRun+) RETURN n")
+
+        Call this directly only when the labels themselves are the answer.
 
         Returns `[label]` when the class has no subclasses, and `[]` when no
         such class is declared.
