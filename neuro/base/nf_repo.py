@@ -135,6 +135,37 @@ def document_failures(idx, path) -> list[str]:
     return failures
 
 
+def namespace_failures(idx, path) -> list[str]:
+    """Defects of a root's `namespace.nfx`: its form, and its pins on the
+    namespaces `idx` knows. A declaration has no schema - this is all of it."""
+    raw = json.loads(Path(path).read_text())
+    ns = nfx.Nfx.from_dict(raw)
+    failures = [f"missing required top-level field {f!r}" for f in nfx.missing_fields(ns)]
+    failures += nfx.namespace_issues(ns)
+    lint = nfx.lint_format(raw)
+    failures += [f"{k['where']} key order {k['keys']} not canonical" for k in lint["key_order"]]
+    failures += [f"{u['where']} has unknown keys {u['keys']}" for u in lint["unknown_keys"]]
+    declared = {n.nid: n for n in idx.namespaces()}
+    for dep, pin in ns.dependencies:
+        if dep not in declared:
+            failures.append(f"pins namespace {dep}@{pin}, which no root declares")
+        elif declared[dep].version != pin:
+            failures.append(f"pins {declared[dep].token or '∅'}@{pin}, it is {declared[dep].version}")
+    return failures
+
+
+def module_test_path(path, roots) -> Path | None:
+    """The pytest file of a module, if it has one: `tests/test_<stem>.py` in a
+    `.nf` root, `test_validators.py` beside the document in a legacy one."""
+    path = Path(path)
+    root = plugins.registry_root_of(path, roots)
+    if root is not None and plugins.is_consolidated(root):
+        candidate = root / "tests" / f"test_{path.stem}.py"
+    else:
+        candidate = path.parent / "test_validators.py"
+    return candidate if candidate.is_file() else None
+
+
 def _labels_split(text: str) -> list[int]:
     return [text[:m.start()].count("\n") + 1 for m in _LABELS_SPLIT.finditer(text)]
 
@@ -373,20 +404,7 @@ class Repo:
         ns_rel = Path(nfx.NAMESPACE_FILENAME)
         ns_path = staged / ns_rel
         if ns_rel in touched and ns_path.is_file():
-            raw = json.loads(ns_path.read_text())
-            ns = nfx.Nfx.from_dict(raw)
-            where = self.show(ns_rel)
-            issues += [f"{where}: missing required top-level field {f!r}" for f in nfx.missing_fields(ns)]
-            issues += [f"{where}: {i}" for i in nfx.namespace_issues(ns)]
-            lint = nfx.lint_format(raw)
-            issues += [f"{where}: {k['where']} key order {k['keys']} not canonical" for k in lint["key_order"]]
-            issues += [f"{where}: {u['where']} has unknown keys {u['keys']}" for u in lint["unknown_keys"]]
-            declared = {n.nid: n for n in idx.namespaces()}
-            for dep, pin in ns.dependencies:
-                if dep not in declared:
-                    issues.append(f"{where}: pins namespace {dep}@{pin}, which no root declares")
-                elif declared[dep].version != pin:
-                    issues.append(f"{where}: pins {declared[dep].token or '∅'}@{pin}, it is {declared[dep].version}")
+            issues += [f"{self.show(ns_rel)}: {f}" for f in namespace_failures(idx, ns_path)]
 
         # versions: every committed change to a document is a release - the next
         # version after its latest tag, nothing else.
@@ -573,12 +591,17 @@ class Repo:
                     out.append(self._path(p))
         return out
 
-    def release(self, targets, major=False, others=(), message=None) -> tuple[str, list["Step"], list[str]]:
+    def release(self, targets, major=False, others=(), message=None,
+                gate=None) -> tuple[str, list["Step"], list[str]]:
         """Write, validate, commit and tag the release `plan_release` computes -
         one commit, one annotated tag per document. An edited validators or
         test file of a released module goes into the same commit, and `hash`
         is rewritten to match the validators. Refuses an index holding
-        anything else; on a refused verdict the worktree and index are put back."""
+        anything else; on a refused verdict the worktree and index are put back.
+
+        `gate(paths) -> issues` is asked once the documents are written and
+        the git verdict holds, before the commit: what git cannot judge - the
+        schema and the values, tested in a base. Any issue refuses."""
         steps = self.plan_release(targets, major, others)
         paths = [self._path(s.rel.as_posix()) for s in steps] + self._companions([s.rel for s in steps])
         staged = set(self.git("diff", "--cached", "--name-only").split())
@@ -593,6 +616,15 @@ class Repo:
         if verdict.issues:
             self._restore(saved, paths)
             raise ReleaseRefused(verdict.issues)
+        if gate is not None:
+            try:
+                failed = gate([self.root / s.rel for s in steps])
+            except BaseException:
+                self._restore(saved, paths)
+                raise
+            if failed:
+                self._restore(saved, paths)
+                raise ReleaseRefused(failed)
         seeds = [s for s in steps if s.seed]
         kinds = {s.type for s in seeds}
         subject = message or ("RELEASE: " + (f"{kinds.pop()} " if len(kinds) == 1 else "")

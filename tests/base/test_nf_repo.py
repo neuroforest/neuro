@@ -231,6 +231,20 @@ def test_release_refused(root):
     assert any(i.startswith("ontology/a.nfx: unresolved") for i in e.value.issues)
     assert (root.path / "ontology/p.nfx").read_text() == before
     assert _git(root.path, "diff", "--cached", "--name-only") == ""
+    # the gate sees the written release and refuses it: nothing committed, all put back
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.0", nodes=[root.pn], extra="edited"), add=False)
+    before, head, seen = (root.path / "ontology/p.nfx").read_text(), _git(root.path, "rev-parse", "HEAD"), []
+
+    def gate(paths):
+        seen.extend((p.relative_to(root.path).as_posix(), json.loads(p.read_text())["version"]) for p in paths)
+        return ["ontology/p.nfx: disconnected"]
+
+    with pytest.raises(nf_repo.ReleaseRefused) as e:
+        root.repo.release(["p"], gate=gate)
+    assert e.value.issues == ["ontology/p.nfx: disconnected"]
+    assert seen == [("ontology/p.nfx", "1.1"), ("ontology/a.nfx", "1.1"), ("knowledge/b.nfx", "1.1")]
+    assert (root.path / "ontology/p.nfx").read_text() == before
+    assert _git(root.path, "rev-parse", "HEAD") == head and _git(root.path, "diff", "--cached", "--name-only") == ""
     # a foreign staged file blocks the release
     root.write("ruff.toml", "[lint]\n")
     with pytest.raises(ValueError, match="already holds ruff.toml"):
