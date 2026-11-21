@@ -111,6 +111,32 @@ def test_swap(root):
         ("kb", "MIGRATE: split ← root", ""), ("", "RELEASE: ontology p 1.1", "1.1"), ("", "ADD: root", "1.0")]
 
 
+def test_rename(root):
+    import json
+
+    to = _released(root)
+    to.parent.mkdir()
+    part = {"token": "kb", "to": to, "modules": ["b"], "nid": "0d1f0f0a-6c0e-4b7e-9d0a-3a3b1f1f7a11"}
+    with pytest.raises(nf_split.SplitRefused) as e:
+        nf_split.plan(root.repo, [{**part, "rename": {"b": "Not A Stem", "a": "x"}, "nid": "nope"}])
+    assert len(e.value.issues) == 3
+    # the new root's history is written as if the module had always had the stem
+    p = nf_split.plan(root.repo, [{**part, "strip_prefix": "x-", "rename": {"b": "bee"}}])
+    assert p.restem == {"b": "bee"} and p.outputs[1].namespace.nid == part["nid"]
+    state = nf_split.build(p)
+    cont, kb = (o["dir"] for o in state["outputs"])
+    assert state["unedited"] == [] and state["outputs"][1]["renamed"] == {"b": "bee"}
+    assert sorted(_git(kb, "ls-files").split()) == ["knowledge/bee.nfx", "namespace.nfx", "ruff.toml"]
+    assert _git(kb, "tag").split() == ["knowledge/bee/1.0", "knowledge/bee/1.1", "namespace/1.0"]
+    assert [json.loads(_git(kb, "show", f"{rev}:knowledge/bee.nfx"))["name"] for rev in ("HEAD", "HEAD~2")] == ["bee"] * 2
+    assert _git(kb, "log", "-1", "--format=%b", "HEAD~1").strip() == "bee 1.0 → 1.1 (re-pin a@1.1)"
+    assert _git(kb, "cat-file", "-p", "knowledge/bee/1.1").splitlines()[-1].startswith("knowledge/bee/1.1")
+    assert _git(cont, "log", "-1", "--format=%b").strip() == "knowledge bee"
+    assert nf_split.verify(p.staging) == []
+    assert nf_split._restem("RELEASE: ontology b-x 1.1 - re-pin b 1.1\nabout b\n", {"b": "bee"}) == \
+        "RELEASE: ontology b-x 1.1 - re-pin bee 1.1\nabout b\n"
+
+
 def test_message():
     message = "RELEASE: ontology p 1.1\n\na 1.0 → 1.1 (re-pin p@1.1)\nb 1.0 → 1.1 (re-pin a@1.1)\nfree text\n"
     assert nf_split._message(message, {"b"}, {"p", "a"}) == \

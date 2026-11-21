@@ -37,7 +37,7 @@ import subprocess
 import uuid
 from pathlib import Path, PurePosixPath
 
-from neuro.base import nf_events, nf_history, nf_repo, nfx, plugins
+from neuro.base import nf_events, nf_history, nf_import, nf_repo, nfx, plugins
 from neuro.base.index import NfxIndex
 from neuro.utils import exceptions
 
@@ -82,9 +82,26 @@ class Plan:
     token: str                    # the source's, and the continuation's
     outputs: list[Output]         # the continuation first
     owner: dict[str, str]         # module nid → output token; absent: the continuation
-    stems: dict[str, tuple[str, str]]  # nid → (kind, stem) at the head
+    stems: dict[str, tuple[str, str]]  # nid → (kind, stem) at the outputs' heads
+    rules: dict[str, tuple[str, dict[str, str]]] = dataclasses.field(default_factory=dict)  # token → (prefix, {stem: new})
+    renamed: dict[str, dict[str, str]] = dataclasses.field(default_factory=dict)  # token → {a source stem: the new one}
     commits: int = 0
     shared: int = 0               # source commits that became a commit in more than one output
+
+    def stem_for(self, token: str, stem: str) -> str | None:
+        """The stem a module of `token` gets in place of `stem`, at whatever
+        commit it had it; None when it keeps it."""
+        prefix, explicit = self.rules.get(token, ("", {}))
+        low = stem.lower()
+        if low in explicit:
+            return explicit[low]
+        if prefix and low.startswith(prefix) and low != prefix:
+            return low[len(prefix):]
+        return None
+
+    @property
+    def restem(self) -> dict[str, str]:
+        return {old: new for by in self.renamed.values() for old, new in by.items()}
 
     @property
     def continuation(self) -> Output:
@@ -105,9 +122,16 @@ def _next_minor(version: str) -> str:
 
 def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_published=False) -> Plan:
     """What splitting `source` writes. `parts`: one dict per new root -
-    `token`, `to`, `modules` (stems, names or nids), optional `name` and
-    `description`. Everything not named stays in the continuation. Reads the
-    repository; writes nothing. Raises `SplitRefused` with every reason.
+    `token`, `to`, `modules` (stems, names or nids), optional `name`,
+    `description` and `nid` (the namespace's, else minted). Everything not
+    named stays in the continuation. Reads the repository; writes nothing.
+    Raises `SplitRefused` with every reason.
+
+    A part may rename its modules on the way - `rename` (`{module: stem}`)
+    and `strip_prefix` (every stem that starts with it loses it). That is not
+    an event: the new root's history is written as if the module had always
+    had that stem - paths, the documents' `name`, tags, and the structured
+    lines of messages.
 
     A source with a remote has been published: its continuation is new
     history, every clone of it stops matching and the remote takes a
@@ -195,6 +219,49 @@ def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_
     outputs[0].modules = [nid for nid in local if nid not in owner]
     by_token = {o.token: o for o in outputs}
 
+    # renames on the way: a rule per part, applied to whatever stem its modules have at each commit
+    rename: dict[str, str] = {}
+    rules: dict[str, tuple[str, dict[str, str]]] = {}
+    nids: dict[str, str] = {}
+    for part in parts:
+        t = part.get("token")
+        out = by_token.get(t)
+        if out is None or out is outputs[0]:
+            continue
+        if part.get("nid"):
+            try:
+                nids[t] = str(uuid.UUID(str(part["nid"])))
+            except ValueError:
+                issues.append(f"{t}: nid {part['nid']!r} is not a UUID")
+        wanted = {}
+        prefix = part.get("strip_prefix") or ""
+        for nid in out.modules if prefix else ():
+            stem = stems[nid][1]
+            if stem.startswith(prefix) and stem != prefix:
+                wanted[nid] = stem[len(prefix):]
+        for key, new in (part.get("rename") or {}).items():
+            nid = find(key)
+            if nid is None or owner.get(nid) != t:
+                issues.append(f"{t}: rename names {key!r}, which is not one of its modules")
+            else:
+                wanted[nid] = new
+        for nid, new in wanted.items():
+            if not nf_events.is_stem(new):
+                issues.append(f"{t}: {stems[nid][1]} → {new!r} is not a stem")
+            elif new != stems[nid][1]:
+                rename[nid] = new
+        explicit = {stems[find(key)][1].lower(): new for key, new in (part.get("rename") or {}).items()
+                    if find(key) in rename}
+        if prefix or explicit:
+            rules[t] = (prefix, explicit)
+        taken: dict[str, str] = {}
+        for nid in out.modules:
+            final = rename.get(nid, stems[nid][1])
+            if final.lower() in taken:
+                issues.append(f"{t}: {stems[nid][1]} and {taken[final.lower()]} would both be named {final}")
+            taken[final.lower()] = stems[nid][1]
+    stems = {nid: (kind, rename.get(nid, stem)) for nid, (kind, stem) in stems.items()}
+
     # which output pins which: a module depending on one that lives elsewhere
     for nid, doc in docs.items():
         mine = owner.get(nid, token)
@@ -230,7 +297,8 @@ def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_
     cont = outputs[0]
     version = _next_minor(declared.version) if cont.needs else declared.version
     for out in outputs[1:]:
-        out.namespace = nfx.Nfx(type=nfx.NAMESPACE_TYPE, nid=str(uuid.uuid4()), version="1.0", name=out.name,
+        out.namespace = nfx.Nfx(type=nfx.NAMESPACE_TYPE, nid=nids.get(out.token) or str(uuid.uuid4()),
+                                version="1.0", name=out.name,
                                 description=out.description or f"Split from {declared.name}",
                                 namespace=out.token, dependencies=())
     for out in outputs[1:]:
@@ -243,7 +311,7 @@ def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_
         dependencies=tuple(declared.dependencies) + tuple((by_token[t].namespace.nid, "1.0") for t in cont.needs))
 
     branch = source.git("rev-parse", "--abbrev-ref", "HEAD").strip()
-    p = Plan(source, head, branch, token, outputs, owner, stems)
+    p = Plan(source, head, branch, token, outputs, owner, stems, rules)
     _count(p)
     return p
 
@@ -253,10 +321,16 @@ def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_
 
 def _walk(p: Plan):
     """Every source commit, oldest first, with its tree sorted by output:
-    `(sha, {token: {path: (mode, blob)}}, {(kind, stem): token})`. A module's
-    `.nfx` is assigned by its nid, its validators and test by its stem;
-    everything else - the declaration, the hooks, the furniture - stays with
-    the continuation."""
+    `(sha, {token: {path: (mode, blob)}}, {(kind, stem): token}, edits)`. A
+    module's `.nfx` is assigned by its nid, its validators and test by its
+    stem; everything else - the declaration, the hooks, the furniture - stays
+    with the continuation.
+
+    A renamed module's files sit at their new paths, under the source's blobs.
+    `edits` - `{token: {path: (what, old, new)}}` - names the ones whose
+    content must follow (`nfx`: the document's name; `test`: the validators
+    path in it). `owners` keeps the source's stems: tags and messages are read
+    in those."""
     repo, default = p.source, p.token
     cat = nf_history._Cat(repo.top)
     nid_of: dict[str, str | None] = {}
@@ -268,24 +342,44 @@ def _walk(p: Plan):
                 mode, _type, blob = meta.split()
                 entries.append((mode, blob, PurePosixPath(path)))
             owners: dict[tuple[str, str], str] = {}
+            here: dict[str, str] = {}                      # this commit's stem → the one it gets
             for _mode, blob, path in entries:
                 if len(path.parts) == 2 and path.parts[0] in nf_events.KINDS and path.suffix == ".nfx":
                     if blob not in nid_of:
                         nid_of[blob] = (cat.json(blob) or {}).get("nid")
-                    owners[(path.parts[0], path.stem.lower())] = p.owner.get(nid_of[blob], default)
+                    t = owners[(path.parts[0], path.stem.lower())] = p.owner.get(nid_of[blob], default)
+                    new = p.stem_for(t, path.stem)
+                    if new:
+                        here[path.stem.lower()] = new
+                        p.renamed.setdefault(t, {})[path.stem.lower()] = new
             by_stem = {stem: t for (_kind, stem), t in owners.items()}
             trees: dict[str, dict[str, tuple[str, str]]] = {o.token: {} for o in p.outputs}
+            edits: dict[str, dict[str, tuple[str, str, str]]] = {o.token: {} for o in p.outputs}
             for mode, blob, path in entries:
-                t = default
+                t, edit = default, None
                 if len(path.parts) == 2 and path.suffix == ".nfx" and path.parts[0] in nf_events.KINDS:
                     t = owners[(path.parts[0], path.stem.lower())]
+                    if path.stem.lower() in here:
+                        edit = ("nfx", path.stem, here[path.stem.lower()])
+                        path = path.with_name(f"{edit[2]}.nfx")
                 elif len(path.parts) == 2 and path.suffix == ".py":
                     if path.parts[0] == plugins._VALIDATORS_DIR:
                         t = by_stem.get(path.stem.lower(), default)
+                        if path.stem.lower() in here:
+                            path = path.with_name(f"{here[path.stem.lower()]}.py")
                     elif path.parts[0] == "tests" and path.stem.startswith("test_"):
-                        t = by_stem.get(path.stem[5:].lower(), default)
+                        stem = path.stem[5:]
+                        t = by_stem.get(stem.lower(), default)
+                        if stem.lower() in here:
+                            edit = ("test", stem, here[stem.lower()])
+                            path = path.with_name(f"test_{edit[2]}.py")
+                if str(path) in trees[t]:
+                    raise SplitRefused([f"{sha[:7]}: two files would be {path} in "
+                                        f"{t or nf_events.ROOT_WORD} - the rename collides in the history"])
                 trees[t][str(path)] = (mode, blob)
-            yield sha, trees, owners
+                if edit:
+                    edits[t][str(path)] = edit
+            yield sha, trees, owners, edits
     finally:
         cat.close()
 
@@ -332,7 +426,7 @@ def _count(p: Plan) -> None:
     commits = {o.token: 0 for o in p.outputs}
     owners_at, series = {}, {}
     p.commits = p.shared = 0
-    for sha, trees, owners in _walk(p):
+    for sha, trees, owners, _edits in _walk(p):
         changed = _changed(trees, previous) or [p.token]
         for t in changed:
             commits[t] += 1
@@ -367,6 +461,29 @@ def _message(message: str, mine: set[str], theirs: set[str]) -> str:
         kept.append(line)
     body = "\n".join(kept).strip("\n")
     return f"{subject}\n\n{body}\n" if body else f"{subject}\n"
+
+
+_STRUCTURED = re.compile(r"^(?:[A-Z]+: )?(?:ontology|knowledge|metaontology)[ /]")
+
+
+def _restem(text: str, restem: dict[str, str]) -> str:
+    """`text` with the renamed stems replaced, in the lines that have a known
+    form - `VERB: <kind> <stem> …` and a tag's `<kind>/<stem>/<version> …`.
+    Free prose is left as it was written."""
+    if not restem:
+        return text
+    word = re.compile(r"(?<![A-Za-z0-9-])(" + "|".join(sorted(map(re.escape, restem), key=len, reverse=True))
+                      + r")(?![A-Za-z0-9-])")
+    return "\n".join(word.sub(lambda m: restem[m[1]], line)
+                     if _STRUCTURED.match(line) or _STEP_LINE.match(line) else line
+                     for line in text.split("\n"))
+
+
+def _retag(name: str, restem: dict[str, str]) -> str:
+    parsed = nf_repo.parse_tag(name)
+    if parsed is None or parsed[0][1].lower() not in restem:
+        return name
+    return nf_repo.tag_name((parsed[0][0], restem[parsed[0][1].lower()]), parsed[1])
 
 
 def _run(cwd, *args, env=None, data=None) -> str:
@@ -430,8 +547,33 @@ def build(p: Plan, progress=None) -> dict:
     at: dict[str, dict[str, str | None]] = {t: {} for t in dirs}
     pairs: dict[str, list[tuple[str, str]]] = {t: [] for t in dirs}
     owners_at, series = {}, {}
+    rewritten: dict[tuple, str] = {}                 # (token, blob, edit) → the blob written in its place
+    blobs: dict[str, dict[str, str]] = {t: {} for t in dirs}   # token → {new blob: the source's}
+    unedited: list[str] = []
+    latest: dict[str, dict] = {}                     # token → its tree as last written, edits applied
+    restem = p.restem                                # complete: `plan` walked the history once
+
+    def edited(t, path, blob, edit):
+        key = (t, blob, edit)
+        if key not in rewritten:
+            what, old, new = edit
+            raw = subprocess.run(["git", "cat-file", "blob", blob], cwd=repo.top, env=env, capture_output=True,
+                                 check=True).stdout
+            try:
+                out = (nf_import.rename_to_stem(raw, new)[0] if what == "nfx"
+                       else nf_repo.rename_test(raw.decode(), old, new).encode())
+            except ValueError as e:
+                unedited.append(f"{path} ({blob[:7]}): {e}")
+                out = raw
+            r = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=dirs[t], env=env, input=out,
+                               capture_output=True, check=True)
+            rewritten[key] = r.stdout.decode().strip()
+            if rewritten[key] != blob:
+                blobs[t][rewritten[key]] = blob
+        return rewritten[key]
+
     shas = repo.git("rev-list", "--reverse", p.head).split()
-    for i, (sha, trees, owners) in enumerate(_walk(p), start=1):
+    for i, (sha, trees, owners, edits) in enumerate(_walk(p), start=1):
         owners_at[sha] = owners
         series.update(owners)
         an, ae, ad, cn, ce, cd, message = meta[sha]
@@ -441,6 +583,9 @@ def build(p: Plan, progress=None) -> dict:
             stems_of[t].add(stem)
         for t in changed:
             entries = dict(trees[t])
+            for path, edit in edits[t].items():
+                entries[path] = (entries[path][0], edited(t, path, entries[path][1], edit))
+            latest[t] = dict(entries)
             if t != p.token:
                 entries[nfx.NAMESPACE_FILENAME] = ("100644", ns_blob[t])
             tree = _tree(dirs[t], entries, env)
@@ -449,7 +594,7 @@ def build(p: Plan, progress=None) -> dict:
                     "GIT_COMMITTER_NAME": cn, "GIT_COMMITTER_EMAIL": ce, "GIT_COMMITTER_DATE": cd}
             parent = ["-p", heads[t]] if t in heads else []
             new = _run(dirs[t], "commit-tree", tree, *parent, "-F", "-", env=cenv,
-                       data=_message(message, stems_of[t], theirs)).strip()
+                       data=_restem(_message(message, stems_of[t], theirs), restem)).strip()
             heads[t] = new
             first.setdefault(t, (new, f"{cn} <{ce}> {cd}"))
             pairs[t].append((sha, new))
@@ -471,14 +616,14 @@ def build(p: Plan, progress=None) -> dict:
     extra_tags = []                                # (token, name, commit, message)
     for out in p.outputs[1:]:
         t = out.token
-        entries = {**previous[t], **furniture, nfx.NAMESPACE_FILENAME: ("100644", ns_blob[t])}
+        entries = {**latest[t], **furniture, nfx.NAMESPACE_FILENAME: ("100644", ns_blob[t])}
         tree = _tree(dirs[t], entries, env)
         heads[t] = _run(dirs[t], "commit-tree", tree, "-p", heads[t], "-F", "-", env=env,
                         data=nf_events.SplitIn(p.token).subject + "\n").strip()
         extra_tags.append((t, "namespace/1.0", first[t][0],
                            f"namespace/1.0 — the root's declaration, in every commit · split from {cont.word}"))
     for n, out in enumerate(p.outputs[1:], start=1):
-        entries = dict(previous[p.token])
+        entries = dict(latest[p.token])
         last = n == len(p.outputs) - 1
         if last and cont.namespace.version != source_ns.version:
             entries[nfx.NAMESPACE_FILENAME] = ("100644", ns_blob[p.token])
@@ -502,6 +647,7 @@ def build(p: Plan, progress=None) -> dict:
         if target is None:
             skipped.append(f"{name}: its commit {commit[:7]} has no counterpart in {p.continuation.word if t == p.token else t}")
             continue
+        name, message = _retag(name, p.renamed.get(t, {})), message and _restem(message, restem)
         if tagger is None:
             streams[t] += [b"reset refs/tags/%s\n" % name.encode(), b"from %s\n\n" % target.encode()]
         else:
@@ -533,14 +679,16 @@ def build(p: Plan, progress=None) -> dict:
                                                        check=False).splitlines() if " " in line]
     state = {
         "source": str(repo.root), "head": p.head, "branch": p.branch, "namespace": source_ns.nid,
-        "runner": runner, "remotes": remotes, "skipped_tags": skipped,
+        "runner": runner, "remotes": remotes, "skipped_tags": skipped, "unedited": unedited,
         "outputs": [{"token": o.token, "word": o.word, "dir": str(dirs[o.token]),
                      "to": str(o.to) if o.to else str(repo.root), "head": heads[o.token],
                      "modules": sorted(p.stems[n][1] for n in o.modules),
-                     "pairs": f"{o.word}.pairs"} for o in p.outputs],
+                     "renamed": dict(sorted(p.renamed.get(o.token, {}).items())),
+                     "pairs": f"{o.word}.pairs", "blobs": f"{o.word}.blobs"} for o in p.outputs],
     }
     for o in p.outputs:
         (p.staging / f"{o.word}.pairs").write_text("".join(f"{old} {new}\n" for old, new in pairs[o.token]))
+        (p.staging / f"{o.word}.blobs").write_text("".join(f"{new} {old}\n" for new, old in blobs[o.token].items()))
     (p.staging / STATE).write_text(json.dumps(state, indent=2) + "\n")
     return state
 
@@ -569,6 +717,21 @@ def verify(staging, others=()) -> list[str]:
     cont = outputs[0]["word"]
     issues = []
 
+    # a renamed module is read back under the source's path and blob
+    back, restem = {}, {}
+    for o in outputs:
+        renamed = o.get("renamed") or {}
+        restem.update(renamed)
+        paths = {}
+        for old, new in renamed.items():
+            for kind in nf_events.KINDS:
+                paths[f"{kind}/{new}.nfx"] = f"{kind}/{old}.nfx"
+            paths[f"{plugins._VALIDATORS_DIR}/{new}.py"] = f"{plugins._VALIDATORS_DIR}/{old}.py"
+            paths[f"tests/test_{new}.py"] = f"tests/test_{old}.py"
+        blobs = dict(line.split() for line in (staging / o["blobs"]).read_text().splitlines()) if o.get("blobs") else {}
+        back[o["word"]] = (paths, blobs)
+    issues += [f"left as it was, the rename could not be written into it: {u}" for u in state.get("unedited", ())]
+
     cache: dict[tuple[str, str], dict[str, str]] = {}
     position = {o["word"]: 0 for o in outputs}
     pairs = {o["word"]: [line.split() for line in (staging / o["pairs"]).read_text().splitlines()] for o in outputs}
@@ -585,7 +748,9 @@ def verify(staging, others=()) -> list[str]:
             if current[w] is None:
                 continue
             if (w, current[w]) not in cache:
-                cache[(w, current[w])] = _ls(o["dir"], current[w])
+                paths, blobs = back[w]
+                cache[(w, current[w])] = {paths.get(path, path): blobs.get(blob, blob)
+                                          for path, blob in _ls(o["dir"], current[w]).items()}
             for path, blob in cache[(w, current[w])].items():
                 if w != cont and path == nfx.NAMESPACE_FILENAME:
                     continue
@@ -604,11 +769,25 @@ def verify(staging, others=()) -> list[str]:
             issues.append(f"{o['word']}: {len(pairs[o['word']]) - position[o['word']]} commit(s) come from no source commit")
 
     want = set(_run(source, "tag").split()) - {s.split(":", 1)[0] for s in state["skipped_tags"]}
-    have: dict[str, list[str]] = {}
-    known = set(nf_history.check_tags(source))   # what the source already had wrong is not the split's doing
+    have: dict[str, list[str]] = {}                # by the source's name for the tag
+    # what the source already had wrong is not the split's doing
+    known = set(nf_history.check_tags(source))
+    if restem:
+        word = re.compile(r"(?<![A-Za-z0-9-])(" + "|".join(sorted(map(re.escape, restem), key=len, reverse=True))
+                          + r")(?![A-Za-z0-9-])")
+        known |= {word.sub(lambda m: restem[m[1]], k) for k in known}
     for o in outputs:
+        renamed = o.get("renamed") or {}
+        olds: dict[str, list[str]] = {}
+        for old, new in renamed.items():
+            olds.setdefault(new, []).append(old)
         for name in _run(o["dir"], "tag").split():
-            have.setdefault(name, []).append(o["word"])
+            parsed = nf_repo.parse_tag(name)
+            # a renamed series is read back under the stem the source has that tag for
+            names = [n for n in (nf_repo.tag_name((parsed[0][0], old), parsed[1])
+                                 for old in olds.get(parsed[0][1], ())) if n in want] if parsed else []
+            for n in names or [name]:
+                have.setdefault(n, []).append(o["word"])
         issues += [f"{o['word']}: {i}" for i in nf_history.check_tags(o["dir"]) if i not in known]
     issues += [f"tag {name} is in no output" for name in sorted(want - set(have))]
     issues += [f"tag {name} is in {', '.join(where)}" for name, where in sorted(have.items())
