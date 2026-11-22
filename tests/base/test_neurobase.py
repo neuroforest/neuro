@@ -226,14 +226,45 @@ class TestOntologyExport:
         nb_meta.metaontology.import_nfx(idx.metaontology_path, index=idx)
         assert namespace(meta_nid) == idx.namespace_for(meta_nid) != None  # noqa: E711
 
+    def test_import_follows_a_dependency_to_its_new_tree(self, nb_meta, tmp_path):
+        """A moved module keeps its version, so only its namespace tells.
+
+        `core` is loaded from tree `a`, then moved to tree `b` unchanged. An
+        import that merely depends on it does not re-import it - the version
+        still satisfies the pin - and must still correct the recorded tree.
+        """
+        import shutil
+
+        from neuro.base.index import OntologyIndex
+        from neuro.utils.internal_utils import get_path
+        app = get_path("app") / ".nf"
+        a = self._tree(tmp_path, "alpha", "a", self.CORE, self.CORE_NODE, name="core")
+        nb_meta.metaontology.import_nfx(a / "ontology" / "core.nfx", index=OntologyIndex(app, a))
+
+        b = self._tree(tmp_path, "beta", "b", self.DEP, self.DEP_NODE, name="dep")
+        shutil.move(a / "ontology" / "core.nfx", b / "ontology" / "core.nfx")
+        dep = self._write(
+            b / "ontology", "dep", self.DEP, "1.0",
+            [{"nid": self.DEP_NODE, "labels": ["OntologyNode"], "properties": {"label": "Dep"}}],
+            [{"from": self.DEP_NODE, "to": self.CORE_NODE, "type": "SUBCLASS_OF"}],
+            [f"{self.CORE}@1.0"],
+        )
+        nb_meta.metaontology.import_nfx(dep, index=OntologyIndex(app, a, b))
+        rows = nb_meta.get_data(
+            "MATCH (m:OntologyMetadata) WHERE m.nid IN $nids RETURN m.name AS name, m.namespace AS ns",
+            {"nids": [self.CORE, self.DEP]})
+        assert {r["name"]: r["ns"] for r in rows} == {"core": "b", "dep": "b"}
+
     def test_export_qualifies_a_name_trees_share(self, nb_meta, tmp_path):
         """Two trees may each hold a `shared`: neither file overwrites the other."""
         from neuro.utils import exceptions
-        self._two_trees(nb_meta, tmp_path)
+        idx = self._two_trees(nb_meta, tmp_path)
         out = tmp_path / "out"
         docs = nb_meta.ontology.export_nfx(out)
         assert sorted(d.nid for d in docs if d.name == "shared") == sorted([self.CORE, self.DEP])
-        assert {p.name for p in out.glob("*.nfx")} == {"metaontology.nfx", "a-shared.nfx", "root-shared.nfx"}
+        # the metaontology was only a dependency of those imports, and has its tree's token too
+        meta = f"{idx.namespace_for(self._meta_pin().split('@')[0])}-metaontology.nfx"
+        assert {p.name for p in out.glob("*.nfx")} == {meta, "a-shared.nfx", "root-shared.nfx"}
         with pytest.raises(exceptions.AmbiguousModule) as e:
             nb_meta.ontology.export_nfx(tmp_path / "x.nfx", name="shared")
         assert e.value.candidates == ["a-shared", "root-shared"]

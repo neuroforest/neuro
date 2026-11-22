@@ -320,7 +320,7 @@ class Metaontology:
             data = self._nb.get_data(
                 """
                 MATCH (m:OntologyMetadata {nid: $nid})
-                RETURN m.name as name, m.version as version
+                RETURN m.name as name, m.version as version, m.namespace as namespace
                 """,
                 {"nid": dep_nid},
             )
@@ -331,6 +331,11 @@ class Metaontology:
                 if index:
                     dep_path = index.resolve(dep_nid)
                     if dep_path:
+                        # A module moved to another tree keeps its version, so it is
+                        # not re-imported here - but its namespace is no longer true.
+                        namespace = index.namespace_for(dep_nid)
+                        if namespace != data[0]["namespace"]:
+                            self._nb.metadata.set_namespace("OntologyMetadata", dep_nid, namespace)
                         sub_deps = nfx.read(dep_path).dependencies
                         self._import_dependencies(sub_deps, index, on_import, _depth=_depth + 1)
                 continue
