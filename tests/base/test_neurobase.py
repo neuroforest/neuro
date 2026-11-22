@@ -225,5 +225,5 @@ class TestOntologyExport:
         before = (nb_meta.get_data(nodes_q), nb_meta.get_data(edges_q))
         nb_meta.ontology.clear(confirm=True)
         assert nb_meta.ontology.count() == 0
-        nb_meta.metaontology.import_nfx(out / "Metaontology.nfx")
+        nb_meta.metaontology.import_nfx(out / "metaontology.nfx")
         assert (nb_meta.get_data(nodes_q), nb_meta.get_data(edges_q)) == before
