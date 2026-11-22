@@ -190,6 +190,17 @@ class Step:
         return f"{self.name} {self.old} → {self.new} ({tail}{'; carries unreleased edits' if self.carries else ''})"
 
 
+def release_subject(seeds) -> str:
+    """`RELEASE: <type> <name> <version>[, …]` for the documents a release was
+    asked for. The type is written once when they share it, and not at all
+    where it would only repeat the name: `RELEASE: metaontology 3.3`."""
+    kinds = {s.type for s in seeds}
+    kind = kinds.pop() if len(kinds) == 1 else ""
+    if all(s.name == kind for s in seeds):
+        kind = ""
+    return "RELEASE: " + (f"{kind} " if kind else "") + ", ".join(f"{s.name} {s.new}" for s in seeds)
+
+
 @dataclasses.dataclass
 class RenamePlan:
     kind: str
@@ -627,9 +638,7 @@ class Repo:
                 self._restore(saved, paths)
                 raise ReleaseRefused(failed)
         seeds = [s for s in steps if s.seed]
-        kinds = {s.type for s in seeds}
-        subject = message or ("RELEASE: " + (f"{kinds.pop()} " if len(kinds) == 1 else "")
-                              + ", ".join(f"{s.name} {s.new}" for s in seeds))
+        subject = message or release_subject(seeds)
         body = [s.line() for s in steps if not s.seed]
         r = subprocess.run(["git", "commit", "-q", "-F", "-"], cwd=self.top, env=self._env, text=True,
                            input="\n\n".join([subject, "\n".join(body)]) if body else subject, capture_output=True)

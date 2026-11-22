@@ -513,3 +513,14 @@ def test_series():
     assert nf_repo.series_of(Path("tests/x.nfx")) is None
     assert nf_repo.tag_name(("namespace", ""), "1.2") == "namespace/1.2"
     assert nf_repo.parse_tag("knowledge/facts/1.1") == (("knowledge", "facts"), "1.1")
+
+
+def test_release_subject():
+    from types import SimpleNamespace as S
+    a, b = S(type="ontology", name="a", new="1.1"), S(type="ontology", name="b", new="2.0")
+    k = S(type="knowledge", name="k", new="1.4")
+    assert nf_repo.release_subject([a]) == "RELEASE: ontology a 1.1"
+    assert nf_repo.release_subject([a, b]) == "RELEASE: ontology a 1.1, b 2.0"
+    assert nf_repo.release_subject([a, k]) == "RELEASE: a 1.1, k 1.4"
+    # the type is not written where it would only repeat the name
+    assert nf_repo.release_subject([S(type="metaontology", name="metaontology", new="3.3")]) == "RELEASE: metaontology 3.3"
