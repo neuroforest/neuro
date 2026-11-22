@@ -39,6 +39,17 @@ class MetadataAccessor(Accessor):
                 {"nid": nid, "dep_nid": dep_nid},
             )
 
+    def set_namespace(self, label, nid, namespace):
+        """Record the token of the tree a module was imported from.
+
+        A module's name is unique inside its tree only, so the anchor carries
+        the tree's token beside it: "" for the root namespace, and no property
+        at all (`namespace` None) for a module that came from a legacy root."""
+        self._nb.run_query(
+            f"MATCH (m:{label} {{nid: $nid}}) SET m.namespace = $namespace",
+            {"nid": nid, "namespace": namespace},
+        )
+
     def link_defines(self, label, meta_nid, node_nid):
         """MERGE `(meta)-[:DEFINES]->(node)` by nid."""
         self._nb.run_query(

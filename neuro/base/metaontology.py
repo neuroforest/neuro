@@ -531,6 +531,10 @@ class Metaontology:
             "MERGE (m:OntologyMetadata {nid: $nid}) SET m += $props",
             {"nid": doc.nid, "props": properties},
         )
+        # Only an index knows which tree the file belongs to; without one the
+        # namespace already recorded stays as it is.
+        if index is not None:
+            self._nb.metadata.set_namespace("OntologyMetadata", doc.nid, index.namespace_for(doc.nid))
         for dep_nid, _ in doc.dependencies:
             self._nb.run_query(
                 """

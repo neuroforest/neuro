@@ -179,6 +179,66 @@ class TestOntologyExport:
         assert {d.name for d in docs} == {"metaontology", "core"}
         assert {p.name for p in out.glob("*.nfx")} == {"metaontology.nfx", "core.nfx"}
 
+    def _tree(self, tmp_path, dirname, token, nid, node_nid, name="shared"):
+        """A `.nf` tree with namespace `token`, holding one ontology `name`."""
+        import json
+        import uuid
+
+        from neuro.base import nfx
+        root = tmp_path / dirname / ".nf"
+        (root / "ontology").mkdir(parents=True)
+        (root / "namespace.nfx").write_text(json.dumps({
+            "type": "namespace", "nid": str(uuid.uuid4()), "version": "1.0", "name": dirname.title(),
+            "namespace": token, "dependencies": [],
+        }))
+        nfx.write(root / "ontology" / f"{name}.nfx", nfx.Nfx.from_dict({
+            "type": "ontology", "nid": nid, "version": "1.0", "name": name,
+            "dependencies": [self._meta_pin()],
+            "nodes": [{"nid": node_nid, "labels": ["OntologyNode"], "properties": {"label": dirname.title()}}],
+            "relationships": [{"from": node_nid, "to": self.NODE, "type": "SUBCLASS_OF"}],
+        }))
+        return root
+
+    def _two_trees(self, nb_meta, tmp_path):
+        """Two trees, `a` and the root namespace, each with a module `shared`."""
+        from neuro.base.index import OntologyIndex
+        from neuro.utils.internal_utils import get_path
+        a = self._tree(tmp_path, "alpha", "a", self.CORE, self.CORE_NODE)
+        home = self._tree(tmp_path, "home", "", self.DEP, self.DEP_NODE)
+        idx = OntologyIndex(get_path("app") / ".nf", a, home)
+        for root in (a, home):
+            nb_meta.metaontology.import_nfx(root / "ontology" / "shared.nfx", index=idx)
+        return idx
+
+    def test_import_records_the_namespace(self, nb_meta, tmp_path):
+        """The tree's token lands on the metadata node; no index, no claim."""
+        def namespace(nid):
+            row = nb_meta.get_data(
+                "MATCH (m:OntologyMetadata {nid: $nid}) RETURN m.namespace AS ns, "
+                "'namespace' IN keys(m) AS has", {"nid": nid})[0]
+            return row["ns"] if row["has"] else None
+
+        meta_nid = self._meta_pin().split("@")[0]
+        assert namespace(meta_nid) is None  # the fixture imports it without an index
+        idx = self._two_trees(nb_meta, tmp_path)
+        assert namespace(self.CORE) == "a"
+        assert namespace(self.DEP) == ""
+        nb_meta.metaontology.import_nfx(idx.metaontology_path, index=idx)
+        assert namespace(meta_nid) == idx.namespace_for(meta_nid) != None  # noqa: E711
+
+    def test_export_qualifies_a_name_trees_share(self, nb_meta, tmp_path):
+        """Two trees may each hold a `shared`: neither file overwrites the other."""
+        from neuro.utils import exceptions
+        self._two_trees(nb_meta, tmp_path)
+        out = tmp_path / "out"
+        docs = nb_meta.ontology.export_nfx(out)
+        assert sorted(d.nid for d in docs if d.name == "shared") == sorted([self.CORE, self.DEP])
+        assert {p.name for p in out.glob("*.nfx")} == {"metaontology.nfx", "a-shared.nfx", "root-shared.nfx"}
+        with pytest.raises(exceptions.AmbiguousModule) as e:
+            nb_meta.ontology.export_nfx(tmp_path / "x.nfx", name="shared")
+        assert e.value.candidates == ["a-shared", "root-shared"]
+        assert nb_meta.ontology.export_nfx(tmp_path / "y.nfx", name="A-Shared").nid == self.CORE
+
     def test_export_assigns_a_cross_module_edge_to_the_dependent(self, nb_meta, tmp_path):
         """An edge out of a dependency's node belongs to the file that can declare it.
 

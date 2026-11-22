@@ -70,30 +70,47 @@ class Ontology:
 
         Matching on `name` is case-insensitive so `-o Filesystem` and
         `-o filesystem` both resolve; an unknown name raises rather than
-        exporting nothing.
+        exporting nothing. A name is unique inside its tree only, so one that
+        several trees share raises `AmbiguousModule`: write the qualified
+        `<namespace>-<name>` (see `qualified_name`), which always matches one.
         """
         rows = self._nb.get_data(
             """
             MATCH (m:Metadata+)
-            WHERE $name = "" OR toLower(m.name) = toLower($name)
-            RETURN m.nid AS nid, m.type AS type, m.name AS name,
+            RETURN m.nid AS nid, m.type AS type, m.name AS name, m.namespace AS namespace,
                    m.version AS version, m.description AS description
-            ORDER BY m.name
-            """,
-            {"name": name},
+            ORDER BY m.namespace, m.name
+            """
         )
-        if name and not rows:
+        if not name:
+            return rows
+        low = name.lower()
+        found = ([r for r in rows if (r["name"] or "").lower() == low]
+                 or [r for r in rows if self.qualified_name(r).lower() == low])
+        if not found:
             raise exceptions.NoOntology(f"no module named {name!r} in this base")
-        return rows
+        if len(found) > 1:
+            raise exceptions.AmbiguousModule(name, sorted(self.qualified_name(r) for r in found))
+        return found
+
+    @staticmethod
+    def qualified_name(meta) -> str:
+        """`<namespace>-<name>`, the root namespace written `root` - how the
+        index names a module across trees. A module with no recorded namespace
+        (imported from a legacy root) keeps its bare name."""
+        if meta["namespace"] is None:
+            return meta["name"] or ""
+        return f"{meta['namespace'] or 'root'}-{meta['name']}"
 
     def export_nfx(self, path, name=""):
         """Export one ontology per file, reconstructed from what defines it.
 
         With `name`, `path` is the file to write. Without it, `path` is a
         directory and every ontology in the base is written to
-        `<name>.nfx` inside it - the base still comes out in one call, but as
-        n valid modules rather than one document claiming to be a module it is
-        not.
+        `<qualified name>.nfx` inside it - the base still comes out in one
+        call, but as n valid modules rather than one document claiming to be a
+        module it is not. The file is named by the qualified name
+        because several trees may each hold a module called, say, `ontology`.
 
         Each document is scoped by the metadata node: its nodes are that
         node's `DEFINES` targets, its relationships those whose *source* it
@@ -182,7 +199,7 @@ class Ontology:
                 raise exceptions.NfxViolation(
                     f"refusing to write {meta['name']}: {fatal}"
                 )
-            target = path if name else os.path.join(path, f"{meta['name']}.nfx")
+            target = path if name else os.path.join(path, f"{self.qualified_name(meta)}.nfx")
             if not name:
                 os.makedirs(path, exist_ok=True)
             nfx.write(target, doc)

@@ -292,6 +292,12 @@ class PluginIndex:
         """The declarations read in the pre-pass, in root order."""
         return [self._namespaces[r] for r in self._roots if r in self._namespaces]
 
+    def namespace_for(self, nid) -> str | None:
+        """The token of the tree that holds the module `nid`: "" in the root
+        namespace, None in a legacy root or when this index does not hold it."""
+        entry = self._index.get(nid)
+        return None if entry is None else entry.namespace
+
     def namespace_of(self, root) -> Namespace | None:
         """The declaration of `root`, or None (legacy root, or none written yet)."""
         return self._namespaces.get(Path(root).resolve())

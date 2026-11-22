@@ -148,7 +148,7 @@ class NodeAccessor(Accessor):
             }
             self._nb.run_query(query, params)
 
-    def sync_nfx(self, path, dependency_nids=None, metadata_label="KnowledgeMetadata"):
+    def sync_nfx(self, path, dependency_nids=None, metadata_label="KnowledgeMetadata", index=None):
         """Reconcile an NFX file into NeuroBase authoritatively.
 
         Anchors the file to a `KnowledgeMetadata` node (via its top-level `nid`)
@@ -175,7 +175,9 @@ class NodeAccessor(Accessor):
 
         Extra labels added to retained nodes by curation are preserved.
         `metadata_label` lets the same machinery anchor different metadata
-        kinds (e.g. `OntologyMetadata`).
+        kinds (e.g. `OntologyMetadata`). `index`, when given, is where the
+        file's tree is looked up: its namespace token is recorded on the
+        anchor, since a module's name is unique inside its tree only.
         """
         doc = nfx.read(path)
         if not (doc.nid and doc.name):
@@ -196,6 +198,8 @@ class NodeAccessor(Accessor):
             metadata_label, doc.nid, meta_props,
             dependency_nids=[dep_nid for dep_nid, _ in doc.dependencies],
         )
+        if index is not None:
+            meta.set_namespace(metadata_label, doc.nid, index.namespace_for(doc.nid))
 
         nfx_nids = list(doc.node_nids)
         meta.prune(metadata_label, doc.nid, nfx_nids)
