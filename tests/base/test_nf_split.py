@@ -74,7 +74,7 @@ def test_build(root):
     assert _git(cont, "log", "-1", "--format=%b", "HEAD~1").strip() == "a 1.0 → 1.1 (re-pin p@1.1)"
     assert sorted(_git(kb, "ls-files").split()) == ["knowledge/b.nfx", "namespace.nfx", "ruff.toml"]
     assert sorted(_git(cont, "ls-files").split()) == ["namespace.nfx", "ontology/a.nfx", "ontology/p.nfx", "ruff.toml"]
-    assert _git(kb, "tag").split() == ["knowledge/b/1.0", "knowledge/b/1.1", "namespace/1.0"]
+    assert _git(kb, "tag").split() == ["knowledge/b/1.0", "knowledge/b/1.1", "namespace/kb/1.0"]
     assert _git(cont, "tag").split() == ["namespace/1.0", "ontology/a/1.0", "ontology/a/1.1",
                                          "ontology/p/1.0", "ontology/p/1.1"]
     assert _git(kb, "rev-parse", "knowledge/b/1.1^{commit}") == _git(kb, "rev-parse", "HEAD~1")
@@ -127,7 +127,7 @@ def test_rename(root):
     cont, kb = (o["dir"] for o in state["outputs"])
     assert state["unedited"] == [] and state["outputs"][1]["renamed"] == {"b": "bee"}
     assert sorted(_git(kb, "ls-files").split()) == ["knowledge/bee.nfx", "namespace.nfx", "ruff.toml"]
-    assert _git(kb, "tag").split() == ["knowledge/bee/1.0", "knowledge/bee/1.1", "namespace/1.0"]
+    assert _git(kb, "tag").split() == ["knowledge/bee/1.0", "knowledge/bee/1.1", "namespace/kb/1.0"]
     assert [json.loads(_git(kb, "show", f"{rev}:knowledge/bee.nfx"))["name"] for rev in ("HEAD", "HEAD~2")] == ["bee"] * 2
     assert _git(kb, "log", "-1", "--format=%b", "HEAD~1").strip() == "bee 1.0 → 1.1 (re-pin a@1.1)"
     assert _git(kb, "cat-file", "-p", "knowledge/bee/1.1").splitlines()[-1].startswith("knowledge/bee/1.1")
@@ -170,7 +170,7 @@ def test_gone(root):
     assert _git(cont, "show", "--format=", "--name-only", "HEAD~3").split() == ["knowledge/o.nfx"]
     assert "knowledge/d/1.0" in _git(kb, "tag").split() and "kb-d" not in _git(cont, "tag")
     assert _git(kb, "cat-file", "-p", "knowledge/d/1.0").splitlines()[-1] == "knowledge/d/1.0 — ADD: d knowledge"
-    assert "split" not in _git(kb, "cat-file", "-p", "namespace/1.0")
+    assert "split" not in _git(kb, "cat-file", "-p", "namespace/kb/1.0")
     assert nf_split.verify(p.staging) == []
 
 

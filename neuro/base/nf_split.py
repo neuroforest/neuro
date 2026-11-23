@@ -539,7 +539,7 @@ FURNITURE_SUBJECT = "ADD: hooks and lint configuration"
 
 def _retag(name: str, restem: dict[str, str]) -> str:
     parsed = nf_repo.parse_tag(name)
-    if parsed is None or parsed[0][1].lower() not in restem:
+    if parsed is None or parsed[0][0] == "namespace" or parsed[0][1].lower() not in restem:
         return name
     return nf_repo.tag_name((parsed[0][0], restem[parsed[0][1].lower()]), parsed[1])
 
@@ -682,15 +682,16 @@ def build(p: Plan, progress=None) -> dict:
         subject = nf_events.SplitIn(p.token).subject if p.events else FURNITURE_SUBJECT
         heads[t] = _run(dirs[t], "commit-tree", tree, "-p", heads[t], "-F", "-", env=env,
                         data=subject + "\n").strip()
-        extra_tags.append((t, "namespace/1.0", first[t][0],
-                           "namespace/1.0 — the root's declaration, in every commit"
+        name = nf_import.namespace_tag(t, "1.0")
+        extra_tags.append((t, name, first[t][0],
+                           f"{name} — the root's declaration, in every commit"
                            + (f" · split from {cont.word}" if p.events else "")))
     if not p.events and cont.namespace.version != source_ns.version:
         entries = {**latest[p.token], nfx.NAMESPACE_FILENAME: ("100644", ns_blob[p.token])}
         pins = ", ".join(by.word for by in p.outputs[1:] if by.token in cont.needs)
         heads[p.token] = _run(dirs[p.token], "commit-tree", _tree(dirs[p.token], entries, env), "-p", heads[p.token],
                               "-F", "-", env=env, data=f"UPDATE: namespace pins {pins}\n").strip()
-        name = f"namespace/{cont.namespace.version}"
+        name = nf_import.namespace_tag(p.token, cont.namespace.version)
         extra_tags.append((p.token, name, heads[p.token], f"{name} — pins {pins}"))
     for n, out in enumerate(p.outputs[1:] if p.events else (), start=1):
         entries = dict(latest[p.token])
@@ -702,7 +703,7 @@ def build(p: Plan, progress=None) -> dict:
         heads[p.token] = _run(dirs[p.token], "commit-tree", tree, "-p", heads[p.token], "-F", "-", env=env,
                               data=f"{nf_events.SplitOut(out.token).subject}\n\n{body}\n").strip()
         if last and cont.namespace.version != source_ns.version:
-            name = f"namespace/{cont.namespace.version}"
+            name = nf_import.namespace_tag(p.token, cont.namespace.version)
             extra_tags.append((p.token, name, heads[p.token],
                                f"{name} — pins {', '.join(by.word for by in p.outputs[1:] if by.token in cont.needs)}"
                                f" · {nf_events.SplitOut(out.token).subject}"))
@@ -724,7 +725,7 @@ def build(p: Plan, progress=None) -> dict:
             streams[t] += [b"tag %s\n" % name.encode(), b"from %s\n" % target.encode(),
                            b"tagger %s %s\n" % (tagger.encode(), date.encode()), _fi_data(message)]
     for t, name, commit, message in extra_tags:
-        tagger = first[t][1] if name == "namespace/1.0" and t != p.token else ident
+        tagger = first[t][1] if name == nf_import.namespace_tag(t, "1.0") and t != p.token else ident
         streams[t] += [b"tag %s\n" % name.encode(), b"from %s\n" % commit.encode(),
                        b"tagger %s\n" % tagger.encode(), _fi_data(message + "\n")]
     for t, d in dirs.items():
@@ -855,7 +856,8 @@ def verify(staging, others=()) -> list[str]:
             parsed = nf_repo.parse_tag(name)
             # a renamed series is read back under the stem the source has that tag for
             names = [n for n in (nf_repo.tag_name((parsed[0][0], old), parsed[1])
-                                 for old in olds.get(parsed[0][1], ())) if n in want] if parsed else []
+                                 for old in olds.get(parsed[0][1], ())) if n in want] \
+                if parsed and parsed[0][0] != "namespace" else []
             for n in names or [name]:
                 have.setdefault(n, []).append(o["word"])
         issues += [f"{o['word']}: {i}" for i in nf_history.check_tags(o["dir"]) if i not in known]

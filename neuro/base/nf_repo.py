@@ -66,24 +66,36 @@ def series_of(rel: Path) -> tuple[str, str] | None:
     """The tag series a root-relative `.nfx` path belongs to: `(kind, stem)` for
     `ontology/<stem>.nfx` / `knowledge/<stem>.nfx`, `("namespace", "")` for the
     declaration, None for anything else. The kind is the subdir - the index
-    holds it equal to the `type` (the metaontology aside)."""
+    holds it equal to the `type` (the metaontology aside).
+    Inside one root the declaration's series has no stem; its tag carries the
+    root's token (`Repo.tag_of`), since one git repository may hold several roots."""
     rel = Path(rel)
     if rel == Path(nfx.NAMESPACE_FILENAME):
-        return "namespace", ""
+        return NAMESPACE_SERIES
     if rel.suffix == ".nfx" and len(rel.parts) == 2 and rel.parts[0] in plugins._KIND_SUBDIRS:
         return rel.parts[0], rel.stem.lower()
     return None
 
 
-def tag_name(series: tuple[str, str], version: str) -> str:
+NAMESPACE_SERIES = ("namespace", "")
+
+
+def tag_name(series: tuple[str, str], version: str, token: str = "") -> str:
+    """The tag of `series` at `version`. A namespace series names its root by
+    `token`, or by the stem `parse_tag` read out of such a tag."""
     kind, stem = series
-    return f"namespace/{version}" if kind == "namespace" else nf_import.tag_for(kind, stem, version)
+    if kind == "namespace":
+        return nf_import.namespace_tag(token or stem, version)
+    return nf_import.tag_for(kind, stem, version)
 
 
 def parse_tag(name: str) -> tuple[tuple[str, str], str] | None:
+    """`(series, version)` of a release tag; a namespace tag's stem is its root's token."""
     parts = name.split("/")
     if len(parts) == 2 and parts[0] == "namespace":
-        return ("namespace", ""), parts[1]
+        return NAMESPACE_SERIES, parts[1]
+    if len(parts) == 3 and parts[0] == "namespace":
+        return ("namespace", parts[1]), parts[2]
     if len(parts) == 3 and parts[0] in plugins._KIND_SUBDIRS:
         return (parts[0], parts[1]), parts[2]
     return None
@@ -288,16 +300,36 @@ class Repo:
             rows.append((status, Path(path).relative_to(self.prefix) if self.prefix else Path(path)))
         return rows
 
+    @property
+    def token(self) -> str:
+        """The root's namespace token, from the declaration in the worktree (HEAD's, failing that)."""
+        path = self.root / nfx.NAMESPACE_FILENAME
+        doc = json.loads(path.read_text()) if path.is_file() else self.doc_at("HEAD", nfx.NAMESPACE_FILENAME)
+        return (doc or {}).get("namespace") or ""
+
+    def tag_of(self, series: tuple[str, str], version: str) -> str:
+        """`tag_name` for a series of this root: its declaration's tag carries its token."""
+        return tag_name(series, version, self.token if series == NAMESPACE_SERIES else "")
+
     def tags(self, merged=None) -> dict[tuple[str, str], set[str]]:
-        """Released versions per series, from the repo's annotated or lightweight tags."""
+        """Released versions per series, from the repo's annotated or lightweight tags.
+        Of the namespace tags only this root's own count - under `NAMESPACE_SERIES`;
+        another root of the same repository keeps its own series."""
         args = ["for-each-ref", "refs/tags", "--format=%(refname:short)"]
         if merged:
             args += ["--merged", merged]
+        token = self.token
         series: dict[tuple[str, str], set[str]] = {}
         for name in self.git(*args).split():
             parsed = parse_tag(name)
-            if parsed:
-                series.setdefault(parsed[0], set()).add(parsed[1])
+            if not parsed:
+                continue
+            key, version = parsed
+            if key[0] == "namespace":
+                if key[1] != token:
+                    continue
+                key = NAMESPACE_SERIES
+            series.setdefault(key, set()).add(version)
         return series
 
     def extract(self, tree, dst: Path) -> None:
@@ -436,22 +468,22 @@ class Repo:
             latest = max(seen, key=version_key) if seen else None
             if latest is None or version == latest:
                 if version not in seen:
-                    released.append(tag_name(series, version))
+                    released.append(self.tag_of(series, version))
                 else:
-                    tagged = self._doc_by_nid(tag_name(series, version), rel, doc.get("nid"))
+                    tagged = self._doc_by_nid(self.tag_of(series, version), rel, doc.get("nid"))
                     if tagged is not None and tagged != doc:
-                        issues.append(f"{where}: changed since {tag_name(series, version)} but still version "
+                        issues.append(f"{where}: changed since {self.tag_of(series, version)} but still version "
                                       f"{version} - every change is a release: `nfx.release {rel.stem or 'namespace'}` "
                                       f"(the next is {' or '.join(sorted(next_versions(latest)))})")
                 continue
             if version in seen:
-                issues.append(f"{where}: version {version} is already released ({tag_name(series, version)}) - "
+                issues.append(f"{where}: version {version} is already released ({self.tag_of(series, version)}) - "
                               f"the next is {' or '.join(sorted(next_versions(latest)))}")
             elif version not in next_versions(latest):
                 issues.append(f"{where}: version {version} skips past the latest release {latest} - "
                               f"expected {' or '.join(sorted(next_versions(latest)))}")
             else:
-                released.append(tag_name(series, version))
+                released.append(self.tag_of(series, version))
 
         return Verdict(issues, sorted(self.show(rel_of[n]) for n in full), released)
 
@@ -472,7 +504,7 @@ class Repo:
             if series is None:
                 continue
             doc = docs[rel]
-            name = tag_name(series, doc.get("version", ""))
+            name = self.tag_of(series, doc.get("version", ""))
             if name in existing:
                 continue
             before = self.doc_at(base, rel)
@@ -529,12 +561,12 @@ class Repo:
             if doc.version not in (last, want):
                 raise ValueError(f"{rel_of[nid]}: version {doc.version} is neither the released {last} nor "
                                  f"the next {want} - leave `version` alone, release writes it")
-            tagged = self.doc_at(tag_name(series_of(rel_of[nid]), last), rel_of[nid])
+            tagged = self.doc_at(self.tag_of(series_of(rel_of[nid]), last), rel_of[nid])
             current = {**json.loads(local[nid].path.read_text()), "version": last}
             if self._digest(rel_of[nid]):
                 current["hash"] = self._digest(rel_of[nid])  # an edited validator is a change of the module
             if tagged == current:
-                raise ValueError(f"{rel_of[nid]}: unchanged since {tag_name(series_of(rel_of[nid]), last)} - "
+                raise ValueError(f"{rel_of[nid]}: unchanged since {self.tag_of(series_of(rel_of[nid]), last)} - "
                                  f"nothing to release")
             new[nid] = want
 
@@ -573,7 +605,7 @@ class Repo:
                 new[nid] = doc.version if last is None else f"{version_key(last)[0]}.{version_key(last)[1] + 1}"
             carries = False
             if nid not in seeds and last is not None:
-                tagged = self.doc_at(tag_name(series_of(rel_of[nid]), last), rel_of[nid])
+                tagged = self.doc_at(self.tag_of(series_of(rel_of[nid]), last), rel_of[nid])
                 after = {**json.loads(local[nid].path.read_text()), "version": last}
                 after.pop("dependencies", None)
                 if tagged is not None:
@@ -1260,7 +1292,7 @@ def namespace_log(repo: Repo) -> list[LogEntry]:
     for line in repo.git("for-each-ref", "refs/tags", "--format=%(refname:short) %(*objectname)%(objectname)").splitlines():
         name, obj = line.split(" ", 1)
         parsed = parse_tag(name)
-        if parsed and parsed[0][0] == "namespace":
+        if parsed and parsed[0] == ("namespace", token):
             tags_at.setdefault(obj[:40], []).append(name)
     entries = []
     for record in repo.git("log", "--format=%H%x00%cs%x00%s%x1e", head, "--", repo._path(path)).split("\x1e"):

@@ -512,7 +512,36 @@ def test_series():
     assert nf_repo.series_of(Path("namespace.nfx")) == ("namespace", "")
     assert nf_repo.series_of(Path("tests/x.nfx")) is None
     assert nf_repo.tag_name(("namespace", ""), "1.2") == "namespace/1.2"
+    assert nf_repo.tag_name(("namespace", ""), "1.2", "bio") == "namespace/bio/1.2"
     assert nf_repo.parse_tag("knowledge/facts/1.1") == (("knowledge", "facts"), "1.1")
+    assert nf_repo.parse_tag("namespace/1.2") == (("namespace", ""), "1.2")
+    assert nf_repo.parse_tag("namespace/bio/1.2") == (("namespace", "bio"), "1.2")
+    assert nf_repo.tag_name(*nf_repo.parse_tag("namespace/bio/1.2")) == "namespace/bio/1.2"
+
+
+def test_tags(tmp_path):
+    # two roots in one repository: each declaration has its own series, under its token
+    _git(tmp_path, "init", "-q", "-b", "master")
+    _git(tmp_path, "config", "core.hooksPath", "/dev/null")
+    for token in ("x", "y"):
+        path = tmp_path / token / ".nf"
+        path.mkdir(parents=True)
+        (path / "namespace.nfx").write_text(nfx.dumps(nfx.Nfx.from_dict(
+            {"type": "namespace", "nid": str(uuid.uuid4()), "version": "1.0", "name": token, "namespace": token})))
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "ADD: roots")
+    x, y = (nf_repo.Repo(tmp_path / token / ".nf") for token in ("x", "y"))
+    assert x.tag() == ["namespace/x/1.0"] and y.tag() == ["namespace/y/1.0"]
+    assert x.tags() == y.tags() == {("namespace", ""): {"1.0"}}
+    # y releases alone: x still sees only its own 1.0
+    doc = json.loads((y.root / "namespace.nfx").read_text())
+    (y.root / "namespace.nfx").write_text(nfx.dumps(nfx.Nfx.from_dict({**doc, "version": "1.1", "description": "more"})))
+    _git(tmp_path, "add", ".")
+    assert y.check().released == ["namespace/y/1.1"]
+    _git(tmp_path, "commit", "-q", "-m", "UPDATE: y")
+    assert y.tag() == ["namespace/y/1.1"] and x.tag() == []
+    assert x.tags() == {("namespace", ""): {"1.0"}} and y.tags() == {("namespace", ""): {"1.0", "1.1"}}
+    assert [e.tags for e in nf_repo.namespace_log(y)] == [["namespace/y/1.1"], ["namespace/y/1.0"]]
 
 
 def test_release_subject():

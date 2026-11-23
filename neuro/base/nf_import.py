@@ -87,6 +87,13 @@ def tag_for(kind: str, stem: str, version: str) -> str:
     return f"{kind}/{stem.lower()}/{version}"
 
 
+def namespace_tag(token: str | None, version: str) -> str:
+    """The annotated tag a root's declaration is released under: `namespace/<token>/<version>`
+    - the token because one git repository may hold several roots - and
+    `namespace/<version>` for the tokenless root."""
+    return f"namespace/{token}/{version}" if token else f"namespace/{version}"
+
+
 def namespace_doc(nid: str, parent_nid: str, parent_version: str, version: str = "1.0") -> nfx.Nfx:
     return nfx.Nfx(
         type=nfx.NAMESPACE_TYPE,

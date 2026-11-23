@@ -35,7 +35,7 @@ Names: every module's `name` is its stem in every commit
 (`plan_import` rewrites it), and the messages follow - a module's old name in
 a commit message or tag message becomes its stem (`renames`, `rename_in`), so
 no historical name survives. The namespace declaration is tagged
-`namespace/<version>` on the first commit. An event whose mapped tree equals
+`namespace/<token>/<version>` on the first commit. An event whose mapped tree equals
 the previous one and that carries no tag (a legacy commit that touched only
 unmapped files) is dropped.
 
@@ -551,7 +551,7 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
                     tags.append((new, ev.last.committer, f"{new} — synthesized: {why}; {subject_of(ev.opener)}"))
         previous = current
         if mark == 0:
-            new = f"namespace/{namespace.version}"
+            new = nf_import.namespace_tag(namespace.namespace, namespace.version)
             made[new] = "(synthesized)"
             report.synthesized += 1
             tags.append((new, ev.last.committer,
@@ -597,16 +597,17 @@ def build(src, dst, namespace: nfx.Nfx, scratch, *, branch="master", progress=No
 
 def check_tags(dst) -> list[str]:
     """Every `<type>/<stem>/<version>` tag names a commit where
-    `<type>/<stem>.nfx` is at that version; `namespace/<version>` names one
-    where `namespace.nfx` is."""
+    `<type>/<stem>.nfx` is at that version; `namespace/[<token>/]<version>`
+    names one where `namespace.nfx` is. The token is the root's current one, not
+    checked against the tagged commit: a renamed token takes its series along."""
     cat = _Cat(dst)
     issues = []
     for tag in _git(dst, "tag").split():
         parts = tag.split("/")
-        if len(parts) == 2 and parts[0] == "namespace":
+        if parts[0] == "namespace" and len(parts) in (2, 3):
             doc = cat.json(f"{tag}:{nfx.NAMESPACE_FILENAME}")
-            if doc is None or str(doc.get("version")) != parts[1]:
-                issues.append(f"{tag}: {nfx.NAMESPACE_FILENAME} is not at {parts[1]} there")
+            if doc is None or str(doc.get("version")) != parts[-1]:
+                issues.append(f"{tag}: {nfx.NAMESPACE_FILENAME} is not at {parts[-1]} there")
             continue
         kind, stem, version = parts
         doc = cat.json(f"{tag}:{kind}/{stem}.nfx")
