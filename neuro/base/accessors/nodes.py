@@ -65,8 +65,21 @@ class NodeAccessor(Accessor):
 
         Source-side lineage is walked inside `Metarelationships.from_ontology`;
         target-side lineage is expanded here, so e.g. `RELATED_TO` declared on
-        `Object` accepts a `Standard` target."""
+        `Object` accepts a `Standard` target.
+
+        An endpoint the file does not declare is a node of a dependency - a
+        knowledge module's edge into the module it pins - and its
+        labels are read from the base, where that dependency is already loaded.
+        Without them every such edge read as pointing at a label-less node."""
         nid_labels = {entry["nid"]: entry["labels"] for entry in doc.nodes}
+        external = sorted({nid for rel in doc.relationships
+                           for nid in (rel["from"], rel["to"])} - nid_labels.keys())
+        if external:
+            for row in self._nb.get_data(
+                "MATCH (n) WHERE n.nid IN $nids RETURN n.nid AS nid, labels(n) AS labels",
+                {"nids": external},
+            ):
+                nid_labels[row["nid"]] = row["labels"]
         violations = Violations()
         for rel in doc.relationships:
             rel_type = rel["type"]

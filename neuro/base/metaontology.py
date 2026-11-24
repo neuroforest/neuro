@@ -323,10 +323,14 @@ class Metaontology:
             return (index.qualified_for(nid) if index else None) or name
 
         for dep_nid, dep_version in dependencies:
+            # A dependency is a module of either kind: a knowledge module may pin
+            # another, and is then anchored on `KnowledgeMetadata`.
             data = self._nb.get_data(
                 """
-                MATCH (m:OntologyMetadata {nid: $nid})
-                RETURN m.name as name, m.version as version, m.namespace as namespace
+                MATCH (m:OntologyMetadata|KnowledgeMetadata {nid: $nid})
+                RETURN m.name as name, m.version as version, m.namespace as namespace,
+                       CASE WHEN m:KnowledgeMetadata THEN 'KnowledgeMetadata'
+                            ELSE 'OntologyMetadata' END as label
                 """,
                 {"nid": dep_nid},
             )
@@ -341,7 +345,7 @@ class Metaontology:
                         # not re-imported here - but its namespace is no longer true.
                         namespace = index.namespace_for(dep_nid)
                         if namespace != data[0]["namespace"]:
-                            self._nb.metadata.set_namespace("OntologyMetadata", dep_nid, namespace)
+                            self._nb.metadata.set_namespace(data[0]["label"], dep_nid, namespace)
                         sub_deps = nfx.read(dep_path).dependencies
                         self._import_dependencies(sub_deps, index, on_import, _depth=_depth + 1)
                 continue
@@ -350,9 +354,17 @@ class Metaontology:
             dep_path = index.resolve(dep_nid)
             if not dep_path:
                 raise exceptions.NfxViolation(f"Dependency {dep_nid}@{dep_version} not found in index")
-            self.import_nfx(dep_path, index=index, on_import=on_import, _depth=_depth)
+            dep_doc = nfx.read(dep_path)
+            if dep_doc.type == "knowledge":
+                self._import_dependencies(dep_doc.dependencies, index, on_import, _depth=_depth + 1)
+                owned_elsewhere = nfx.NfxTree(
+                    dep_doc, self._resolver(index),
+                ).all_node_nids(scope="dependencies")
+                self._nb.nodes.sync_nfx(dep_path, dependency_nids=owned_elsewhere, index=index)
+            else:
+                self.import_nfx(dep_path, index=index, on_import=on_import, _depth=_depth)
             if on_import:
-                dep_name = qualified(dep_nid, nfx.read(dep_path).name or dep_path.stem)
+                dep_name = qualified(dep_nid, dep_doc.name or dep_path.stem)
                 on_import(dep_name, imported=True, depth=_depth)
 
     def _resolver(self, index=None):
@@ -369,9 +381,9 @@ class Metaontology:
                     return nfx.read(dep_path)
             rows = self._nb.get_data(
                 """
-                MATCH (m:OntologyMetadata {nid: $nid})
+                MATCH (m:OntologyMetadata|KnowledgeMetadata {nid: $nid})
                 OPTIONAL MATCH (m)-[:DEFINES]->(n)
-                OPTIONAL MATCH (m)-[:DEPENDS_ON]->(d:OntologyMetadata)
+                OPTIONAL MATCH (m)-[:DEPENDS_ON]->(d:OntologyMetadata|KnowledgeMetadata)
                 RETURN collect(DISTINCT n.nid) as nids,
                        collect(DISTINCT d.nid) as dep_nids
                 """,

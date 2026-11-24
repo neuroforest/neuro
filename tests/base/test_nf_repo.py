@@ -197,6 +197,28 @@ def test_release(root):
     assert _git(root.path, "status", "--short") == ""
 
 
+def test_release_knowledge(root):
+    """Knowledge pinning knowledge: the cascade re-pins it like any
+    dependant, and the hook accepts the result."""
+    _git(root.path, "config", "user.name", "T")
+    _git(root.path, "config", "user.email", "t@example.org")
+    c, cn = str(uuid.uuid4()), str(uuid.uuid4())
+    root.write("knowledge/c.nfx", root.doc(c, "c", "1.0", kind="knowledge", deps=[(root.b, "1.0")],
+                                           nodes=[cn], rels=[(cn, root.bn)]))
+    assert root.check() == []
+    root.commit("ADD: c")
+    _git(root.path, "tag", "-a", "knowledge/c/1.0", "-m", "knowledge/c/1.0")
+
+    root.write("knowledge/b.nfx", root.doc(root.b, "b", "1.0", kind="knowledge", deps=[(root.a, "1.0")],
+                                           nodes=[root.bn], rels=[(root.bn, root.an)], extra="b edit"), add=False)
+    steps = root.repo.plan_release(["b"])
+    assert [(s.rel.stem, s.old, s.new, s.repins) for s in steps] == [
+        ("b", "1.0", "1.1", []), ("c", "1.0", "1.1", ["b@1.1"])]
+    sha, steps, tags = root.repo.release(["b"])
+    assert tags == ["knowledge/b/1.1", "knowledge/c/1.1"]
+    assert root.repo.check("HEAD").issues == []
+
+
 def test_release_companions(root):
     _git(root.path, "config", "user.name", "T")
     _git(root.path, "config", "user.email", "t@example.org")

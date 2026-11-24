@@ -319,6 +319,59 @@ class PluginIndex:
             return [entry.implicit_parent_nid]
         return []
 
+    @property
+    def metaontology_path(self):
+        """Path of the discovered metaontology entry, or `None` if this view
+        holds none."""
+        for entry in self._index.values():
+            if entry.type == "metaontology":
+                return entry.path
+        return None
+
+    def tree(self, path) -> nfx.NfxTree:
+        """The dependency DAG of the document at `path`, every pin resolved
+        through this index whatever the type of the module it names. Raises
+        `NfxCycle`. The one walk behind `closure`, `dependency_node_nids` and
+        the redundant-pin check, so they cannot disagree about what a document
+        depends on."""
+        def _resolve(nid):
+            e = self._index.get(nid)
+            return nfx.read(e.path) if e else None
+        return nfx.NfxTree(nfx.read(path), _resolve, extra_deps=self.extra_deps)
+
+    def closure(self, path, include_self=False) -> list[Path]:
+        """What has to be loaded for the document at `path`: the paths of its
+        dependency closure, dependencies before dependants, the metaontology
+        first (pinned or not).
+
+        Type-blind - a knowledge module pinning a knowledge module pulls in
+        that module and the ontologies behind it - so ask an `NfxIndex` unless
+        the closure is known to stay inside one kind. The document itself is
+        left out unless `include_self`. A pin on a module this index does not
+        hold raises `NfxViolation`: a silent skip there loads half a closure
+        and reports the rest as undefined types.
+        """
+        path = Path(path)
+        tree = self.tree(path)
+        if tree.missing:
+            raise exceptions.NfxViolation(
+                f"{path.stem}: dependency not in scope: {', '.join(sorted(tree.missing))}"
+            )
+        root_nid = tree.root.nid
+        meta = next((e for e in self._index.values() if e.type == "metaontology"), None)
+        paths = [] if meta is None else [meta.path]
+        for nid in tree.topo_order():
+            if nid != root_nid and (meta is None or nid != meta.nid):
+                paths.append(self._index[nid].path)
+        if include_self and (meta is None or root_nid != meta.nid):
+            paths.append(path)
+        return paths
+
+    def dependency_node_nids(self, path) -> set[str]:
+        """Every node nid declared by the modules the document at `path`
+        depends on - what an import must treat as owned elsewhere."""
+        return self.tree(path).all_node_nids(scope="dependencies")
+
     def check_dependency_versions(self, path):
         """Check that all dependencies have exact version match and that no
         direct dependency is also reachable transitively. Returns list of
@@ -334,11 +387,8 @@ class PluginIndex:
                 dep_name = entry.name or entry.path.stem
                 errors.append(f"{dep_name} requires {required_version}, found {entry.version}")
 
-        def _resolve(nid):
-            e = self._index.get(nid)
-            return nfx.read(e.path) if e else None
         try:
-            tree = nfx.NfxTree(doc, _resolve, extra_deps=self.extra_deps)
+            tree = self.tree(path)
         except exceptions.NfxCycle:
             return errors
         for nid in tree.redundant_directs():
@@ -360,14 +410,6 @@ class OntologyIndex(PluginIndex):
     (its directory must be one of the PLUGINS roots, which is the default)."""
 
     KIND = ("ontology", "metaontology")
-
-    @property
-    def metaontology_path(self):
-        """Path of the discovered metaontology entry, or `None` if absent."""
-        for entry in self._index.values():
-            if entry.type == "metaontology":
-                return entry.path
-        return None
 
 
 class KnowledgeIndex(PluginIndex):

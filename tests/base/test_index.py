@@ -320,3 +320,55 @@ class TestImplicitParent:
         idx = OntologyIndex(root)
         child = next(e for e in idx.entries() if e.nid == child_nid)
         assert child.implicit_parent_nid == parent_nid
+
+
+class TestClosure:
+    """A knowledge module pinning a knowledge module: K2 → K1 → O → M."""
+
+    @staticmethod
+    def _chain(root):
+        m = _write_nfx(root / "ontology" / "m.nfx", kind="metaontology", name="m")
+        o = _write_nfx(root / "ontology" / "o.nfx", kind="ontology", name="o", dependencies=[f"{m}@1.0"])
+        k1 = _write_nfx(root / "knowledge" / "k1.nfx", kind="knowledge", name="k1", dependencies=[f"{o}@1.0"])
+        _write_nfx(root / "knowledge" / "k2.nfx", kind="knowledge", name="k2", dependencies=[f"{k1}@1.0"])
+        return o
+
+    def test_closure(self, tmp_path):
+        root = tmp_path / ".nf"
+        self._chain(root)
+        idx = NfxIndex(root)
+        k2 = root.resolve() / "knowledge" / "k2.nfx"
+        assert [p.stem for p in idx.closure(k2)] == ["m", "o", "k1"]
+        assert [p.stem for p in idx.closure(k2, include_self=True)] == ["m", "o", "k1", "k2"]
+        meta = idx.metaontology_path
+        assert idx.closure(meta) == [meta] and idx.closure(meta, include_self=True) == [meta]
+
+    def test_closure_unpinned_metaontology(self, tmp_path):
+        root = tmp_path / ".nf"
+        self._chain(root)
+        _write_nfx(root / "knowledge" / "bare.nfx", kind="knowledge", name="bare")
+        idx = NfxIndex(root)
+        assert [p.stem for p in idx.closure(root.resolve() / "knowledge" / "bare.nfx")] == ["m"]
+
+    def test_closure_missing(self, tmp_path):
+        """A view that cannot see a pinned module refuses, it does not skip."""
+        root = tmp_path / ".nf"
+        self._chain(root)
+        with pytest.raises(exceptions.NfxViolation, match="not in scope"):
+            OntologyIndex(root).closure(root.resolve() / "knowledge" / "k2.nfx")
+
+    def test_check_dependency_versions(self, tmp_path):
+        """The redundant-pin check walks the closure `closure` loads."""
+        root = tmp_path / ".nf"
+        o = self._chain(root)
+        idx = NfxIndex(root)
+        k2 = root.resolve() / "knowledge" / "k2.nfx"
+        assert idx.check_dependency_versions(k2) == []
+        doc = json.loads(k2.read_text())
+        doc["dependencies"].append(f"{o}@1.0")
+        k2.write_text(json.dumps(doc))
+        idx = NfxIndex(root)
+        assert idx.check_dependency_versions(k2) == [
+            "o is both a direct and a transitive dependency - drop the direct pin"
+        ]
+        assert [p.stem for p in idx.closure(k2)] == ["m", "o", "k1"]
