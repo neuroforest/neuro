@@ -298,6 +298,12 @@ class PluginIndex:
         entry = self._index.get(nid)
         return None if entry is None else entry.namespace
 
+    def qualified_for(self, nid) -> str | None:
+        """`<namespace>-<stem>` of the module `nid`; None when this index does
+        not hold it. The one name `resolve` always takes back to that module."""
+        entry = self._index.get(nid)
+        return None if entry is None else self.qualified(entry)
+
     def namespace_of(self, root) -> Namespace | None:
         """The declaration of `root`, or None (legacy root, or none written yet)."""
         return self._namespaces.get(Path(root).resolve())

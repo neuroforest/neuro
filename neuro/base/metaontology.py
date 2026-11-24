@@ -313,9 +313,15 @@ class Metaontology:
         `dependencies` is an iterable of `(nid, version)` pairs (as on `Nfx.dependencies`).
 
         on_import(name, imported, depth): callback for each dependency.
+            name is the qualified `<namespace>-<stem>` when the index holds the
+            module - a bare name is unique inside its tree only, so it neither
+            tells two dependencies apart nor resolves back to one.
             imported=True if freshly imported, False if already loaded.
             depth is the dependency depth (1 for direct, 2+ for transitive).
         """
+        def qualified(nid, name):
+            return (index.qualified_for(nid) if index else None) or name
+
         for dep_nid, dep_version in dependencies:
             data = self._nb.get_data(
                 """
@@ -327,7 +333,7 @@ class Metaontology:
             if data and (not dep_version or
                          self._version_tuple(data[0]["version"]) >= self._version_tuple(dep_version)):
                 if on_import:
-                    on_import(data[0]["name"], imported=False, depth=_depth)
+                    on_import(qualified(dep_nid, data[0]["name"]), imported=False, depth=_depth)
                 if index:
                     dep_path = index.resolve(dep_nid)
                     if dep_path:
@@ -345,8 +351,8 @@ class Metaontology:
             if not dep_path:
                 raise exceptions.NfxViolation(f"Dependency {dep_nid}@{dep_version} not found in index")
             self.import_nfx(dep_path, index=index, on_import=on_import, _depth=_depth)
-            dep_name = nfx.read(dep_path).name or dep_path.stem
             if on_import:
+                dep_name = qualified(dep_nid, nfx.read(dep_path).name or dep_path.stem)
                 on_import(dep_name, imported=True, depth=_depth)
 
     def _resolver(self, index=None):
