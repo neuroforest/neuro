@@ -30,7 +30,7 @@ def test_registry_path(registry, monkeypatch, tmp_path):
     assert nf_trees.registry_path() == registry
     monkeypatch.delenv(nf_trees.ENV_VAR)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    assert nf_trees.registry_path() == tmp_path / "nf" / "trees.toml"
+    assert nf_trees.registry_path() == tmp_path / "neuroforest" / "trees.toml"
 
 
 def test_read(registry, tmp_path):

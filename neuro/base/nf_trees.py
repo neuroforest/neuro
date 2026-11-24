@@ -1,6 +1,6 @@
 """The tree registry - every `.nf` tree on this machine.
 
-One file per machine, `~/.config/nf/trees.toml`, maps a namespace nid to the
+One file per machine, `~/.config/neuroforest/trees.toml`, maps a namespace nid to the
 directory its tree lives in, the token beside it:
 
     format = 1
@@ -70,12 +70,12 @@ class Tree:
 
 
 def registry_path() -> Path:
-    """`$NF_TREES`, else `$XDG_CONFIG_HOME/nf/trees.toml` - one per machine,
-    whatever APP_NAME or ENV the process runs under."""
+    """`$NF_TREES`, else `$XDG_CONFIG_HOME/neuroforest/trees.toml` - one per
+    machine, whatever APP_NAME or ENV the process runs under."""
     override = os.environ.get(ENV_VAR)
     if override:
         return Path(override).expanduser()
-    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "nf" / "trees.toml"
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "neuroforest" / "trees.toml"
 
 
 def read(path=None) -> list[Tree]:
