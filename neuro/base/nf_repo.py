@@ -4,7 +4,7 @@ A `.nf` root's git hooks.
 One rule set for every document of the root - ontology, knowledge and
 `namespace.nfx` alike. `Repo.check` is the pre-commit verdict: the *new* tree
 (the index, or a commit when replaying history) is written out as a scratch
-`.nf`, indexed beside the other roots, and judged against the *base* (HEAD, or
+`.nf`, indexed beside the other trees, and judged against the *base* (HEAD, or
 the commit's parent) and the release tags. `Repo.tag` is post-commit: one
 annotated tag per document whose version has none yet. `nfx` stays the
 git-free format layer; everything that reads a repository lives here.
@@ -16,7 +16,7 @@ may change alone. The commit then carries its whole re-pin closure:
 every pin on it inside the root updated in the same commit. Dependants inside
 the root are re-validated whenever something they depend on changes, so a
 document that drops a node another one still references is refused at its own
-commit. Pins into other roots are checked only on documents the commit
+commit. Pins into other trees are checked only on documents the commit
 touches; a stale one elsewhere is the staleness report's business (013 P9).
 
 A root is either a repository of its own (`~/.nf`) or a directory inside a
@@ -68,7 +68,7 @@ def series_of(rel: Path) -> tuple[str, str] | None:
     declaration, None for anything else. The kind is the subdir - the index
     holds it equal to the `type` (the metaontology aside).
     Inside one root the declaration's series has no stem; its tag carries the
-    root's token (`Repo.tag_of`), since one git repository may hold several roots."""
+    root's token (`Repo.tag_of`), since one git repository may hold several trees."""
     rel = Path(rel)
     if rel == Path(nfx.NAMESPACE_FILENAME):
         return NAMESPACE_SERIES
@@ -170,11 +170,11 @@ def namespace_failures(idx, path) -> list[str]:
     return failures
 
 
-def module_test_path(path, roots) -> Path | None:
+def module_test_path(path, trees) -> Path | None:
     """The pytest file of a module, if it has one: `tests/test_<stem>.py` in a
     `.nf` root, `test_validators.py` beside the document in a legacy one."""
     path = Path(path)
-    root = plugins.registry_root_of(path, roots)
+    root = plugins.tree_of(path, trees)
     if root is not None and plugins.is_consolidated(root):
         candidate = root / "tests" / f"test_{path.stem}.py"
     else:
@@ -390,14 +390,14 @@ class Repo:
             others = self._others(others, staged)
             return self._verdict(staged, base, self.changed(base, new), tags, others)
 
-    def _others(self, roots, own) -> list[Path]:
-        """`roots` without this root - by path, and by namespace nid: another
+    def _others(self, trees, own) -> list[Path]:
+        """`trees` without this root - by path, and by namespace nid: another
         checkout of the same namespace (a clone, a worktree) is this root, and
         `own` stands in for it."""
         ns = Path(own) / nfx.NAMESPACE_FILENAME
         nid = nfx.read(ns).nid if ns.is_file() else None
         kept = []
-        for r in (Path(r).resolve() for r in roots):
+        for r in (Path(r).resolve() for r in trees):
             other = r / nfx.NAMESPACE_FILENAME
             if r == self.root or (nid and other.is_file() and nfx.read(other).nid == nid):
                 continue
@@ -412,7 +412,7 @@ class Repo:
         except exceptions.NfxViolation as e:
             return Verdict([str(e).replace(str(staged), str(self.root))], [], [])
         by_nid = {e.nid: e for e in idx.entries()}
-        local = {nid: e for nid, e in by_nid.items() if e.registry_root == staged}
+        local = {nid: e for nid, e in by_nid.items() if e.tree == staged}
         docs = {nid: nfx.read(e.path) for nid, e in local.items()}
         rel_of = {nid: e.path.relative_to(staged) for nid, e in local.items()}
         nid_at = {rel: nid for nid, rel in rel_of.items()}
@@ -566,7 +566,7 @@ class Repo:
         in-root dependant, deps first, re-pinned and bumped to its own next
         minor. Reads the worktree; writes nothing."""
         idx = NfxIndex(*self._others(others, self.root), self.root)
-        local = {e.nid: e for e in idx.entries() if e.registry_root == self.root}
+        local = {e.nid: e for e in idx.entries() if e.tree == self.root}
         docs = {nid: nfx.read(e.path) for nid, e in local.items()}
         rel_of = {nid: e.path.relative_to(self.root) for nid, e in local.items()}
         tags = self.tags()
@@ -984,7 +984,7 @@ class Repo:
         return changed
 
 
-# ---- move between roots -------------------------------------------------------
+# ---- move between trees -------------------------------------------------------
 
 
 @dataclasses.dataclass
@@ -1053,7 +1053,7 @@ def plan_move(source: Repo, target: Repo, key, with_dependants=False, as_="", ot
     idx = NfxIndex(*_rest(others, source, target), target.root, source.root)
     ns_src, ns_dst = idx.namespace_of(source.root), idx.namespace_of(target.root)
     if ns_src is None or ns_dst is None:
-        raise ValueError("both roots need a namespace.nfx")
+        raise ValueError("both trees need a namespace.nfx")
     if ns_src.nid == ns_dst.nid:
         raise ValueError("source and target are checkouts of the same namespace")
     head = source.rev("HEAD")
@@ -1061,7 +1061,7 @@ def plan_move(source: Repo, target: Repo, key, with_dependants=False, as_="", ot
         raise ValueError(f"{source.root}: nothing committed yet")
     seed_rel = source._find(key, head)
     seed = source.doc_at(head, seed_rel)["nid"]
-    local = {e.nid: e for e in idx.entries() if e.registry_root == source.root}
+    local = {e.nid: e for e in idx.entries() if e.tree == source.root}
     by_nid = {e.nid: e for e in idx.entries()}
     docs = {nid: nfx.read(e.path) for nid, e in local.items()}
     rel_of = {nid: e.path.relative_to(source.root) for nid, e in local.items()}
@@ -1155,7 +1155,7 @@ def move(source: Repo, target: Repo, key, with_dependants=False, as_="", others=
     `MIGRATE: … →` commit removing it from the source, then one `MIGRATE: … ←`
     commit adding it to the target, each module tagged at its version there. A
     set moves in one commit at each end - the modules pin one another, so no
-    order of single moves keeps both roots valid - with one event line per
+    order of single moves keeps both trees valid - with one event line per
     module in the body. History stays where it was; the source keeps its tags.
     A refusal anywhere puts both back. Returns the plan and the two commits."""
     plan = plan_move(source, target, key, with_dependants, as_, others)
@@ -1226,13 +1226,13 @@ def _module_paths(kind, stem) -> list[str]:
     return [f"{kind}/{stem}.nfx", f"{plugins._VALIDATORS_DIR}/{stem}.py", f"tests/test_{stem}.py"]
 
 
-def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
+def module_log(repo: Repo, key, trees=()) -> tuple[list[LogEntry], str | None]:
     """Every commit of a module, newest first, across its renames and moves:
     the file log in its root, continued under the old stem at each
     `REFACTOR:` and in the source root at each `MIGRATE: … ←` (paired by nid).
     An entry is marked `repin` where the commit changed nothing of the module
     but its version and the versions of its pins - a dependency's release.
-    `roots` are the other roots the chain may pass through, found by token.
+    `trees` are the other trees the chain may pass through, found by token.
     An entry read in another root than `repo` is `linked`. Where the chain
     goes on in a root that is not among them, the entries end with a `gap`
     one naming it. Returns the entries and a note when a root that is here
@@ -1241,7 +1241,7 @@ def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
     rel = repo._find(key, head)
     nid = repo.doc_at(head, rel)["nid"]
     by_token: dict[str, Repo] = {}
-    for r in [repo.root, *roots]:
+    for r in [repo.root, *trees]:
         ns = Path(r) / nfx.NAMESPACE_FILENAME
         if ns.is_file():
             token = nfx.read(ns).namespace or ""

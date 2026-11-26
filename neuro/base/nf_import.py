@@ -89,7 +89,7 @@ def tag_for(kind: str, stem: str, version: str) -> str:
 
 def namespace_tag(token: str | None, version: str) -> str:
     """The annotated tag a root's declaration is released under: `namespace/<token>/<version>`
-    - the token because one git repository may hold several roots - and
+    - the token because one git repository may hold several trees - and
     `namespace/<version>` for the tokenless root."""
     return f"namespace/{token}/{version}" if token else f"namespace/{version}"
 
@@ -311,10 +311,10 @@ def sync(mapping: Mapping, root) -> dict[str, list[Path]]:
     return delta
 
 
-def verify(staged, src_root, *base_roots) -> list[str]:
+def verify(staged, src_root, *base_trees) -> list[str]:
     """Check the `.nf` root `staged` against the legacy `src_root`.
 
-    `base_roots` are the roots the staged one stands on (the app's builtin
+    `base_trees` are the trees the staged one stands on (the app's builtin
     `.nf`, which holds the metaontology its modules pin). Returns problems;
     empty means the copy indexes the identical module and nid set at the same
     versions, keeps the hash rule and satisfies every pin.
@@ -322,8 +322,8 @@ def verify(staged, src_root, *base_roots) -> list[str]:
     staged = Path(staged).resolve()
     issues = []
     src = {e.nid: e for e in NfxIndex(src_root).entries()}
-    idx = NfxIndex(*base_roots, staged)
-    dst = {e.nid: e for e in idx.entries() if e.registry_root == staged}
+    idx = NfxIndex(*base_trees, staged)
+    dst = {e.nid: e for e in idx.entries() if e.tree == staged}
     for nid in sorted(src.keys() - dst.keys()):
         issues.append(f"{src[nid].path.name}: missing from the copy")
     for nid in sorted(dst.keys() - src.keys()):
@@ -335,7 +335,7 @@ def verify(staged, src_root, *base_roots) -> list[str]:
                           f"{d.path.stem}/{d.type}@{d.version}")
         if d.name != d.path.stem:
             issues.append(f"{d.path.name}: name {d.name!r} is not its stem")
-        vpath = plugins.validators_path_for(d.path, idx.roots)
+        vpath = plugins.validators_path_for(d.path, idx.trees)
         doc_hash = nfx.read(d.path).hash
         if vpath is not None and vpath.is_file():
             if hashlib.sha256(vpath.read_bytes()).hexdigest() != doc_hash:

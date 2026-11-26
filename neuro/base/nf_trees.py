@@ -12,7 +12,7 @@ directory its tree lives in, the token beside it:
 
 It is what the `nf.*` tasks list and what an `@<token>` entry of `PLUGINS` is
 looked up in. `PLUGINS` itself stays the *scope*: the trees one environment
-may load (`plugins.effective_roots`). A tree is found by nid whatever its
+may load (`plugins.effective_trees`). A tree is found by nid whatever its
 directory is called today, so moving one (`move`) edits this file and nothing
 else.
 

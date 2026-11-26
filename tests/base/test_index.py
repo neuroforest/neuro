@@ -93,7 +93,7 @@ class TestPluginIndexKindFilter:
 class TestOntologyIndexMetaontology:
     def test_metaontology_discovered_via_roots(self, tmp_path):
         """OntologyIndex accepts metaontology via the standard scan - its
-        directory just needs to be one of the registry roots."""
+        directory just needs to be one of the trees."""
         plugins_root = tmp_path / "plugins"
         plugins_root.mkdir()
         meta_dir = tmp_path / "assets" / "ontology"
@@ -210,11 +210,11 @@ class TestConsolidatedRoot:
         idx = NfxIndex(root)
         by_nid = {e.nid: e for e in idx.entries()}
         assert set(by_nid) == {a, k}
-        assert by_nid[a].registry_root == root.resolve()
+        assert by_nid[a].tree == root.resolve()
         assert by_nid[a].validators_path == (root / "validators" / "A.py").resolve()
         assert by_nid[a].local_name == "A"
         assert by_nid[k].plugin_root is None
-        assert idx.roots == (root.resolve(),)
+        assert idx.trees == (root.resolve(),)
 
     def test_subdir_type_mismatch_fatal(self, tmp_path):
         root = tmp_path / ".nf"

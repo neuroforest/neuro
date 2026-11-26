@@ -15,14 +15,14 @@ register time and surfaced via `Entry.implicit_parent_nid`; `_topo` /
 
 Three things are fatal at scan time: a nid claimed by two
 files anywhere; a local name (file stem, case-insensitive) used twice inside
-one registry root - across roots it may repeat, the roots' namespaces tell
+one tree - across trees it may repeat, the trees' namespaces tell
 them apart; and, in a consolidated root, a file whose
 kind subdir disagrees with its `type` field.
 
 Before the modules, a pre-pass reads each consolidated root's `namespace.nfx`
 into a `Namespace`; every `Entry` of that root carries its
 token and nid. Fatal there: a declaration that is not `type: "namespace"` or
-fails `nfx.namespace_issues`, two roots claiming one token, a namespace nid
+fails `nfx.namespace_issues`, two trees claiming one token, a namespace nid
 also claimed elsewhere. A missing declaration is a warning and leaves the
 root's entries with `namespace None` until `tree.import` writes one
 a legacy root never has one.
@@ -73,7 +73,7 @@ class Entry:
     plugin_root: Path | None = None
     parent_plugin_root: Path | None = None
     implicit_parent_nid: str | None = None
-    registry_root: Path | None = None
+    tree: Path | None = None
     validators_path: Path | None = None
     namespace: str | None = None
     namespace_nid: str | None = None
@@ -85,7 +85,7 @@ class Entry:
 
 
 class PluginIndex:
-    """Index of `.nfx` files discovered from PLUGINS registry roots, filtered
+    """Index of `.nfx` files discovered from PLUGINS trees, filtered
     by the subclass's `KIND` tuple (empty = accept all types).
 
     Keyed canonically by `nid`. `resolve()` additionally accepts name, stem,
@@ -95,12 +95,12 @@ class PluginIndex:
 
     KIND: tuple[str, ...] = ()
 
-    def __init__(self, *roots):
+    def __init__(self, *trees):
         self._index: dict[str, Entry] = {}
         self._by_plugin_root: dict[Path, Entry] = {}
         self._by_local_name: dict[tuple[Path, str], Path] = {}
         self._namespaces: dict[Path, Namespace] = {}
-        self._roots = tuple(Path(r).resolve() for r in roots)
+        self._trees = tuple(Path(r).resolve() for r in trees)
         self._read_namespaces()
         self._scan()
         self._resolve_implicit_parents()
@@ -111,7 +111,7 @@ class PluginIndex:
         """Pre-pass: one `Namespace` per consolidated root that declares one."""
         by_token: dict[str, Path] = {}
         by_nid: dict[str, Path] = {}
-        for root in self._roots:
+        for root in self._trees:
             path = plugins.namespace_path(root)
             if path is None:
                 continue
@@ -176,13 +176,13 @@ class PluginIndex:
                 raise exceptions.NfxViolation(
                     f"nid collision: {doc.nid} claimed by {ns.path} and {path}"
                 )
-        name_key = (pf.registry_root, path.stem.lower())
+        name_key = (pf.tree, path.stem.lower())
         claimed = self._by_local_name.get(name_key)
         if claimed is not None and claimed != path:
             raise exceptions.NfxViolation(
-                f"local name collision in {pf.registry_root}: {path.stem!r} claimed by {claimed} and {path}"
+                f"local name collision in {pf.tree}: {path.stem!r} claimed by {claimed} and {path}"
             )
-        ns = self._namespaces.get(pf.registry_root)
+        ns = self._namespaces.get(pf.tree)
         entry = Entry(
             path=path,
             nid=doc.nid,
@@ -191,7 +191,7 @@ class PluginIndex:
             version=doc.version,
             plugin_root=pf.plugin_root,
             parent_plugin_root=pf.parent_plugin_root,
-            registry_root=pf.registry_root,
+            tree=pf.tree,
             validators_path=pf.validators_path,
             namespace=None if ns is None else ns.token,
             namespace_nid=None if ns is None else ns.nid,
@@ -203,7 +203,7 @@ class PluginIndex:
         return entry
 
     def _scan(self) -> None:
-        for pf in plugins.walk_plugins(self._roots):
+        for pf in plugins.walk_plugins(self._trees):
             self._register(pf)
             plugins.load_validators(pf)
 
@@ -284,13 +284,13 @@ class PluginIndex:
         return list(self._index.values())
 
     @property
-    def roots(self):
-        """The registry roots this index was built from, resolved, in order."""
-        return self._roots
+    def trees(self):
+        """The trees this index was built from, resolved, in order."""
+        return self._trees
 
     def namespaces(self) -> list[Namespace]:
         """The declarations read in the pre-pass, in root order."""
-        return [self._namespaces[r] for r in self._roots if r in self._namespaces]
+        return [self._namespaces[r] for r in self._trees if r in self._namespaces]
 
     def namespace_for(self, nid) -> str | None:
         """The token of the tree that holds the module `nid`: "" in the root
@@ -404,7 +404,7 @@ class PluginIndex:
 
 
 class NfxIndex(PluginIndex):
-    """Type-agnostic view: registers every `.nfx` reachable from the roots."""
+    """Type-agnostic view: registers every `.nfx` reachable from the trees."""
 
     KIND = ()
 
@@ -412,7 +412,7 @@ class NfxIndex(PluginIndex):
 class OntologyIndex(PluginIndex):
     """Ontology view: registers `.nfx` whose `type` is `ontology` or
     `metaontology`. The metaontology is discovered through the standard scan
-    (its directory must be one of the PLUGINS roots, which is the default)."""
+    (its directory must be one of the PLUGINS trees, which is the default)."""
 
     KIND = ("ontology", "metaontology")
 

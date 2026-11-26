@@ -276,18 +276,18 @@ class TestConsolidatedRoot:
         root = _make_nf_root(tmp_path)
         legacy = tmp_path / "plugins"
         (legacy / "p").mkdir(parents=True)
-        roots = [root, legacy]
-        assert plugins.validators_path_for(root / "ontology" / "Math.nfx", roots) == (
+        trees = [root, legacy]
+        assert plugins.validators_path_for(root / "ontology" / "Math.nfx", trees) == (
             root / "validators" / "Math.py"
         ).resolve()
-        assert plugins.validators_path_for(root / "knowledge" / "K.nfx", roots) == (
+        assert plugins.validators_path_for(root / "knowledge" / "K.nfx", trees) == (
             root / "validators" / "K.py"
         ).resolve()
-        assert plugins.validators_path_for(root / "namespace.nfx", roots) is None
-        assert plugins.validators_path_for(legacy / "p" / "p.nfx", roots) == (
+        assert plugins.validators_path_for(root / "namespace.nfx", trees) is None
+        assert plugins.validators_path_for(legacy / "p" / "p.nfx", trees) == (
             legacy / "p" / "validators.py"
         ).resolve()
-        assert plugins.validators_path_for(legacy / "bare.nfx", roots) is None
+        assert plugins.validators_path_for(legacy / "bare.nfx", trees) is None
 
     def test_mixed_roots(self, tmp_path):
         root = _make_nf_root(tmp_path)
@@ -297,7 +297,7 @@ class TestConsolidatedRoot:
         (legacy / "p" / "p.nfx").touch()
         by_root = {}
         for pf in plugins.walk_plugins([legacy, root]):
-            by_root.setdefault(pf.registry_root, []).append(pf.nfx_path.name)
+            by_root.setdefault(pf.tree, []).append(pf.nfx_path.name)
         assert by_root == {legacy.resolve(): ["p.nfx"], root.resolve(): ["A.nfx"]}
 
     def test_load_validators(self, tmp_path):

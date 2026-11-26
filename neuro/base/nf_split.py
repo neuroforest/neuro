@@ -8,7 +8,7 @@ and the root they leave keeps none of it.
 
 The source is partitioned, never rewritten in place. `plan` assigns every
 module, by nid, to an *output*: the continuation (everything not named, with
-the source's own `namespace.nfx` and its history) or one of the new roots.
+the source's own `namespace.nfx` and its history) or one of the new trees.
 `build` replays the source's commits oldest first into one new repository per
 output under a staging directory: each output gets a commit wherever its share
 of the tree changed, with the same author, dates and message, and every tag is
@@ -169,7 +169,7 @@ def plan(source: nf_repo.Repo, parts, others=(), with_dependants=False, rewrite_
     token = declared.namespace or ""
 
     idx = NfxIndex(*source._others(others, source.root), source.root)
-    local = {e.nid: e for e in idx.entries() if e.registry_root == source.root}
+    local = {e.nid: e for e in idx.entries() if e.tree == source.root}
     docs = {nid: nfx.read(e.path) for nid, e in local.items()}
     stems = {nid: (e.path.parent.name, e.path.stem) for nid, e in local.items()}
 
@@ -866,7 +866,7 @@ def verify(staging, others=()) -> list[str]:
                if len(where) > 1 and not name.startswith("namespace/")]
     issues += [f"tag {s}" for s in state["skipped_tags"]]
 
-    roots = [Path(o["dir"]).resolve() for o in outputs]
+    trees = [Path(o["dir"]).resolve() for o in outputs]
     rest = []
     for r in (Path(r).resolve() for r in others):
         ns = r / nfx.NAMESPACE_FILENAME
@@ -874,16 +874,16 @@ def verify(staging, others=()) -> list[str]:
         if r != source.resolve() and not (ns.is_file() and nfx.read(ns).nid == state["namespace"]):
             rest.append(r)
     try:
-        idx = NfxIndex(*rest, *roots)
-        for o, root in zip(outputs, roots):
+        idx = NfxIndex(*rest, *trees)
+        for o, root in zip(outputs, trees):
             issues += [f"{o['word']}: {nfx.NAMESPACE_FILENAME}: {f}"
                        for f in nf_repo.namespace_failures(idx, root / nfx.NAMESPACE_FILENAME)]
         for e in idx.entries():
-            if e.registry_root in roots:
-                where = f"{e.registry_root.parent.name}: {e.path.relative_to(e.registry_root)}"
+            if e.tree in trees:
+                where = f"{e.tree.parent.name}: {e.path.relative_to(e.tree)}"
                 issues += [f"{where}: {f}" for f in nf_repo.document_failures(idx, e.path)]
                 issues += [f"{where}: {f}" for f in idx.check_dependency_versions(e.path)]
-    except exceptions.NfxViolation as e:  # roots that cannot be indexed together are the finding
+    except exceptions.NfxViolation as e:  # trees that cannot be indexed together are the finding
         issues.append(f"the outputs do not index together: {e}")
     return issues
 

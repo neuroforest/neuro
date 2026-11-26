@@ -103,10 +103,10 @@ def test_swap(root):
     assert state["kept"] == str(root.path.parent / ".nf.pre-split") and not p.staging.exists()
     assert _subjects(root.path)[0] == "MIGRATE: split → kb" and _subjects(to)[0] == "MIGRATE: split ← root"
     assert _git(root.path, "status", "--short") == "" and _git(to, "status", "--short") == ""
-    # the two roots stand together: the new one's module still resolves its pin into the old
+    # the two trees stand together: the new one's module still resolves its pin into the old
     assert nf_repo.Repo(to).check("HEAD", others=[root.path]).issues == []
     # the log names the root each commit was made in: the source's, before the split
-    entries, note = nf_repo.module_log(nf_repo.Repo(to), "b", roots=[root.path])
+    entries, note = nf_repo.module_log(nf_repo.Repo(to), "b", trees=[root.path])
     assert note is None and [(e.token, e.subject, e.version) for e in entries] == [
         ("kb", "MIGRATE: split ← root", ""), ("", "RELEASE: ontology p 1.1", "1.1"), ("", "ADD: root", "1.0")]
 

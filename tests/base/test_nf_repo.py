@@ -396,12 +396,12 @@ def test_move(tmp_path, root):
     _git(root.path, "config", "user.name", "T")
     _git(root.path, "config", "user.email", "t@example.org")
     micro = _target(tmp_path, root)
-    roots = [root.path, micro.root]
+    trees = [root.path, micro.root]
     # A has a dependant (B) in the source: refused alone, named
     with pytest.raises(ValueError, match="in-root dependants: knowledge/b.nfx"):
-        nf_repo.plan_move(root.repo, micro, "a", others=roots)
+        nf_repo.plan_move(root.repo, micro, "a", others=trees)
 
-    plan, departed, arrived = nf_repo.move(root.repo, micro, "b", as_="stains", others=roots)
+    plan, departed, arrived = nf_repo.move(root.repo, micro, "b", as_="stains", others=trees)
     assert _git(root.path, "log", "-1", "--format=%s").strip() == "MIGRATE: knowledge b → micro"
     assert _git(micro.root, "log", "-1", "--format=%s%n%b").split("\n")[:2] == [
         "MIGRATE: knowledge b ← root as stains",
@@ -412,13 +412,13 @@ def test_move(tmp_path, root):
     assert _git(root.path, "tag", "-l", "knowledge/*").split() == ["knowledge/b/1.0"]  # the source keeps its past
     assert "MIGRATE: knowledge b ← root as stains · released in root" in _git(
         micro.root, "cat-file", "-p", "knowledge/stains/1.0")
-    assert root.repo.check("HEAD").issues == [] and micro.check("HEAD", others=roots).issues == []
+    assert root.repo.check("HEAD").issues == [] and micro.check("HEAD", others=trees).issues == []
     from neuro.base import nf_events
     arrival = nf_events.parse(_git(micro.root, "log", "-1", "--format=%s"))
     assert nf_events.departure_of(root.path, "", arrival, root.b, "micro") == departed
 
     # P with its dependant A as a set, while micro's stains already pins A: one commit at each end
-    plan, departed, arrived = nf_repo.move(root.repo, micro, "p", with_dependants=True, others=roots)
+    plan, departed, arrived = nf_repo.move(root.repo, micro, "p", with_dependants=True, others=trees)
     assert [i.stem for i in plan.items] == ["p", "a"]
     assert _git(root.path, "log", "-1", "--format=%B").strip().split("\n") == [
         "MIGRATE: ontology p → micro", "", "MIGRATE: ontology p → micro", "MIGRATE: ontology a → micro"]
@@ -429,17 +429,17 @@ def test_move(tmp_path, root):
         micro.root, "cat-file", "-p", "ontology/a/1.0")
     a_arrival = nf_events.parse_all(message)[1]
     assert nf_events.departure_of(root.path, "", a_arrival, root.a, "micro") == departed
-    assert micro.check("HEAD", others=roots).issues == []
+    assert micro.check("HEAD", others=trees).issues == []
 
     # stains alone cannot go back: it pins A, now in micro, which the root's envelope does not reach
     with pytest.raises(nf_repo.ReleaseRefused) as e:
-        nf_repo.plan_move(micro, root.repo, "stains", as_="b", others=roots)
+        nf_repo.plan_move(micro, root.repo, "stains", as_="b", others=trees)
     assert any("add micro@1.0" in i for i in e.value.issues)
     # the whole set goes back; the root's own tags of the same nids do not reserve p and a against them
-    plan, _, _ = nf_repo.move(micro, root.repo, "p", with_dependants=True, others=roots)
+    plan, _, _ = nf_repo.move(micro, root.repo, "p", with_dependants=True, others=trees)
     assert [(i.stem, i.landed) for i in plan.items] == [("p", "p"), ("a", "a"), ("stains", "stains")]
     assert _git(root.path, "log", "-1", "--format=%s").strip() == "MIGRATE: ontology p ← micro"
-    assert root.repo.check("HEAD").issues == [] and micro.check("HEAD", others=roots).issues == []
+    assert root.repo.check("HEAD").issues == [] and micro.check("HEAD", others=trees).issues == []
     assert sorted(_git(root.path, "tag", "-l", "ontology/*").split()) == [
         "ontology/a/1.0", "ontology/p/1.0"]  # versions unchanged: nothing new to tag
 
@@ -448,9 +448,9 @@ def test_move_refused(tmp_path, root):
     _git(root.path, "config", "user.name", "T")
     _git(root.path, "config", "user.email", "t@example.org")
     micro = _target(tmp_path, root, pin=False)
-    roots = [root.path, micro.root]
+    trees = [root.path, micro.root]
     with pytest.raises(nf_repo.ReleaseRefused) as e:
-        nf_repo.plan_move(root.repo, micro, "b", others=roots)
+        nf_repo.plan_move(root.repo, micro, "b", others=trees)
     assert any("add root@1.0" in i for i in e.value.issues)
     # unreleased edits, and a taken stem
     (tmp_path / "x").mkdir()
@@ -485,13 +485,13 @@ def test_module_log(tmp_path, root):
     _git(root.path, "config", "user.name", "T")
     _git(root.path, "config", "user.email", "t@example.org")
     micro = _target(tmp_path, root)
-    roots = [root.path, micro.root]
-    root.repo.rename("b", "stains", others=roots)
-    nf_repo.move(root.repo, micro, "stains", others=roots)  # a rename is a release, so the module is clean
+    trees = [root.path, micro.root]
+    root.repo.rename("b", "stains", others=trees)
+    nf_repo.move(root.repo, micro, "stains", others=trees)  # a rename is a release, so the module is clean
     micro.git("config", "user.name", "T")
-    micro.rename("stains", "dyes", others=roots)
-    nf_repo.move(micro, root.repo, "dyes", others=roots)
-    entries, note = nf_repo.module_log(root.repo, "dyes", roots=roots)
+    micro.rename("stains", "dyes", others=trees)
+    nf_repo.move(micro, root.repo, "dyes", others=trees)
+    entries, note = nf_repo.module_log(root.repo, "dyes", trees=trees)
     assert note is None
     assert [(e.token, e.subject) for e in entries] == [
         ("", "MIGRATE: knowledge dyes ← micro"),
@@ -512,13 +512,13 @@ def test_module_log(tmp_path, root):
                                               nodes=[root.bn], rels=[(root.bn, root.an)], extra="edit"))
     root.commit("UPDATE: dyes")
     with pytest.raises(nf_repo.ReleaseRefused) as e:
-        nf_repo.plan_move(root.repo, micro, "dyes", as_="tints", others=roots)
+        nf_repo.plan_move(root.repo, micro, "dyes", as_="tints", others=trees)
     assert any("unreleased edits since knowledge/dyes/1.2" in i for i in e.value.issues)
     assert len({(e.root, e.sha) for e in entries}) == len(entries)
     # a commit read in another root than the one asked is linked
     assert [e.via for e in entries] == ["", "linked", "linked", "linked", "", "", ""]
     # a root the chain needs is missing: the walk ends with a gap row naming it
-    entries, note = nf_repo.module_log(root.repo, "dyes", roots=[root.path])
+    entries, note = nf_repo.module_log(root.repo, "dyes", trees=[root.path])
     assert note is None and [e.gap for e in entries] == [False, False, True]
     assert (entries[2].token, entries[2].sha) == ("micro", "") and "history in micro" in entries[2].subject
 
@@ -604,7 +604,7 @@ def test_series():
 
 
 def test_tags(tmp_path):
-    # two roots in one repository: each declaration has its own series, under its token
+    # two trees in one repository: each declaration has its own series, under its token
     _git(tmp_path, "init", "-q", "-b", "master")
     _git(tmp_path, "config", "core.hooksPath", "/dev/null")
     for token in ("x", "y"):
@@ -613,7 +613,7 @@ def test_tags(tmp_path):
         (path / "namespace.nfx").write_text(nfx.dumps(nfx.Nfx.from_dict(
             {"type": "namespace", "nid": str(uuid.uuid4()), "version": "1.0", "name": token, "namespace": token})))
     _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "ADD: roots")
+    _git(tmp_path, "commit", "-q", "-m", "ADD: trees")
     x, y = (nf_repo.Repo(tmp_path / token / ".nf") for token in ("x", "y"))
     assert x.tag() == ["namespace/x/1.0"] and y.tag() == ["namespace/y/1.0"]
     assert x.tags() == y.tags() == {("namespace", ""): {"1.0"}}

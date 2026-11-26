@@ -1,7 +1,7 @@
 """
 Plugin system: validator registry and on-disk plugin discovery.
 
-Two kinds of registry root exist.
+Two kinds of tree exist.
 
 **Consolidated root** - a directory named `.nf`, acting as a whole:
 
@@ -114,12 +114,12 @@ clear = _registry.clear
 class PluginFile:
     """One discovered `.nfx` and its enclosing plugin context.
 
-    `plugin_root` is None for a bare nfx sitting directly under a registry root
+    `plugin_root` is None for a bare nfx sitting directly under a tree
     and for every file of a consolidated root (no plugin directories there);
     a consolidated root's `namespace.nfx` is never one of these (see
     `namespace_path`).
     `parent_plugin_root` is None when the plugin has no enclosing parent plugin
-    (top-level under a registry root). `validators_path` is where this
+    (top-level under a tree). `validators_path` is where this
     module's validators live if it has any - `<plugin>/validators.py` in a
     legacy root, `validators/<stem>.py` in a consolidated one - whether or not
     the file exists. `expected_type` is the `type` the file's kind subdir
@@ -127,15 +127,15 @@ class PluginFile:
     "knowledge"), None where the path says nothing.
     """
     nfx_path: Path
-    registry_root: Path
+    tree: Path
     plugin_root: Path | None
     parent_plugin_root: Path | None
     validators_path: Path | None = None
     expected_type: str | None = None
 
 
-def _normalise_roots(registry_roots: Iterable[Path | str]) -> tuple[Path, ...]:
-    return tuple(Path(r).resolve() for r in registry_roots)
+def _normalise_trees(trees: Iterable[Path | str]) -> tuple[Path, ...]:
+    return tuple(Path(r).resolve() for r in trees)
 
 
 def is_consolidated(root: Path | str) -> bool:
@@ -179,34 +179,34 @@ def scope() -> list[tuple[str, Path | None]]:
     return entries
 
 
-def effective_roots() -> list[Path]:
-    """The PLUGINS roots in effect for this process, missing entries skipped.
+def effective_trees() -> list[Path]:
+    """The PLUGINS trees in effect for this process, missing entries skipped.
 
-    The one way callers obtain the registry roots: the
+    The one way callers obtain the trees: the
     entries of `scope()`, an absent one logged and dropped rather than fatal,
     so a machine without every root checked out still builds. A tree named
     twice (by path and by `@token`) counts once.
     """
-    roots = []
+    trees = []
     for entry, path in scope():
         if path is None or not path.exists():
             logging.warning(f"PLUGINS: '{entry}' does not exist, skipped")
             continue
         path = path.resolve()
-        if path not in roots:
-            roots.append(path)
-    return roots
+        if path not in trees:
+            trees.append(path)
+    return trees
 
 
-def missing_roots() -> list[str]:
+def missing_trees() -> list[str]:
     """The `PLUGINS` entries that name nothing on this machine, as written."""
     return [entry for entry, path in scope() if path is None or not path.exists()]
 
 
-def registry_root_of(path: Path | str, registry_roots: Iterable[Path | str]) -> Path | None:
-    """The registry root `path` sits under, or None if it is outside all of them."""
+def tree_of(path: Path | str, trees: Iterable[Path | str]) -> Path | None:
+    """The tree `path` sits under, or None if it is outside all of them."""
     resolved = Path(path).resolve()
-    for root in _normalise_roots(registry_roots):
+    for root in _normalise_trees(trees):
         if _is_under(resolved, root):
             return root
     return None
@@ -214,7 +214,7 @@ def registry_root_of(path: Path | str, registry_roots: Iterable[Path | str]) -> 
 
 def validators_path_for(
     nfx_path: Path | str,
-    registry_roots: Iterable[Path | str],
+    trees: Iterable[Path | str],
 ) -> Path | None:
     """Where the validators for `nfx_path` live, in either kind of root.
 
@@ -225,40 +225,40 @@ def validators_path_for(
     hash check and `ontology.rehash` alike.
     """
     path = Path(nfx_path).resolve()
-    roots = _normalise_roots(registry_roots)
-    root = registry_root_of(path, roots)
+    trees = _normalise_trees(trees)
+    root = tree_of(path, trees)
     if root is not None and is_consolidated(root):
         if path.parent.parent == root and path.parent.name in _KIND_SUBDIRS:
             return root / _VALIDATORS_DIR / f"{path.stem}.py"
         return None
-    proot = plugin_root_for(path, roots)
+    proot = plugin_root_for(path, trees)
     return None if proot is None else proot / _VALIDATORS_FILENAME
 
 
 def plugin_root_for(
     nfx_path: Path | str,
-    registry_roots: Iterable[Path | str] = (),
+    trees: Iterable[Path | str] = (),
 ) -> Path | None:
     """Return the plugin directory owning `nfx_path`, or None for a bare nfx.
 
-    Rules (with `registry_roots` provided):
-      - If `nfx_path.parent` is itself a registry root → None (bare).
+    Rules (with `trees` provided):
+      - If `nfx_path.parent` is itself a tree → None (bare).
       - If `nfx_path.parent.name` is "plugins" (sub-plugin container) → None
         (bare sub-plugin; parent linkage handled by `walk_plugins`).
       - If `nfx_path.parent.name` is "ontology" or "knowledge" → return
         `nfx_path.parent.parent` (kind-subdir layout).
       - Otherwise → return `nfx_path.parent` (flat-dir or dir-form sub-plugin).
 
-    With no `registry_roots`, falls back to the legacy heuristic
+    With no `trees`, falls back to the legacy heuristic
     (parent dir name equals nfx stem implies dir-form). Kept so older callers
-    that have not yet been threaded with registry roots keep working.
+    that have not yet been threaded with trees keep working.
     """
     path = Path(nfx_path).resolve()
-    roots = _normalise_roots(registry_roots)
-    if not roots:
+    trees = _normalise_trees(trees)
+    if not trees:
         return path.parent if path.parent.name == path.stem else None
     parent = path.parent
-    if parent in roots:
+    if parent in trees:
         return None
     if parent.name == _SUBPLUGIN_CONTAINER:
         return None
@@ -285,20 +285,20 @@ def _owns_nfx(directory: Path) -> bool:
 
 def _enclosing_plugin(
     start: Path,
-    roots: tuple[Path, ...],
+    trees: tuple[Path, ...],
 ) -> Path | None:
     """Walk up from `start.parent` and return the first ancestor that owns
     its own `.nfx` (flat or via a kind subdir). Reserved container names
     (`plugins/`, `ontology/`, `knowledge/`) are skipped - they may carry
     files but are never themselves treated as plugins. Stops at any registry
-    root or when leaving every registry root's subtree."""
-    if not roots:
+    root or when leaving every tree's subtree."""
+    if not trees:
         return None
     ancestor = start.parent
     while True:
-        if ancestor in roots:
+        if ancestor in trees:
             return None
-        if not any(_is_under(ancestor, r) for r in roots):
+        if not any(_is_under(ancestor, r) for r in trees):
             return None
         if ancestor.name not in _RESERVED_DIR_NAMES and _owns_nfx(ancestor):
             return ancestor
@@ -309,14 +309,14 @@ def _enclosing_plugin(
 
 def parent_plugin_root(
     plugin_root: Path | str,
-    registry_roots: Iterable[Path | str],
+    trees: Iterable[Path | str],
 ) -> Path | None:
     """Return the enclosing plugin's root, or None if `plugin_root` is top-level."""
     if not plugin_root:
         return None
     return _enclosing_plugin(
         Path(plugin_root).resolve(),
-        _normalise_roots(registry_roots),
+        _normalise_trees(trees),
     )
 
 
@@ -349,7 +349,7 @@ def _walk_consolidated(root: Path) -> Iterator[PluginFile]:
         for nfx_path in _nfx_files(root / kind):
             yield PluginFile(
                 nfx_path=nfx_path,
-                registry_root=root,
+                tree=root,
                 plugin_root=None,
                 parent_plugin_root=None,
                 validators_path=root / _VALIDATORS_DIR / f"{nfx_path.stem}.py",
@@ -357,42 +357,42 @@ def _walk_consolidated(root: Path) -> Iterator[PluginFile]:
             )
 
 
-def _walk_legacy(root: Path, roots: tuple[Path, ...]) -> Iterator[PluginFile]:
+def _walk_legacy(root: Path, trees: tuple[Path, ...]) -> Iterator[PluginFile]:
     for dirpath, _dirnames, filenames in os.walk(root, followlinks=True):
         dir_path = Path(dirpath)
         for fname in filenames:
             if not fname.endswith(".nfx"):
                 continue
             nfx_path = dir_path / fname
-            proot = plugin_root_for(nfx_path, roots)
+            proot = plugin_root_for(nfx_path, trees)
             # For bare nfx (no plugin_root), parent linkage is still
             # possible when nested inside a `plugins/` sub-plugin container.
             parent_start = proot if proot is not None else nfx_path
-            parent = _enclosing_plugin(parent_start, roots)
+            parent = _enclosing_plugin(parent_start, trees)
             yield PluginFile(
                 nfx_path=nfx_path,
-                registry_root=root,
+                tree=root,
                 plugin_root=proot,
                 parent_plugin_root=parent,
                 validators_path=None if proot is None else proot / _VALIDATORS_FILENAME,
             )
 
 
-def walk_plugins(registry_roots: Iterable[Path | str]) -> Iterator[PluginFile]:
-    """Yield every `.nfx` under each registry root, with plugin context.
+def walk_plugins(trees: Iterable[Path | str]) -> Iterator[PluginFile]:
+    """Yield every `.nfx` under each tree, with plugin context.
 
     A `.nf` root is read by the consolidated rule (`_walk_consolidated`); any
     other root by the legacy layouts, symlinks followed, in `os.walk` order.
-    Roots come in the order given; a root that is not a directory is skipped.
+    Trees come in the order given; a root that is not a directory is skipped.
     """
-    roots = _normalise_roots(registry_roots)
-    for root in roots:
+    trees = _normalise_trees(trees)
+    for root in trees:
         if not root.is_dir():
             continue
         if is_consolidated(root):
             yield from _walk_consolidated(root)
         else:
-            yield from _walk_legacy(root, roots)
+            yield from _walk_legacy(root, trees)
 
 
 def load_validators_file(validators_path: Path | str | None) -> bool:

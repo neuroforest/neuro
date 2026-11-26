@@ -117,14 +117,14 @@ def test_scope(tmp_path, monkeypatch):
     nf_trees.register(b)
     monkeypatch.setenv("APP_DIR", str(tmp_path))
     monkeypatch.setenv("PLUGINS", f"a/.nf:@kb:@root:@gone:{tmp_path}/nowhere")
-    assert plugins.effective_roots() == [a, b]  # `@root` names a tree the path already did
-    assert plugins.missing_roots() == ["@gone", f"{tmp_path}/nowhere"]
+    assert plugins.effective_trees() == [a, b]  # `@root` names a tree the path already did
+    assert plugins.missing_trees() == ["@gone", f"{tmp_path}/nowhere"]
     # the scope follows a tree that moves; a path entry does not
     _git(b, "init", "-q", "-b", "master")
     _git(b, "add", ".")
     _git(b, "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "ADD: namespace")
     nf_trees.move(b, tmp_path / "c" / ".nf")
-    assert plugins.effective_roots() == [a, tmp_path / "c" / ".nf"]
+    assert plugins.effective_trees() == [a, tmp_path / "c" / ".nf"]
 
 
 def test_track_notes(tmp_path):

@@ -1,7 +1,7 @@
 """
 The commit subjects that record a module's rename or move.
 
-History is never copied between `.nf` roots: each rename and each move is one
+History is never copied between `.nf` trees: each rename and each move is one
 commit at each end, and its subject is the record. Three forms, one line each,
 written only by `nfx.rename` / `nfx.move` and read by `nfx.log`:
 
