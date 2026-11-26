@@ -433,19 +433,21 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
 def extensions(doc: Nfx, dependency_nodes: dict) -> tuple[dict, list[str]]:
     """What `doc` adds to the nodes its dependencies declare.
 
-    A module may re-declare a dependency's node. Restating what the dependency
-    says of it - its labels, a property with the same value - makes the entry
-    an edge endpoint and nothing more. A label or a property key beyond that
-    is the module's *contribution*: an extension of a node it does not own.
+    A module may re-declare a dependency's node. Restating its labels makes
+    the entry an edge endpoint and nothing more - which an edge needs of no
+    node a dependency declares, so such an entry is only ever the carrier of
+    an extension. A label or a property key the dependencies do not declare is
+    the module's *contribution*: an extension of a node it does not own.
     `dependency_nodes` is `NfxTree.dependency_nodes()`.
 
     Returns `(contributions, issues)`. `contributions` maps a nid to `labels`
     and `properties` added and `declared`, the labels (the owner's class
     first) and properties the dependencies hold on the node. `issues` are the
-    reasons to refuse the
-    document: a property key a dependency sets to another value (a key has one
-    declaring module per node - an override would change with import order),
-    and a contribution to a node no knowledge module declares.
+    reasons to refuse the document: a property key a dependency declares on
+    the node, whatever the value (a key has one declaring module per node - a
+    second one makes the value depend on which was imported last, and an equal
+    value only until its owner drops the key), and a contribution to a node no
+    knowledge module declares.
     """
     contributions: dict[str, dict] = {}
     issues: list[str] = []
@@ -462,11 +464,9 @@ def extensions(doc: Nfx, dependency_nodes: dict) -> tuple[dict, list[str]]:
                 values.setdefault(key, []).append((owner, value))
         added = {}
         for key, value in entry.get("properties", {}).items():
-            clash = next((owner for owner, v in values.get(key, ()) if v != value), None)
-            if clash is not None:
-                issues.append(f"{entry['nid']}: property {key!r} is declared by {clash.name} "
-                              f"with another value")
-            elif key not in values:
+            if key in values:
+                issues.append(f"{entry['nid']}: property {key!r} is declared by {values[key][0][0].name}")
+            else:
                 added[key] = value
         new_labels = [label for label in entry.get("labels", ()) if label not in labels]
         if not new_labels and not added:

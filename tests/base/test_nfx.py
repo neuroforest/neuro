@@ -273,8 +273,9 @@ def test_validate_untaggable_name():
 
 
 def test_extensions():
-    """A re-declared node of a dependency: restating it adds nothing, a label
-    or key beyond it is a contribution, and a clash or a schema node refuses."""
+    """A re-declared node of a dependency: its labels restated add nothing, a
+    label or key beyond it is a contribution, and a key the owner declares -
+    whatever the value - or a schema node refuses."""
     from neuro.base.nfx import Nfx, extensions
 
     def module(kind, name, node):
@@ -285,18 +286,20 @@ def test_extensions():
     owner = module("knowledge", "owner", owned)
     deps = {LOCAL_2: [(owner, owner.nodes[0])]}
 
-    assert extensions(module("knowledge", "k", {**owned, "properties": {"title": "t"}}), deps) == ({}, [])
+    bare = {"nid": LOCAL_2, "labels": ["Thing"]}
+    assert extensions(module("knowledge", "k", bare), deps) == ({}, [])
     added, issues = extensions(module("knowledge", "k", {
-        "nid": LOCAL_2, "labels": ["Thing", "Tiddler"], "properties": {"title": "t", "text": "x"}}), deps)
+        "nid": LOCAL_2, "labels": ["Thing", "Tiddler"], "properties": {"text": "x"}}), deps)
     assert issues == []
     assert added[LOCAL_2]["labels"] == ["Tiddler"] and added[LOCAL_2]["properties"] == {"text": "x"}
     assert added[LOCAL_2]["declared"] == {"labels": ["Thing"], "properties": {"title": "t", "rank": 1}}
 
-    added, issues = extensions(module("knowledge", "k", {**owned, "properties": {"rank": 2}}), deps)
-    assert added == {} and "'rank' is declared by owner" in issues[0]
+    for value in (1, 2):  # the owner's value or another: the key is the owner's
+        added, issues = extensions(module("knowledge", "k", {**bare, "properties": {"rank": value}}), deps)
+        assert added == {} and issues == [f"{LOCAL_2}: property 'rank' is declared by owner"]
 
     schema = module("ontology", "onto", owned)
-    added, issues = extensions(module("knowledge", "k", {**owned, "labels": ["Thing", "Tiddler"]}),
+    added, issues = extensions(module("knowledge", "k", {**bare, "labels": ["Thing", "Tiddler"]}),
                                {LOCAL_2: [(schema, schema.nodes[0])]})
     assert added == {} and "ontology onto cannot be extended" in issues[0]
 
