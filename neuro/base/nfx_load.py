@@ -90,20 +90,16 @@ class Previous:
 
 
 def import_document(nb, idx, path, on_import=None):
-    """Write the document at `path` into `nb` and return its report. Its
-    dependencies are expected to be there already - load `idx.closure(path)`
-    first, in order.
+    """Write the document at `path` into `nb` and return its report, whatever
+    its kind. A dependency the base lacks is imported first; loading
+    `idx.closure(path)` in order beforehand makes that a no-op.
 
     `idx` resolves every pin of the document, so it has to see all types (an
-    `NfxIndex`). For a knowledge module the nodes its dependencies declare are
-    passed on as owned elsewhere: a module that re-declares one - as an edge
-    endpoint, or to add a label and properties to it - must not take it over
-    from its owner.
+    `NfxIndex`). The nodes its dependencies declare are passed on as owned
+    elsewhere: a knowledge module that re-declares one - as an edge endpoint,
+    or to add a label and properties to it - must not take it over from its
+    owner.
     """
-    doc = nfx.read(path)
-    if doc.type == "knowledge":
-        return write_document(nb, path, POLICIES["knowledge"],
-                              dependency_nodes=idx.dependency_nodes(path), index=idx)
     return nb.metaontology.import_nfx(path, index=idx, on_import=on_import)
 
 

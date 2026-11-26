@@ -451,7 +451,9 @@ def extensions(doc: Nfx, dependency_nodes: dict) -> tuple[dict, list[str]]:
     issues: list[str] = []
     for entry in doc.nodes:
         owners = dependency_nodes.get(entry.get("nid"))
-        if not owners:
+        if not owners or not all(o.get("labels") for _, o in owners):
+            # Not a dependency's node - or one known by nid alone (a module
+            # read back from a base): nothing says what would be an addition.
             continue
         labels = list(dict.fromkeys(label for _, o in owners for label in o.get("labels", ())))
         values: dict[str, list] = {}

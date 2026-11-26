@@ -354,16 +354,10 @@ class Metaontology:
             dep_path = index.resolve(dep_nid)
             if not dep_path:
                 raise exceptions.NfxViolation(f"Dependency {dep_nid}@{dep_version} not found in index")
-            dep_doc = nfx.read(dep_path)
-            if dep_doc.type == "knowledge":
-                self._import_dependencies(dep_doc.dependencies, index, on_import, _depth=_depth + 1)
-                owned_elsewhere = nfx.NfxTree(dep_doc, self._resolver(index)).dependency_nodes()
-                nfx_load.write_document(self._nb, dep_path, nfx_load.POLICIES["knowledge"],
-                                        dependency_nodes=owned_elsewhere, index=index)
-            else:
-                self.import_nfx(dep_path, index=index, on_import=on_import, _depth=_depth)
+            # Whatever its kind: the document's `type` picks the policy.
+            self.import_nfx(dep_path, index=index, on_import=on_import, _depth=_depth)
             if on_import:
-                dep_name = qualified(dep_nid, dep_doc.name or dep_path.stem)
+                dep_name = qualified(dep_nid, nfx.read(dep_path).name or dep_path.stem)
                 on_import(dep_name, imported=True, depth=_depth)
 
     def _resolver(self, index=None):
@@ -424,26 +418,28 @@ class Metaontology:
         )}
 
     def import_nfx(self, path, index=None, on_import=None, _depth=0):
-        """Import an ontology from an NFX file.
+        """Import a module from an NFX file with the dependencies it lacks -
+        an ontology, the metaontology or a knowledge module: its `type` picks
+        the policy it is written under (`nfx_load.POLICIES`).
 
-        Reconciles this ontology's nodes - never a blanket clear, see
+        Reconciles the module's nodes - never a blanket clear, see
         `nfx_load`. Declared nodes are merged in place so their edges survive;
-        a node the file no longer declares loses this ontology's `DEFINES` and
+        a node the file no longer declares loses this module's `DEFINES` and
         is deleted only when nothing is left on it. Dependencies are checked in the DB; if
         missing or at a mismatched version, imported via the index.
 
         on_import(name, imported, depth): optional callback for dependency status.
 
         Raises `NfxViolation` if the document declares no `nid` or no `name`:
-        both are required to mint the `OntologyMetadata` every node hangs off.
+        both are required to mint the metadata node every node hangs off.
         Refuses a `type: "namespace"` document outright - a root's declaration
-        is not a schema; its graph form is the `:NfxPackage`
-        seeded by its own importer, not an `OntologyMetadata`.
+        is not a module; its graph form is the `:NfxPackage`
+        seeded by its own importer, not a metadata node.
         """
         doc = nfx.read(path)
         if doc.is_namespace:
             raise exceptions.NfxViolation(
-                f"{path} is a namespace declaration, not an ontology - nothing to import"
+                f"{path} is a namespace declaration, not a module - nothing to import"
             )
 
         # Ensure dependencies are present in the DB.
@@ -456,12 +452,14 @@ class Metaontology:
             raise exceptions.NfxViolation(
                 f"Dependency cycle for {path}: {' -> '.join(e.args[0])}"
             )
-        # The write is the one every kind shares; an ontology differs from the
-        # others only by its policy (`nfx_load.POLICIES`).
-        policy = nfx_load.POLICIES["metaontology" if doc.type == "metaontology" else "ontology"]
+        # The write is the one every kind shares; the kinds differ only by
+        # their policy. What the dependencies say of their nodes is known from
+        # their files alone - a dependency read back from the base is a set of
+        # nids, enough to own a node and too little to be extended.
+        owned = tree.dependency_nodes()
         return nfx_load.write_document(
-            self._nb, path, policy,
-            dependency_nids=tree.all_node_nids(scope="dependencies"), index=index,
+            self._nb, path, nfx_load.policy_for(doc), index=index,
+            **({"dependency_nodes": owned} if index else {"dependency_nids": set(owned)}),
         )
 
     def is_ontology_valid(self):
