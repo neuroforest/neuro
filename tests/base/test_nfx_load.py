@@ -32,10 +32,10 @@ class _Tree:
         self.nid = str(uuid.uuid4())
         self.file = path / "ontology" / "p.nfx"
 
-    def release(self, version, nodes, relationships=(), tag=True):
+    def release(self, version, nodes, relationships=(), tag=True, dependencies=()):
         self.file.parent.mkdir(exist_ok=True)
         nfx.write(self.file, nfx.Nfx(
-            nid=self.nid, type="ontology", name="p", version=version,
+            nid=self.nid, type="ontology", name="p", version=version, dependencies=tuple(dependencies),
             nodes=tuple(nodes), relationships=tuple(relationships),
         ))
         _git(self.path, "add", "ontology/p.nfx")
@@ -113,6 +113,33 @@ def test_write_document(nb_meta, tree):
     edge = nb_meta.get_data("MATCH ({nid: $a})-[r:SUBCLASS_OF]->() RETURN properties(r) AS p", {"a": a})
     assert edge[0]["p"] == {"weight": 2, "seen": True}
 
+    # A base three releases behind: what 1.4 added and 1.5 dropped never
+    # reached it, and the one diff 1.3 → 1.6 takes back what 1.6 lacks.
+    e = str(uuid.uuid4())
+    tree.release("1.4", [_node(a, "A", color="red"), _node(c, "C"), _node(e, "E")], [
+        {"from": a, "to": c, "type": "SUBCLASS_OF"}, {"from": a, "to": e, "type": "SUBCLASS_OF"},
+    ])
+    tree.release("1.5", [_node(a, "A", ["OntologyNode", "Late"], color="red"), _node(c, "C")], [
+        {"from": a, "to": c, "type": "SUBCLASS_OF"},
+    ])
+    report = nb_meta.metaontology.import_nfx(tree.release("1.6", [
+        _node(a, "A", ["OntologyNode", "Late"]), _node(c, "C"),
+    ]))
+    assert _state(nb_meta, e) is None and report["released"] == []
+    assert _state(nb_meta, a) == ({"OntologyNode", "Curated", "Late"}, {"nid": a, "label": "A", "owner": "hand"})
+    assert _edges(nb_meta, a) == {("RELATED_TO", c)} and report["edges_pruned"] == 1
+
+    # A pin the document drops goes with it.
+    q = tree.path / "ontology" / "q.nfx"
+    nfx.write(q, nfx.Nfx(nid=str(uuid.uuid4()), type="ontology", name="q", version="1.0", nodes=(_node(e, "E"),)))
+    nb_meta.metaontology.import_nfx(q)
+    pins = "MATCH (:OntologyMetadata {name: 'p'})-[:DEPENDS_ON]->(d) RETURN d.name AS name"
+    nodes = [_node(a, "A", ["OntologyNode", "Late"]), _node(c, "C")]
+    nb_meta.metaontology.import_nfx(tree.release("1.7", nodes, dependencies=[(nfx.read(q).nid, "1.0")]))
+    assert [r["name"] for r in nb_meta.get_data(pins)] == ["q"]
+    nb_meta.metaontology.import_nfx(tree.release("1.8", nodes))
+    assert nb_meta.get_data(pins) == []
+
 
 def test_previous_document(nb_meta, tree):
     """The previous version is the release the base holds; one that cannot be
@@ -147,3 +174,15 @@ def test_previous_document(nb_meta, tree):
     # ... and a root that does not release its documents.
     (tree.path / "namespace.nfx").write_text('{"type": "namespace", "released": false}')
     assert nfx_load.previous_document(nb_meta, path, policy, nfx.read(path)).graph
+
+    # With the base as the previous version nothing is refused, whatever the
+    # tags say, and an edge between two of the document's nodes that it stops
+    # carrying goes - while it still declares an edge of that type.
+    c = str(uuid.uuid4())
+    edges = [{"from": a, "to": b, "type": "SUBCLASS_OF"}, {"from": c, "to": b, "type": "SUBCLASS_OF"}]
+    nodes = [_node(a, "A"), _node(b, "B"), _node(c, "C")]
+    nfx_load.write_document(nb_meta, tree.release("1.2", nodes, edges, tag=False), policy)
+    assert _edges(nb_meta, a) == {("SUBCLASS_OF", b)}
+    report = nfx_load.write_document(nb_meta, tree.release("1.3", nodes, edges[1:], tag=False), policy)
+    assert _edges(nb_meta, a) == set() and _edges(nb_meta, c) == {("SUBCLASS_OF", b)}
+    assert report["edges_pruned"] == 1
