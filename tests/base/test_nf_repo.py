@@ -175,6 +175,41 @@ def test_tag(root):
     assert "RELEASE: ontology p 1.1" in _git(root.path, "cat-file", "-p", "ontology/a/1.1")
 
 
+def test_unreleased_root(root):
+    """A root that declares `"released": false` (test fixtures) commits its
+    documents without releasing them: no version rule, no tags - and every
+    other rule still holds."""
+    ns = json.loads((root.path / "namespace.nfx").read_text())
+    edited = root.doc(root.p, "p", "1.0", nodes=[root.pn], extra="edited")
+    root.write("ontology/p.nfx", edited)
+    assert any("every change is a release" in i for i in root.check())
+    # the declaration takes the key without a bump of its own, and lifts the rule
+    root.write("namespace.nfx", {**ns, "released": False})
+    verdict = root.repo.check()
+    assert verdict.issues == [] and verdict.released == []
+    root.commit("UPDATE: fixtures")
+    assert root.repo.tag() == []
+    # a version that moves - even past the next one - is neither refused nor tagged
+    root.write("knowledge/b.nfx", root.doc(root.b, "b", "1.7", kind="knowledge", deps=[(root.a, "1.0")],
+                                           nodes=[root.bn], rels=[(root.bn, root.an)]))
+    assert root.check() == []
+    root.commit("UPDATE: fixtures again")
+    assert root.repo.tag() == []
+    assert "knowledge/b/1.7" not in _git(root.path, "tag", "-l").split()
+    # the rest of the check is not lifted: pins inside the root, names, references
+    root.write("ontology/p.nfx", root.doc(root.p, "p", "1.1", nodes=[root.pn]))
+    assert any("ontology/a.nfx: pins p@1.0" in i for i in root.check())
+    root.write("ontology/p.nfx", root.doc(root.p, "P", "1.0", nodes=[root.pn], extra="edited"))
+    assert any("name 'P' must be its stem 'p'" in i for i in root.check())
+    root.write("ontology/p.nfx", edited)
+    root.write("ontology/a.nfx", root.doc(root.a, "a", "1.0", deps=[(root.p, "1.0")]))
+    assert any(i.startswith("knowledge/b.nfx: unresolved") for i in root.check())
+    # `true` is not a spelling of the default
+    _git(root.path, "checkout", "-q", "HEAD", "--", "ontology/a.nfx")
+    root.write("namespace.nfx", {**ns, "released": True})
+    assert any("only as false" in i for i in root.check())
+
+
 def test_release(root):
     _git(root.path, "config", "user.name", "T")
     _git(root.path, "config", "user.email", "t@example.org")

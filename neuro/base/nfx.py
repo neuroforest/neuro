@@ -29,7 +29,7 @@ NAMESPACE_FILENAME = "namespace.nfx"
 _NAMESPACE_TOKEN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 # Internal canonical layout - callers consume validation/lint results, not these.
-_KEY_ORDER = ("type", "nid", "version", "name", "description", "namespace", "was",
+_KEY_ORDER = ("type", "nid", "version", "name", "description", "namespace", "was", "released",
               "dependencies", "hash", "nodes", "relationships")
 _NODE_KEY_ORDER = ("nid", "labels", "properties")
 _REL_KEY_ORDER = ("from", "to", "type", "properties")
@@ -109,8 +109,11 @@ class Nfx:
     string is reconstituted by `to_dict`.
 
     `namespace` is None when the key is absent and a string - possibly "" -
-    when it is written; `was` lists the root's retired tokens. Both belong to
-    a `type: "namespace"` document only (`validate` reports them elsewhere).
+    when it is written; `was` lists the root's retired tokens. `released` is
+    None when the key is absent and has one written value, `false`: the root's
+    documents are committed without being released (test fixtures) - no
+    version rule, no tags. All three belong to a `type: "namespace"` document
+    only (`validate` reports them elsewhere).
     """
 
     nid: str = ""
@@ -120,6 +123,7 @@ class Nfx:
     version: str = ""
     namespace: str | None = None
     was: tuple[str, ...] = ()
+    released: bool | None = None
     dependencies: tuple[tuple[str, str], ...] = ()
     hash: str = ""
     nodes: tuple[dict, ...] = field(default_factory=tuple)
@@ -156,6 +160,9 @@ class Nfx:
         was_raw = data.get("was", []) or []
         if not isinstance(was_raw, list) or not all(isinstance(w, str) for w in was_raw):
             raise NfxViolation(f"was {was_raw!r} is not a list of tokens")
+        released = data.get("released")
+        if released is not None and not isinstance(released, bool):
+            raise NfxViolation(f"released {released!r} is not a boolean")
         nodes: list[dict] = []
         for n in data.get("nodes", []) or []:
             n = dict(n)
@@ -180,6 +187,7 @@ class Nfx:
             version=data.get("version", "") or "",
             namespace=namespace,
             was=tuple(was_raw),
+            released=released,
             dependencies=tuple(deps),
             hash=data.get("hash", "") or "",
             nodes=tuple(nodes),
@@ -214,6 +222,8 @@ class Nfx:
             out["namespace"] = self.namespace
         if self.was:
             out["was"] = list(self.was)
+        if self.released is not None:
+            out["released"] = self.released
         if self.dependencies:
             out["dependencies"] = [f"{n}@{v}" for n, v in self.dependencies]
         if self.hash:
@@ -317,8 +327,9 @@ def namespace_issues(doc: Nfx) -> list[str]:
     corpus - an absent key is the silent-drop trap, not an empty namespace),
     the token and every `was` entry must match the token grammar, `was` must
     not repeat itself or the current token, and the file declares no nodes,
-    relationships or hash: it is a declaration, not a schema. Any other type
-    may carry neither `namespace` nor `was`.
+    relationships or hash: it is a declaration, not a schema. `released` has
+    one spelling - `false`, or the key absent - so `true` is reported. Any
+    other type may carry none of `namespace`, `was` and `released`.
     """
     issues: list[str] = []
     if doc.is_namespace:
@@ -335,6 +346,8 @@ def namespace_issues(doc: Nfx) -> list[str]:
             if old in seen:
                 issues.append(f"'was' lists {old!r} twice")
             seen.add(old)
+        if doc.released is True:
+            issues.append("'released' is written only as false; a released root omits the key")
         for key in ("nodes", "relationships", "hash"):
             if getattr(doc, key):
                 issues.append(f"namespace file carries {key!r}; a declaration has no schema")
@@ -343,6 +356,9 @@ def namespace_issues(doc: Nfx) -> list[str]:
             issues.append(f"'namespace' key on a {doc.type or 'typeless'} document; only a namespace file declares one")
         if doc.was:
             issues.append(f"'was' key on a {doc.type or 'typeless'} document; only a namespace file retires tokens")
+        if doc.released is not None:
+            issues.append(f"'released' key on a {doc.type or 'typeless'} document; only a namespace file "
+                          f"says its root is not released")
     return issues
 
 

@@ -371,6 +371,36 @@ def test_lint_format_namespace_key_order():
     assert lint_format(bad)["key_order"]
 
 
+def test_nfx_released_roundtrip():
+    """Absent stays absent, `false` survives write → read, and sits after `was`."""
+    import json
+    from neuro.base.nfx import Nfx, dumps, lint_format
+    plain = Nfx.from_dict({**NS_BASE, "namespace": "t"})
+    assert plain.released is None and "released" not in plain.to_dict()
+    doc = Nfx.from_dict({**NS_BASE, "namespace": "t", "was": ["old"], "released": False,
+                         "dependencies": [f"{DEP_1}@1.0"]})
+    assert doc.released is False
+    raw = json.loads(dumps(doc))
+    assert raw["released"] is False
+    assert list(raw).index("was") < list(raw).index("released") < list(raw).index("dependencies")
+    assert lint_format(raw)["key_order"] == [] and lint_format(raw)["unknown_keys"] == []
+    assert Nfx.from_dict(raw).released is False
+
+
+def test_nfx_released_issues():
+    from neuro.base.nfx import Nfx, validate
+    from neuro.utils.exceptions import NfxViolation
+    assert validate(Nfx.from_dict({**NS_BASE, "namespace": "t", "released": False}))["namespace"] == []
+    # one spelling: a released root omits the key
+    assert any("only as false" in m for m in validate(
+        Nfx.from_dict({**NS_BASE, "namespace": "t", "released": True}))["namespace"])
+    # only a namespace file says it
+    module = {"type": "ontology", "nid": LOCAL_1, "version": "1.0", "name": "X", "released": False}
+    assert any("'released' key on a ontology document" in m for m in validate(Nfx.from_dict(module))["namespace"])
+    with pytest.raises(NfxViolation):
+        Nfx.from_dict({**NS_BASE, "namespace": "t", "released": "no"})
+
+
 def test_lint_format_flags_empty_arrays():
     from neuro.base.nfx import lint_format
     assert lint_format({"nodes": [], "relationships": []})["empty"] == ["nodes", "relationships"]

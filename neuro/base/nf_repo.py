@@ -179,6 +179,17 @@ def module_test_path(path, roots) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
+def _is_released(root) -> bool:
+    """Whether the root at `root` releases its documents - true unless its
+    declaration says `"released": false`. Read raw: a malformed declaration is
+    reported by the checks, and until it parses the release rule stays on."""
+    path = Path(root) / nfx.NAMESPACE_FILENAME
+    try:
+        return json.loads(path.read_text()).get("released") is not False
+    except (OSError, ValueError, AttributeError):
+        return True
+
+
 def _labels_split(text: str) -> list[int]:
     return [text[:m.start()].count("\n") + 1 for m in _LABELS_SPLIT.finditer(text)]
 
@@ -453,7 +464,9 @@ class Repo:
         # versions: every committed change to a document is a release - the next
         # version after its latest tag, nothing else.
         # Its test file is not part of the document and may change alone.
-        for rel in sorted(touched):
+        # A root that declares `"released": false` (test fixtures) is exempt from
+        # this rule alone: its documents are still held to everything above.
+        for rel in sorted(touched) if _is_released(staged) else ():
             series = series_of(rel)
             path = staged / rel
             if series is None or not path.is_file():
@@ -491,8 +504,11 @@ class Repo:
 
     def tag(self) -> list[str]:
         """Annotate HEAD with one tag per document of the root it changed whose
-        version has no tag yet. Idempotent; returns the tags made."""
+        version has no tag yet. Idempotent; returns the tags made. A root that
+        declares `"released": false` gets none."""
         head = self.rev("HEAD")
+        if (self.doc_at(head, nfx.NAMESPACE_FILENAME) or {}).get("released") is False:
+            return []
         base = self.rev("HEAD^") or EMPTY_TREE
         subject = self.git("log", "-1", "--format=%s", head).strip()
         existing = set(self.git("tag", "-l").split())
