@@ -515,9 +515,12 @@ def test_module_log(tmp_path, root):
         nf_repo.plan_move(root.repo, micro, "dyes", as_="tints", others=roots)
     assert any("unreleased edits since knowledge/dyes/1.2" in i for i in e.value.issues)
     assert len({(e.root, e.sha) for e in entries}) == len(entries)
-    # a root the chain needs is missing: the walk stops with a note
+    # a commit read in another root than the one asked is linked
+    assert [e.via for e in entries] == ["", "linked", "linked", "linked", "", "", ""]
+    # a root the chain needs is missing: the walk ends with a gap row naming it
     entries, note = nf_repo.module_log(root.repo, "dyes", roots=[root.path])
-    assert len(entries) == 2 and "continues in micro" in note
+    assert note is None and [e.gap for e in entries] == [False, False, True]
+    assert (entries[2].token, entries[2].sha) == ("micro", "") and "history in micro" in entries[2].subject
 
 
 def test_module_log_repin(root):

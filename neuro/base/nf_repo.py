@@ -1196,6 +1196,8 @@ class LogEntry:
     version: str          # at the commit (its parent's, for a removal)
     tags: list[str]
     repin: bool = False   # the commit only follows a dependency: version and pins moved, nothing of its own
+    via: str = ""         # how the log reached it: "" read in the tree asked, "linked" read in another, through a move
+    gap: bool = False     # no commit: the history goes on in the tree `token`, which is not on this machine
 
 
 def _module_paths(kind, stem) -> list[str]:
@@ -1209,7 +1211,10 @@ def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
     An entry is marked `repin` where the commit changed nothing of the module
     but its version and the versions of its pins - a dependency's release.
     `roots` are the other roots the chain may pass through, found by token.
-    Returns the entries and a note when the chain leaves this machine."""
+    An entry read in another root than `repo` is `linked`. Where the chain
+    goes on in a root that is not among them, the entries end with a `gap`
+    one naming it. Returns the entries and a note when a root that is here
+    holds no matching departure."""
     head = repo.rev("HEAD")
     rel = repo._find(key, head)
     nid = repo.doc_at(head, rel)["nid"]
@@ -1264,7 +1269,8 @@ def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
             here.append((order[sha], LogEntry(
                 cur.root, origin[4] if origin else token_of(cur), sha, date, message.split("\n", 1)[0], path,
                 doc.get("version", ""),
-                sorted(t for t in tags_at.get(sha, []) if parse_tag(t)[0][1] in names[cur.root]), repin)))
+                sorted(t for t in tags_at.get(sha, []) if parse_tag(t)[0][1] in names[cur.root]), repin,
+                via="" if cur.root == repo.root else "linked")))
             arrival = next((e for e in events if isinstance(e, nf_events.Arrival)
                             and e.kind == kind and e.landed == stem), None)
             rename = next((e for e in events if isinstance(e, nf_events.Rename)
@@ -1272,7 +1278,11 @@ def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
             if arrival:
                 source = by_token.get(arrival.source)
                 if source is None:
-                    note = f"the chain continues in {arrival.source or nf_events.ROOT_WORD}, not among the roots here"
+                    # after everything read here: the gap is older than the arrival
+                    here.append((len(order), LogEntry(
+                        cur.root, arrival.source, "", "",
+                        f"earlier history in {arrival.source or nf_events.ROOT_WORD}, not on this machine",
+                        f"{kind}/{arrival.stem}.nfx", "", [], gap=True)))
                     break
                 dep = nf_events.departure_of(source.top, source.prefix, arrival, nid, token_of(cur))
                 if dep is None:
@@ -1284,11 +1294,12 @@ def module_log(repo: Repo, key, roots=()) -> tuple[list[LogEntry], str | None]:
                 nxt = (cur, f"{sha}^", kind, rename.stem)
                 break
         if here:
-            oldest = max(n for n, _ in here)
+            oldest = max(n for n, e in here if not e.gap)
             for n, sha, date, subject, _source in splits:
                 if n < oldest and (cur.root, sha) not in seen:
                     seen.add((cur.root, sha))
-                    here.append((n, LogEntry(cur.root, token_of(cur), sha, date, subject, f"{kind}/{stem}.nfx", "", [])))
+                    here.append((n, LogEntry(cur.root, token_of(cur), sha, date, subject, f"{kind}/{stem}.nfx", "", [],
+                                             via="" if cur.root == repo.root else "linked")))
         entries += [entry for _n, entry in sorted(here, key=lambda item: item[0])]
         cur, rev, kind, stem = nxt if nxt else (None, None, None, None)
     return entries, note
