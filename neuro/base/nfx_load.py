@@ -300,7 +300,10 @@ def _release(nb, policy, nid, declared):
     edges no import will ever restore. `_split` decides what happens next.
 
     Each row carries `own`: the nids this anchor defined going in, which is the
-    document's slice of the base when the base is the previous version.
+    document's slice of the base when the base is the previous version. Its
+    `label` is what the report calls the node: its `label` or `name`, else its
+    class with the value of the key the ontology declares for it (`PlanStatus
+    abolished`), else with its nid.
     """
     return nb.get_data(
         f"""
@@ -311,9 +314,14 @@ def _release(nb, policy, nid, declared):
         OPTIONAL MATCH (other:{ANCHORS})-[:DEFINES]->(n)
         WHERE other.nid <> $nid
         WITH n, d, own, collect(DISTINCT other.name) AS claimed_by
+        OPTIONAL MATCH (c:OntologyNode)-[:SUBCLASS_OF*0..]->(:OntologyNode)-[:HAS_KEY]->(k)
+        WHERE c.label IN labels(n)
+        WITH n, d, own, claimed_by, collect(DISTINCT k.label) AS key_names
         DELETE d
         RETURN elementId(n) AS eid, n.nid AS nid,
-               coalesce(n.label, n.name, labels(n)[0] + ' ' + n.nid) AS label,
+               coalesce(n.label, n.name,
+                        labels(n)[0] + ' ' + head([x IN key_names WHERE n[x] IS NOT NULL | toString(n[x])]),
+                        labels(n)[0] + ' ' + n.nid) AS label,
                n.label AS class_label, 'OntologyNode' IN labels(n) AS is_class,
                labels(n) AS labels, keys(n) AS keys, claimed_by, own
         """,
