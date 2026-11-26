@@ -41,10 +41,7 @@ from neuro.base.nf_history import _pins, is_repin
 from neuro.utils import exceptions
 
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-HOOKS = ("pre-commit", "post-commit")
-SHIM_DIR = ".githooks"
 NOTES_REF = "refs/notes/nf-origin"  # per commit: the sha and namespace it was made as, before a split or a reconcile
-_SENTINEL = "# nf hook"
 _GIT_PATH_VARS = ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY")
 _LABELS_SPLIT = re.compile(r'"labels"\s*:\s*\[[^\]]*\n')
 
@@ -185,9 +182,10 @@ def module_test_path(path, trees) -> Path | None:
 def global_check() -> Path | None:
     """The machine-wide nf check, if one is installed: an executable
     `pre-commit.d/nf` under the global `core.hooksPath`. Such a hook finds the
-    root a commit touches and runs `tree.check` / `tree.tag` on it, so where it
-    is installed a root needs no hooks of its own - and must not have them, or
-    every commit is judged twice."""
+    root a commit touches and runs `tree.check` / `tree.tag` on it. It is the
+    only way a root is guarded: this package judges a commit and installs no
+    hook - a root carries none of its own, and what calls the judge on a
+    machine is that machine's business."""
     r = subprocess.run(["git", "config", "--global", "--get", "core.hooksPath"], capture_output=True, text=True)
     path = r.stdout.strip()
     if r.returncode or not path:
@@ -469,7 +467,7 @@ class Repo:
                 digest = hashlib.sha256(vpath.read_bytes()).hexdigest()
                 if doc.hash != digest:
                     issues.append(f"{where}: hash {doc.hash or '(missing)'} is not sha256(validators/{vpath.name}) "
-                                  f"{digest[:12]}… - run `ontology.rehash` (`git config nf.runner` names the wrapper)")
+                                  f"{digest[:12]}… - run `ontology.rehash`")
             elif doc.hash:
                 issues.append(f"{where}: carries a hash but validators/{path.stem}.py does not exist")
 
@@ -895,79 +893,7 @@ class Repo:
             rows.insert(0, (Path(nfx.NAMESPACE_FILENAME), ns.name, ns.version))
         return rows
 
-    # ---- install -------------------------------------------------------------------
-
-    def hooks_dir(self) -> Path:
-        """Where git, or the global chain, will run this repo's hooks from.
-
-        With a `core.hooksPath` in effect (a global hooks directory,
-        such as `~/.config/git/hooks`) git never reads the repo's own hooks dir; the
-        global hook re-invokes `$(git rev-parse --git-dir)/hooks/<name>`. A local
-        `core.hooksPath` would cut that producer off, so it is never set here."""
-        if self.git("config", "--get", "core.hooksPath", check=False).strip():
-            return Path(self.git("rev-parse", "--absolute-git-dir").strip()) / "hooks"
-        return Path(self.git("rev-parse", "--git-path", "hooks").strip()).resolve()
-
-    def shim(self, hook) -> str:
-        task = {"pre-commit": "tree.check", "post-commit": "tree.tag"}[hook]
-        return (
-            "#!/bin/sh\n"
-            f"{_SENTINEL} - versioned with the root; the code is neuro's `{task}`.\n"
-            "# The wrapper is per clone, `git config nf.runner <wrapper>`, and has no default:\n"
-            "# a guess could run another line's code (a legacy runner during the parallel period).\n"
-            'runner="$(git config nf.runner)" || { echo "nf hook: nf.runner is not set - run tree.hooks" >&2; exit 1; }\n'
-            "# git hands a hook relative paths; the wrapper changes directory before Python starts.\n"
-            f"for v in {' '.join(_GIT_PATH_VARS)}; do\n"
-            '    eval "p=\\${$v:-}"\n'
-            '    case "$p" in ""|/*) ;; *) export "$v=$PWD/$p" ;; esac\n'
-            "done\n"
-            'root="$(cd "$(dirname "$0")/.." && pwd)"\n'
-            f'exec "$runner" {task} --tree "$root"\n'
-        )
-
-    def stub(self, hook) -> str:
-        target = f"$(git rev-parse --show-toplevel)/{self._path(SHIM_DIR)}/{hook}"
-        return f'#!/bin/sh\n{_SENTINEL} - installed by `tree.hooks`.\nexec "{target}" "$@"\n'
-
-    def hooks_state(self) -> str:
-        """`global` where the machine has a global nf check (`global_check`) -
-        the root is judged through it, whatever sits in its own hook files.
-        Otherwise: `current` when every shim and stub is what `install` would
-        write and the wrapper is named, `none` when no hook is there, else
-        `stale` - a shim from before a task was renamed calls a task that no
-        longer exists."""
-        if global_check() is not None:
-            return "global"
-        hooks, shims = self.hooks_dir(), self.root / SHIM_DIR
-        files = [(path, body) for hook in HOOKS
-                 for path, body in ((shims / hook, self.shim(hook)), (hooks / hook, self.stub(hook)))]
-        if not any(path.exists() for path, _ in files):
-            return "none"
-        same = all(path.is_file() and path.read_text(errors="replace") == body for path, body in files)
-        return "current" if same and self.git("config", "--get", "nf.runner", check=False).strip() else "stale"
-
-    def install(self, runner) -> list[str]:
-        """Write the versioned shims into `<root>/.githooks/`, a stub per hook
-        into `hooks_dir()`, and `nf.runner`. Refuses to replace a hook it did
-        not write. Returns what it wrote."""
-        hooks = self.hooks_dir()
-        for hook in HOOKS:
-            current = hooks / hook
-            if current.exists() and _SENTINEL not in current.read_text(errors="replace"):
-                raise FileExistsError(f"{current} exists and is not an nf hook - chain it by hand or move it away")
-        wrote = []
-        shims = self.root / SHIM_DIR
-        shims.mkdir(exist_ok=True)
-        hooks.mkdir(parents=True, exist_ok=True)
-        for hook in HOOKS:
-            for path, body in ((shims / hook, self.shim(hook)), (hooks / hook, self.stub(hook))):
-                if not path.exists() or path.read_text() != body:
-                    path.write_text(body)
-                    wrote.append(str(path))
-                path.chmod(0o755)
-        self.git("config", "nf.runner", runner)
-        self.track_notes()
-        return wrote
+    # ---- notes ---------------------------------------------------------------------
 
     def track_notes(self) -> list[str]:
         """Make every remote fetch the origin notes: git

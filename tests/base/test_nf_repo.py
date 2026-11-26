@@ -567,29 +567,6 @@ def test_global_check(tmp_path, monkeypatch):
     assert nf_repo.global_check() == part
 
 
-def test_hooks_state_global(root, monkeypatch):
-    """Where the machine judges every root, a root's own hook files say nothing."""
-    monkeypatch.setattr(nf_repo, "global_check", lambda: root.path / "nf")
-    assert root.repo.hooks_state() == "global"
-
-
-def test_install(root, monkeypatch):
-    monkeypatch.setattr(nf_repo, "global_check", lambda: None)
-    hooks = root.path / ".git" / "hooks"
-    assert root.repo.hooks_state() == "none"
-    wrote = root.repo.install(runner="wrapper")
-    assert root.repo.hooks_state() == "current"
-    assert {p.split("/")[-1] for p in wrote} == {"pre-commit", "post-commit"}
-    assert (root.path / ".githooks" / "pre-commit").read_text().count("tree.check --tree") == 1
-    assert ".githooks/post-commit" in (hooks / "post-commit").read_text()
-    assert _git(root.path, "config", "nf.runner").strip() == "wrapper"
-    assert root.repo.install(runner="wrapper") == []
-    (hooks / "pre-commit").write_text("#!/bin/sh\necho mine\n")
-    with pytest.raises(FileExistsError):
-        root.repo.install(runner="wrapper")
-    assert "echo invoke" not in (root.path / ".githooks" / "pre-commit").read_text()
-
-
 def test_series():
     from pathlib import Path
     assert nf_repo.series_of(Path("ontology/Cli.nfx")) == ("ontology", "cli")

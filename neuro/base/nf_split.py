@@ -745,12 +745,11 @@ def build(p: Plan, progress=None) -> dict:
         _run(d, "fsck", "--connectivity-only", env=env)
         _run(d, "reset", "--hard", "-q", env=env)
 
-    runner = repo.git("config", "--get", "nf.runner", check=False).strip()
     remotes = [line.split(" ", 1) for line in repo.git("config", "--local", "--get-regexp", r"^(remote|branch)\.",
                                                        check=False).splitlines() if " " in line]
     state = {
         "source": str(repo.root), "head": p.head, "branch": p.branch, "namespace": source_ns.nid,
-        "runner": runner, "remotes": remotes, "skipped_tags": skipped, "unedited": unedited,
+        "remotes": remotes, "skipped_tags": skipped, "unedited": unedited,
         "outputs": [{"token": o.token, "word": o.word, "dir": str(dirs[o.token]),
                      "to": str(o.to) if o.to else str(repo.root), "head": heads[o.token],
                      "modules": sorted(p.stems[n][1] for n in o.modules),
@@ -925,8 +924,7 @@ def swap(staging, notify=True) -> dict:
     for key, value in state["remotes"]:
         _run(state["outputs"][0]["to"], "config", key, value, env=env)
     for o in state["outputs"]:
-        if state["runner"] and nf_repo.global_check() is None:
-            nf_repo.Repo(o["to"]).install(state["runner"])
+        nf_repo.Repo(o["to"]).track_notes()
         if notify:
             subprocess.run(["git", "hook", "run", "--ignore-missing", f"--to-stdin={staging / o['pairs']}",
                             "post-rewrite", "--", "rebase"], cwd=o["to"], env=env, capture_output=True)

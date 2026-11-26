@@ -235,9 +235,8 @@ def _git(cwd, *args):
 
 def move(root, to, path=None) -> Tree:
     """Relocate the tree at `root` to `to` and rewrite its registry line
-    Leaves no commit: pins are by namespace nid and the
-    hook shims call the wrapper named in `git config nf.runner`, so nothing
-    inside the repository holds its own path. Across filesystems: copy,
+    Leaves no commit: pins are by namespace nid and a tree carries no hook
+    of its own, so nothing inside the repository holds its own path. Across filesystems: copy,
     `git fsck` the copy, then remove the original."""
     root = Path(root).expanduser().resolve()
     to = Path(to).expanduser()
