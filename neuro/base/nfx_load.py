@@ -7,13 +7,34 @@ kinds - a schema, instance data, the schema of schemas - is carried by a
 writers that drifted apart. `import_document` is the entry point that reads the
 `type` and picks the policy; pair it with `PluginIndex.closure`, which says what
 to load and in which order.
+
+What an import takes away is decided by the document's *previous version*, never
+by what the base happens to hold beside it:
+
+- a node the document stops declaring is **released** - it loses this
+  document's `DEFINES` and nothing else. It is deleted only when nothing is left
+  on it; while an edge, or an instance of the class, still reaches it, it stays
+  and is reported;
+- an edge, a label or a property key is **retracted** when the previous version
+  declared it and this one does not. One nobody declared - set by hand, by a
+  collector - is not the document's to remove.
+
+The previous version is read from the release tags of the document's `.nf`
+root (`nf_repo`). Two cases have no release history and take the base itself as
+the previous version, the document then being authoritative for what its anchor
+defines: the metaontology, which ships with the app, and a document in no
+repository at all.
 """
 
 import dataclasses
+import json
+from pathlib import Path
 
-from neuro.base import nfx
+from neuro.base import nfx, plugins
 from neuro.core import Node
 from neuro.utils import exceptions
+
+ANCHORS = "OntologyMetadata|KnowledgeMetadata"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -25,30 +46,27 @@ class Policy:
         instance data needs and a schema, which *is* the ontology, cannot have.
     stubs: a node a dependency owns may be re-declared as an edge endpoint, and
         is then left untouched instead of being taken over.
-    prune: a node the document stops declaring is deleted with its edges, where
-        the other kinds only release it.
-    own_tail: only edges leaving a node the document declares are its to
-        retract; without it, any edge between two nodes it names is.
-    relink_pins: the anchor's `DEPENDS_ON` set is replaced by the document's,
-        where the other kinds only ever add to it.
-    replace_edges: an edge's properties are replaced by the document's, where
-        the other kinds merge into what is there.
+    defined_ends: an edge is written only between nodes some document of this
+        kind defines.
+    own_tail: with the base as the previous version, only edges leaving a node
+        the document declares are its to retract; without it, any edge between
+        two nodes it names is.
+    graph_previous: the base is always the previous version - a kind that has
+        no release history where it is installed.
     """
     kind: str
     anchor: str
     shapes: bool = False
     stubs: bool = False
-    prune: bool = False
+    defined_ends: bool = False
     own_tail: bool = True
-    relink_pins: bool = False
-    replace_edges: bool = False
+    graph_previous: bool = False
 
 
 POLICIES = {
-    "ontology": Policy("ontology", "OntologyMetadata"),
-    "metaontology": Policy("metaontology", "OntologyMetadata"),
-    "knowledge": Policy("knowledge", "KnowledgeMetadata", shapes=True, stubs=True, prune=True,
-                        own_tail=False, relink_pins=True, replace_edges=True),
+    "ontology": Policy("ontology", "OntologyMetadata", defined_ends=True),
+    "metaontology": Policy("metaontology", "OntologyMetadata", defined_ends=True, graph_previous=True),
+    "knowledge": Policy("knowledge", "KnowledgeMetadata", shapes=True, stubs=True, own_tail=False),
 }
 
 
@@ -56,6 +74,19 @@ def policy_for(doc) -> Policy:
     """The policy of a document's `type`. A typeless document is an ontology,
     as it has always been read."""
     return POLICIES.get(doc.type or "ontology", POLICIES["ontology"])
+
+
+@dataclasses.dataclass(frozen=True)
+class Previous:
+    """What the document declared before this import.
+
+    graph: the base stands in for it - the document is authoritative for what
+        its anchor defines. Otherwise `doc` is the previous version as released,
+        or None when nothing is to be retracted (a first import, or a re-import
+        of the version already loaded).
+    """
+    graph: bool = False
+    doc: nfx.Nfx | None = None
 
 
 def import_document(nb, idx, path, on_import=None):
@@ -75,19 +106,74 @@ def import_document(nb, idx, path, on_import=None):
     return nb.metaontology.import_nfx(path, index=idx, on_import=on_import)
 
 
+def release_root(path):
+    """`(Repo, root-relative path)` of the git-tracked `.nf` root holding
+    `path` and releasing its documents; `(None, None)` for a document in no
+    such root. A root whose declaration says `"released": false` (test
+    fixtures) commits without tagging, so it has no release history either."""
+    from neuro.base import nf_repo
+    path = Path(path).resolve()
+    root = next((p for p in path.parents if plugins.is_consolidated(p)), None)
+    if root is None:
+        return None, None
+    try:
+        if json.loads((root / nfx.NAMESPACE_FILENAME).read_text()).get("released") is False:
+            return None, None
+    except (OSError, ValueError, AttributeError):
+        pass
+    try:
+        return nf_repo.Repo(root), path.relative_to(root)
+    except (RuntimeError, ValueError):
+        return None, None
+
+
+def previous_document(nb, path, policy, doc) -> Previous:
+    """What `doc` declared in the version `nb` holds.
+
+    Raises `NfxViolation` when the document lives in a git-tracked root, the
+    base holds another version of it, and that version has no readable release
+    tag: retracting against a guess would delete what nobody dropped, and
+    retracting nothing would leave what somebody did.
+    """
+    from neuro.base import nf_repo
+    rows = nb.get_data(
+        f"MATCH (m:{policy.anchor} {{nid: $nid}}) RETURN m.version AS version", {"nid": doc.nid},
+    )
+    if not rows:
+        return Previous()
+    if policy.graph_previous:
+        return Previous(graph=True)
+    repo, rel = release_root(path)
+    if repo is None:
+        return Previous(graph=True)
+    loaded = rows[0]["version"] or ""
+    series = nf_repo.series_of(rel)
+    tag = repo.tag_of(series, loaded) if series and loaded else None
+    data = repo.doc_at(tag, rel) if tag else None
+    if data is not None and data.get("nid") == doc.nid:
+        return Previous(doc=nfx.Nfx.from_dict(data))
+    if loaded == doc.version:
+        return Previous()  # no release lies between
+    raise exceptions.NfxViolation(
+        f"{path}: the base holds {doc.name} {loaded or '(no version)'} and its release "
+        f"{tag or 'tag'} cannot be read from {repo.top} - without it nothing says what "
+        f"{doc.version} dropped. Refusing to import."
+    )
+
+
 def write_document(nb, path, policy, dependency_nids=None, index=None):
     """Reconcile the document at `path` into `nb` under `policy`.
 
     The document is anchored on a metadata node (its top-level `nid`), and
-    `(anchor)-[:DEFINES]->(node)` records what it declares. Each call adds what
-    is new, rewrites what is still declared, drops what is no longer declared
-    and retracts the edges it used to carry. Dependencies are not imported
-    here; `dependency_nids` is every node nid they declare.
+    `(anchor)-[:DEFINES]->(node)` records what it declares. Dependencies are
+    not imported here; `dependency_nids` is every node nid they declare.
 
-    Returns the import report: `nodes`, `released`, `reparented`, `orphaned`,
-    `edges_pruned`. `index`, when given, is where the document's tree is looked
-    up: its namespace token is recorded on the anchor, since a module's name is
-    unique inside its tree only.
+    Returns the import report: `nodes`, and what left - `released` (every node
+    dropped), `reparented` (another document defines it now), `removed`
+    (nothing was left on it, so it is gone), `orphaned` (kept, with the number
+    of edges and instances holding it) and `edges_pruned`. `index`, when given,
+    is where the document's tree is looked up: its namespace token is recorded
+    on the anchor, since a module's name is unique inside its tree only.
     """
     doc = nfx.read(path)
 
@@ -106,128 +192,271 @@ def write_document(nb, path, policy, dependency_nids=None, index=None):
     nb.nodes._validate_structure(doc, path, dependency_nids)
     if policy.shapes:
         nb.nodes._validate_relationship_shapes(doc, path)
+    # Before the first write: a refusal leaves the base as it was.
+    previous = previous_document(nb, path, policy, doc)
 
     declared = list(doc.node_nids)
-    report = {"nodes": len(declared), "released": [], "reparented": [],
-              "orphaned": [], "edges_pruned": 0}
-    meta = nb.metadata
-
-    if policy.prune:
-        meta.prune(policy.anchor, doc.nid, declared)
-    else:
-        report.update(nb.metaontology._release_undeclared(doc.nid, declared))
+    released = _release(nb, policy, doc.nid, declared)
 
     properties = {k: v for k, v in (
         ("name", doc.name), ("version", doc.version),
         ("description", doc.description), ("type", doc.type),
     ) if v}
-    pins = [dep_nid for dep_nid, _ in doc.dependencies]
-    if policy.relink_pins:
-        meta.upsert(policy.anchor, doc.nid, properties, dependency_nids=pins)
-    else:
-        meta.upsert_additive(policy.anchor, doc.nid, properties, dependency_nids=pins)
+    nb.metadata.upsert(policy.anchor, doc.nid, properties,
+                       dependency_nids=[dep_nid for dep_nid, _ in doc.dependencies])
     # Only an index knows which tree the file belongs to; without one the
     # namespace already recorded stays as it is.
     if index is not None:
-        meta.set_namespace(policy.anchor, doc.nid, index.namespace_for(doc.nid))
+        nb.metadata.set_namespace(policy.anchor, doc.nid, index.namespace_for(doc.nid))
+
+    before = {n["nid"]: n for n in previous.doc.nodes} if previous.doc else {}
+    foreign = set(dependency_nids or ()) if policy.stubs else set()
+    claimed = {} if policy.stubs else nb.metaontology._claimed_nodes(doc.nid)
+    for entry in doc.nodes:
+        if entry["nid"] in foreign:
+            # A *foreign reference*: re-declared only so this document's own
+            # edges have an endpoint. Its properties are the owner's, and a
+            # `DEFINES` would make this anchor co-own it and later drop it.
+            continue
+        _write_node(nb, doc, policy, entry, previous, before.get(entry["nid"]), claimed)
+
+    pruned = _retract_edges(nb, doc, policy, previous, declared)
+    _write_edges(nb, doc, policy, previous)
+
+    removed, orphaned = _split(nb, [r for r in released if not r["claimed_by"]], previous)
+    return {
+        "nodes": len(declared),
+        "released": [r["label"] for r in released],
+        "reparented": [(r["label"], r["claimed_by"]) for r in released if r["claimed_by"]],
+        "removed": removed,
+        "orphaned": orphaned,
+        "edges_pruned": pruned,
+    }
+
+
+def _release(nb, policy, nid, declared):
+    """Drop this document's `DEFINES` from the nodes it no longer declares, and
+    say what they are. The nodes themselves are kept: the set of edges reaching
+    a declared node is open - measured components, metric values and records
+    point at it from outside any document - so deleting it here would sever
+    edges no import will ever restore. `_split` decides what happens next.
+
+    Each row carries `own`: the nids this anchor defined going in, which is the
+    document's slice of the base when the base is the previous version.
+    """
+    return nb.get_data(
+        f"""
+        MATCH (m:{policy.anchor} {{nid: $nid}})-[:DEFINES]->(s)
+        WITH m, collect(s.nid) AS own
+        MATCH (m)-[d:DEFINES]->(n)
+        WHERE NOT n.nid IN $declared
+        OPTIONAL MATCH (other:{ANCHORS})-[:DEFINES]->(n)
+        WHERE other.nid <> $nid
+        WITH n, d, own, collect(DISTINCT other.name) AS claimed_by
+        DELETE d
+        RETURN elementId(n) AS eid, n.nid AS nid,
+               coalesce(n.label, n.name, labels(n)[0] + ' ' + n.nid) AS label,
+               n.label AS class_label, 'OntologyNode' IN labels(n) AS is_class,
+               claimed_by, own
+        """,
+        {"nid": nid, "declared": list(declared)},
+    )
+
+
+def _split(nb, orphans, previous):
+    """Delete the released nodes nothing reaches any more; report the rest.
+
+    A node is held by an edge to anything but an anchor - and, where the base
+    is the previous version, to anything outside the document's own slice,
+    since nothing there says which of its edges the document once declared. A
+    class is also held by its instances: they carry it as a *label* and hold no
+    edge back to it, so the edge test alone would call a class with ten
+    thousand instances isolated. A twin - another defined class of the same
+    label - goes on defining them, and then they do not hold this one.
+
+    Returns `(removed, orphaned)`: labels, and `(label, holders)` pairs.
+    """
+    if not orphans:
+        return [], []
+    own = orphans[0]["own"] if previous.graph else []
+    held = {r["eid"]: r["edges"] for r in nb.get_data(
+        f"""
+        MATCH (n) WHERE elementId(n) IN $eids
+        OPTIONAL MATCH (n)-[r]-(o)
+        WHERE NOT (o:{ANCHORS}) AND NOT coalesce(o.nid, '') IN $own
+        RETURN elementId(n) AS eid, count(r) AS edges
+        """,
+        {"eids": [r["eid"] for r in orphans], "own": own},
+    )}
+    removed, orphaned, doomed = [], [], []
+    for row in orphans:
+        holders = held.get(row["eid"], 0)
+        if not holders and row["is_class"] and row["class_label"]:
+            holders = _instances(nb, row["class_label"])
+        if holders:
+            orphaned.append((row["label"], holders))
+        else:
+            removed.append(row["label"])
+            doomed.append(row["eid"])
+    if doomed:
+        nb.run_query("MATCH (n) WHERE elementId(n) IN $eids DETACH DELETE n", {"eids": doomed})
+    return removed, orphaned
+
+
+def _instances(nb, label):
+    """How many instances still need the class `label` - none while another
+    defined class of that label exists."""
+    twins = nb.get_data(
+        "MATCH (:OntologyMetadata)-[:DEFINES]->(t:OntologyNode {label: $label}) RETURN count(t) AS c",
+        {"label": label},
+    )
+    if twins[0]["c"]:
+        return 0
+    rows = nb.get_data(
+        f"""
+        MATCH (i:{_quoted(label)})
+        WHERE NOT i:OntologyMetadata AND NOT (i)<-[:DEFINES]-(:OntologyMetadata)
+        RETURN count(i) AS c
+        """
+    )
+    return rows[0]["c"]
+
+
+def _quoted(name):
+    return "`" + str(name).replace("`", "``") + "`"
+
+
+def _write_node(nb, doc, policy, entry, previous, before, claimed):
+    """Write one declared node and link it to the anchor.
+
+    With the base as the previous version the document is authoritative: its
+    properties replace the node's and a label it does not carry is removed.
+    Otherwise it adds what it declares and takes back only what its previous
+    version declared and this one does not (`before` is that version's entry).
+    """
+    labels = list(entry["labels"])
+    properties = dict(entry.get("properties", {}))
+    properties["nid"] = entry["nid"]
+    dropped_labels, dropped_keys = [], []
+    if before is not None:
+        dropped_labels = sorted(set(before["labels"]) - set(labels))
+        dropped_keys = sorted(set(before.get("properties", {})) - set(properties))
 
     if policy.stubs:
-        _write_instance_nodes(nb, doc, policy, set(dependency_nids or ()))
+        # Instance data: validated against the ontology on the way in.
+        nb.objects.put(Node(labels=labels, properties=properties), identifier_key="nid",
+                       replace=previous.graph)
+        if dropped_labels or dropped_keys:
+            nb.run_query(
+                f"""
+                MATCH (n:{_quoted(labels[0])} {{nid: $nid}})
+                SET n += $gone
+                REMOVE n:$($dropped)
+                """,
+                {"nid": entry["nid"], "gone": dict.fromkeys(dropped_keys), "dropped": dropped_labels},
+            )
     else:
-        _write_schema_nodes(nb, doc, policy)
-
-    keep = [(r["from"], r["to"], r["type"]) for r in doc.relationships]
-    if policy.own_tail:
-        # Confined to the nids this document touches and to edges leaving its
-        # own nodes, so other documents' edges are never candidates.
-        scope = set(declared) | {nid for triple in keep for nid in triple[:2]}
-        report["edges_pruned"] = nb.nodes._reconcile_internal_edges(scope, keep, sources=declared)
-    else:
-        report["edges_pruned"] = nb.nodes._reconcile_internal_edges(declared, keep)
-
-    for rel in doc.relationships:
-        _write_edge(nb, rel, policy)
-
-    return report
-
-
-def _write_schema_nodes(nb, doc, policy):
-    """Write the nodes of a schema: the document is authoritative for each
-    node's properties and labels, and every one is DEFINES-linked.
-
-    A node this document already defines is written through its element id,
-    which is what makes a relabel a relabel - see `Metaontology._claimed_nodes`.
-    """
-    claimed = nb.metaontology._claimed_nodes(doc.nid)
-    for entry in doc.nodes:
-        labels = entry["labels"]
-        params = {"nid": entry["nid"], "props": entry.get("properties", {}), "labels": labels}
+        # A node this document already defines is written through its element
+        # id, which is what makes a relabel a relabel: a label-scoped MERGE
+        # stops matching once the labels change, and then creates.
+        params = {"nid": entry["nid"], "props": properties, "labels": labels,
+                  "gone": dict.fromkeys(dropped_keys), "dropped": dropped_labels}
         eid = claimed.get(entry["nid"])
         if eid:
             params["eid"] = eid
             anchor = "MATCH (n) WHERE elementId(n) = $eid"
         else:
-            anchor = f"MERGE (n:{labels[0]} {{nid: $nid}})"
-        # `SET n =` (not `+=`): a property dropped from the file must go, and a
-        # label it stopped declaring is removed rather than left to accumulate.
-        # Both clauses take the label list as a *parameter* (Neo4j 5.26 dynamic
-        # labels), which also keeps a label out of the interpolated query text.
+            anchor = f"MERGE (n:{_quoted(labels[0])} {{nid: $nid}})"
+        if previous.graph:
+            reconcile = """SET n = $props
+                SET n:$($labels)
+                WITH n, [l IN labels(n) WHERE NOT l IN $labels] AS stale
+                REMOVE n:$(stale)"""
+        else:
+            reconcile = """SET n += $props
+                SET n += $gone
+                SET n:$($labels)
+                REMOVE n:$($dropped)"""
+        # The label lists are *parameters* (Neo4j 5.26 dynamic labels), which
+        # keeps a label out of the interpolated query text.
         nb.run_query(
             f"""
             {anchor}
-            SET n = $props, n.nid = $nid
-            SET n:$($labels)
-            WITH n, [l IN labels(n) WHERE NOT l IN $labels] AS stale
-            REMOVE n:$(stale)
+            {reconcile}
             """,
             params,
         )
-        nb.run_query(
-            f"""
-            MATCH (m:{policy.anchor} {{nid: $meta_nid}})
-            MATCH (n:{labels[0]} {{nid: $node_nid}})
-            MERGE (m)-[:DEFINES]->(n)
-            """,
-            {"meta_nid": doc.nid, "node_nid": entry["nid"]},
-        )
+    nb.metadata.link_defines(policy.anchor, doc.nid, entry["nid"], node_label=labels[0])
 
 
-def _write_instance_nodes(nb, doc, policy, foreign):
-    """Write the nodes of instance data, validated against the ontology.
+def _triples(document):
+    return {(r["from"], r["to"], r["type"]): r for r in document.relationships}
 
-    A node whose nid belongs to a dependency is a *foreign reference* - the
-    document re-declares it only so its own edges have a resolvable endpoint
-    (and so it validates standalone). Its properties are the owner's: replacing
-    them would strip whatever this document omits (the `color` an OntologyNode
-    class carries), and a `DEFINES` would make this anchor co-own it and later
-    drop it. So it is left untouched; edge retraction still sees it, since it
-    stays in the document's nid set.
+
+def _end(var, nid, labels):
+    """A node pattern by nid, label-scoped where the label is known - an
+    unlabelled lookup scans the base."""
+    label = labels.get(nid)
+    return f"({var}:{_quoted(label)} {{nid: ${var}}})" if label else f"({var} {{nid: ${var}}})"
+
+
+def _retract_edges(nb, doc, policy, previous, declared):
+    """Delete the edges this document used to carry and no longer does; return
+    how many.
+
+    Against a released previous version that is an exact set: the triples it
+    declared minus the ones declared now. Against the base it is the slice:
+    edges of a type the document declares, between the nodes it touches, that
+    it does not carry - and under `own_tail` only those leaving its own nodes,
+    so another document's edges between nodes this one merely names are never
+    candidates.
     """
-    for entry in doc.nodes:
-        if entry["nid"] in foreign:
-            continue
-        properties = dict(entry.get("properties", {}))
-        properties["nid"] = entry["nid"]
-        node = Node(labels=entry["labels"], properties=properties)
-        nb.objects.put(node, identifier_key="nid", replace=True)
-        nb.metadata.link_defines(policy.anchor, doc.nid, entry["nid"])
+    keep = list(_triples(doc))
+    if previous.graph:
+        if policy.own_tail:
+            scope = set(declared) | {nid for triple in keep for nid in triple[:2]}
+            return nb.nodes._reconcile_internal_edges(scope, keep, sources=declared)
+        return nb.nodes._reconcile_internal_edges(declared, keep)
+    if previous.doc is None:
+        return 0
+    # A dropped node still carries its old first label; a kept one may have
+    # changed it, and was rewritten just now.
+    labels = {n["nid"]: n["labels"][0] for n in (*previous.doc.nodes, *doc.nodes) if n.get("labels")}
+    pruned = 0
+    for from_nid, to_nid, rel_type in sorted(set(_triples(previous.doc)) - set(keep)):
+        rows = nb.get_data(
+            f"""
+            MATCH {_end("a", from_nid, labels)}-[r:{_quoted(rel_type)}]->{_end("b", to_nid, labels)}
+            DELETE r
+            RETURN count(r) AS pruned
+            """,
+            {"a": from_nid, "b": to_nid},
+        )
+        pruned += rows[0]["pruned"] if rows else 0
+    return pruned
 
 
-def _write_edge(nb, rel, policy):
-    """MERGE one declared relationship and set its properties."""
-    if policy.replace_edges:
-        ends = "MATCH (a {nid: $from_id})\nMATCH (b {nid: $to_id})"
-        assign = "="
-    else:
+def _write_edges(nb, doc, policy, previous):
+    """MERGE every declared relationship and set its properties: replaced when
+    the base is the previous version, otherwise merged, minus the keys the
+    previous version set on that edge and this one does not."""
+    before = _triples(previous.doc) if previous.doc else {}
+    if policy.defined_ends:
         # Both ends have to be nodes some document of this kind defines.
         ends = (f"MATCH (:{policy.anchor})-[:DEFINES]->(a {{nid: $from_id}})\n"
                 f"MATCH (:{policy.anchor})-[:DEFINES]->(b {{nid: $to_id}})")
-        assign = "+="
-    nb.run_query(
-        f"""
-        {ends}
-        MERGE (a)-[r:{rel["type"]}]->(b)
-        SET r {assign} $props
-        """,
-        {"from_id": rel["from"], "to_id": rel["to"], "props": rel.get("properties", {})},
-    )
+    else:
+        ends = "MATCH (a {nid: $from_id})\nMATCH (b {nid: $to_id})"
+    assign = "SET r = $props" if previous.graph else "SET r += $props\nSET r += $gone"
+    for triple, rel in _triples(doc).items():
+        properties = rel.get("properties", {})
+        gone = set(before.get(triple, {}).get("properties", {})) - set(properties)
+        nb.run_query(
+            f"""
+            {ends}
+            MERGE (a)-[r:{rel["type"]}]->(b)
+            {assign}
+            """,
+            {"from_id": rel["from"], "to_id": rel["to"], "props": properties,
+             "gone": dict.fromkeys(sorted(gone))},
+        )

@@ -164,32 +164,13 @@ class NodeAccessor(Accessor):
             self._nb.run_query(query, params)
 
     def sync_nfx(self, path, dependency_nids=None, metadata_label="KnowledgeMetadata", index=None):
-        """Reconcile an NFX file into NeuroBase authoritatively.
+        """Reconcile a knowledge file into NeuroBase and return the import
+        report: `nfx_load.write_document` under the knowledge policy, which
+        says what is added, released and retracted.
 
-        Anchors the file to a `KnowledgeMetadata` node (via its top-level `nid`)
-        and uses `(meta)-[:DEFINES]->(node)` edges to track membership. On each
-        call:
-
-        - **Add**: nodes new in the file are created.
-        - **Update**: nodes still in the file have their properties **replaced**
-          (not merged) - keys absent from the file are removed.
-        - **Delete**: nodes previously DEFINES-linked from this metadata that
-          are absent from the file are `DETACH DELETE`d.
-        - **Foreign references**: a node whose nid is in `dependency_nids` is
-          owned by a dependency and only re-declared here to anchor this file's
-          own edges; it is left entirely untouched (not property-replaced, not
-          DEFINES-linked, not pruned), so its owner's properties survive - the
-          same treatment ontology import gives a cross-ontology reference.
-        - **Relationships**: edges with both endpoints in the file are
-          reconciled *within the edge types the file declares* - an edge of a
-          managed type not in the file is deleted, those in the file are
-          upserted with property replacement. Edges of a type the file never
-          declares (and edges with one foot outside the file) are left alone,
-          so a file that declares stub nodes only to hang its own edge type off
-          them can't reap the foreign structural edges among those nodes.
-
-        The write itself is `nfx_load.write_document` under the knowledge
-        policy. `metadata_label` lets the same machinery anchor different metadata
+        A node whose nid is in `dependency_nids` is owned by a dependency and
+        only re-declared here to anchor this file's own edges; it is left
+        entirely untouched. `metadata_label` lets the same machinery anchor different metadata
         kinds (e.g. `OntologyMetadata`). `index`, when given, is where the
         file's tree is looked up: its namespace token is recorded on the
         anchor, since a module's name is unique inside its tree only.

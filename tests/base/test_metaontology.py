@@ -390,21 +390,33 @@ class TestImportReconciliation:
             "APPLIES_TO from a knowledge-defined node severed by the re-import"
 
     def test_undeclared_node_is_orphaned_not_deleted(self, nb_meta, tmp_path):
-        """A node dropped from a file is kept and un-DEFINES'd, never deleted."""
+        """A node dropped from a file is un-DEFINES'd, and kept while anything
+        outside the file still reaches it; one nothing reaches is removed."""
         first = self._write(
             tmp_path, "core", self.CORE, "1.0",
-            [self._node(self.SHARED, "Shared"), self._node(self.DROPPED, "Dropped")],
+            [self._node(self.SHARED, "Shared"), self._node(self.DROPPED, "Dropped"),
+             self._node(self.LOCAL, "Local")],
         )
         nb_meta.metaontology.import_nfx(first)
+        nb_meta.run_query(
+            """
+            MATCH (c {nid: $dropped})
+            CREATE (m:MetricDefinition {nid: $metric, label: 'Coverage'})-[:APPLIES_TO]->(c)
+            """,
+            {"dropped": self.DROPPED, "metric": self.METRIC},
+        )
 
         second = self._write(
             tmp_path, "core", self.CORE, "1.1", [self._node(self.SHARED, "Shared")],
         )
-        nb_meta.metaontology.import_nfx(second)
+        report = nb_meta.metaontology.import_nfx(second)
 
-        assert self._exists(nb_meta, self.DROPPED), "undeclared node must be kept"
+        assert self._exists(nb_meta, self.DROPPED), "a node still reached from outside must be kept"
         assert not self._edge(nb_meta, self.CORE, self.DROPPED, "DEFINES"), \
             "the dropping ontology must release its DEFINES"
+        assert self._edge(nb_meta, self.METRIC, self.DROPPED, "APPLIES_TO")
+        assert not self._exists(nb_meta, self.LOCAL), "a node nothing reaches is removed"
+        assert report["orphaned"] == [("Dropped", 1)] and report["removed"] == ["Local"]
 
     def _labels(self, nb, nid):
         return [set(r["labels"]) for r in nb.get_data(

@@ -33,25 +33,7 @@ class MetadataAccessor(Accessor):
             self._nb.run_query(
                 f"""
                 MATCH (m:{label} {{nid: $nid}})
-                MATCH (d {{nid: $dep_nid}})
-                MERGE (m)-[:DEPENDS_ON]->(d)
-                """,
-                {"nid": nid, "dep_nid": dep_nid},
-            )
-
-    def upsert_additive(self, label, nid, properties=None, dependency_nids=()):
-        """MERGE a metadata anchor and add its `DEPENDS_ON` edges, leaving the
-        ones already there. A dependency is linked only where an anchor of the
-        same label holds it."""
-        self._nb.run_query(
-            f"MERGE (m:{label} {{nid: $nid}}) SET m += $props",
-            {"nid": nid, "props": properties or {}},
-        )
-        for dep_nid in dependency_nids:
-            self._nb.run_query(
-                f"""
-                MATCH (m:{label} {{nid: $nid}})
-                MATCH (d:{label} {{nid: $dep_nid}})
+                MATCH (d:OntologyMetadata|KnowledgeMetadata {{nid: $dep_nid}})
                 MERGE (m)-[:DEPENDS_ON]->(d)
                 """,
                 {"nid": nid, "dep_nid": dep_nid},
@@ -68,26 +50,15 @@ class MetadataAccessor(Accessor):
             {"nid": nid, "namespace": namespace},
         )
 
-    def link_defines(self, label, meta_nid, node_nid):
-        """MERGE `(meta)-[:DEFINES]->(node)` by nid."""
+    def link_defines(self, label, meta_nid, node_nid, node_label=None):
+        """MERGE `(meta)-[:DEFINES]->(node)` by nid. `node_label`, when known,
+        scopes the node lookup - an unlabelled one scans the base."""
+        node = f"(n:`{node_label.replace('`', '``')}` {{nid: $node_nid}})" if node_label else "(n {nid: $node_nid})"
         self._nb.run_query(
             f"""
             MATCH (m:{label} {{nid: $meta_nid}})
-            MATCH (n {{nid: $node_nid}})
+            MATCH {node}
             MERGE (m)-[:DEFINES]->(n)
             """,
             {"meta_nid": meta_nid, "node_nid": node_nid},
-        )
-
-    def prune(self, label, meta_nid, keep_nids):
-        """`DETACH DELETE` every node DEFINES-linked from this anchor whose
-        nid is not in `keep_nids`. Used to drop nodes that were imported
-        previously but are absent from the current NFX."""
-        self._nb.run_query(
-            f"""
-            MATCH (m:{label} {{nid: $meta_nid}})-[:DEFINES]->(n)
-            WHERE NOT n.nid IN $nids
-            DETACH DELETE n
-            """,
-            {"meta_nid": meta_nid, "nids": list(keep_nids)},
         )
