@@ -550,7 +550,31 @@ def test_rename_test():
         nf_repo.rename_test("nothing\n", "a", "b")
 
 
-def test_install(root):
+def test_global_check(tmp_path, monkeypatch):
+    """A machine-wide nf check is an executable `pre-commit.d/nf` under the
+    global `core.hooksPath`; anything less is no check."""
+    config, hooks = tmp_path / "gitconfig", tmp_path / "hooks"
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
+    config.write_text("")
+    assert nf_repo.global_check() is None
+    config.write_text(f"[core]\n\thooksPath = {hooks}\n")
+    assert nf_repo.global_check() is None
+    part = hooks / "pre-commit.d" / "nf"
+    part.parent.mkdir(parents=True)
+    part.write_text("#!/bin/sh\n")
+    assert nf_repo.global_check() is None  # not executable
+    part.chmod(0o755)
+    assert nf_repo.global_check() == part
+
+
+def test_hooks_state_global(root, monkeypatch):
+    """Where the machine judges every root, a root's own hook files say nothing."""
+    monkeypatch.setattr(nf_repo, "global_check", lambda: root.path / "nf")
+    assert root.repo.hooks_state() == "global"
+
+
+def test_install(root, monkeypatch):
+    monkeypatch.setattr(nf_repo, "global_check", lambda: None)
     hooks = root.path / ".git" / "hooks"
     assert root.repo.hooks_state() == "none"
     wrote = root.repo.install(runner="wrapper")

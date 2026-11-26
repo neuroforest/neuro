@@ -179,6 +179,20 @@ def module_test_path(path, roots) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
+def global_check() -> Path | None:
+    """The machine-wide nf check, if one is installed: an executable
+    `pre-commit.d/nf` under the global `core.hooksPath`. Such a hook finds the
+    root a commit touches and runs `tree.check` / `tree.tag` on it, so where it
+    is installed a root needs no hooks of its own - and must not have them, or
+    every commit is judged twice."""
+    r = subprocess.run(["git", "config", "--global", "--get", "core.hooksPath"], capture_output=True, text=True)
+    path = r.stdout.strip()
+    if r.returncode or not path:
+        return None
+    part = Path(path).expanduser() / "pre-commit.d" / "nf"
+    return part if part.is_file() and os.access(part, os.X_OK) else None
+
+
 def _is_released(root) -> bool:
     """Whether the root at `root` releases its documents - true unless its
     declaration says `"released": false`. Read raw: a malformed declaration is
@@ -913,9 +927,14 @@ class Repo:
         return f'#!/bin/sh\n{_SENTINEL} - installed by `tree.hooks`.\nexec "{target}" "$@"\n'
 
     def hooks_state(self) -> str:
-        """`current` when every shim and stub is what `install` would write and
-        the wrapper is named, `none` when no hook is there, else `stale` - a
-        shim from before a task was renamed calls a task that no longer exists."""
+        """`global` where the machine has a global nf check (`global_check`) -
+        the root is judged through it, whatever sits in its own hook files.
+        Otherwise: `current` when every shim and stub is what `install` would
+        write and the wrapper is named, `none` when no hook is there, else
+        `stale` - a shim from before a task was renamed calls a task that no
+        longer exists."""
+        if global_check() is not None:
+            return "global"
         hooks, shims = self.hooks_dir(), self.root / SHIM_DIR
         files = [(path, body) for hook in HOOKS
                  for path, body in ((shims / hook, self.shim(hook)), (hooks / hook, self.stub(hook)))]

@@ -925,7 +925,7 @@ def swap(staging, notify=True) -> dict:
     for key, value in state["remotes"]:
         _run(state["outputs"][0]["to"], "config", key, value, env=env)
     for o in state["outputs"]:
-        if state["runner"]:
+        if state["runner"] and nf_repo.global_check() is None:
             nf_repo.Repo(o["to"]).install(state["runner"])
         if notify:
             subprocess.run(["git", "hook", "run", "--ignore-missing", f"--to-stdin={staging / o['pairs']}",
