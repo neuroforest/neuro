@@ -372,6 +372,11 @@ class PluginIndex:
         depends on - what an import must treat as owned elsewhere."""
         return self.tree(path).all_node_nids(scope="dependencies")
 
+    def dependency_nodes(self, path) -> dict:
+        """The same nodes, each with what its declaring modules say of it -
+        what lets an import tell a re-declared endpoint from an extension."""
+        return self.tree(path).dependency_nodes()
+
     def check_dependency_versions(self, path):
         """Check that all dependencies have exact version match and that no
         direct dependency is also reachable transitively. Returns list of

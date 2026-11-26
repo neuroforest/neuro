@@ -272,6 +272,35 @@ def test_validate_untaggable_name():
         **base, "type": "knowledge", "name": "NLZOH branches"}))["untaggable_name"] is None
 
 
+def test_extensions():
+    """A re-declared node of a dependency: restating it adds nothing, a label
+    or key beyond it is a contribution, and a clash or a schema node refuses."""
+    from neuro.base.nfx import Nfx, extensions
+
+    def module(kind, name, node):
+        return Nfx.from_dict({"type": kind, "nid": str(uuid.uuid4()), "version": "1.0",
+                              "name": name, "nodes": [node]})
+
+    owned = {"nid": LOCAL_2, "labels": ["Thing"], "properties": {"title": "t", "rank": 1}}
+    owner = module("knowledge", "owner", owned)
+    deps = {LOCAL_2: [(owner, owner.nodes[0])]}
+
+    assert extensions(module("knowledge", "k", {**owned, "properties": {"title": "t"}}), deps) == ({}, [])
+    added, issues = extensions(module("knowledge", "k", {
+        "nid": LOCAL_2, "labels": ["Thing", "Tiddler"], "properties": {"title": "t", "text": "x"}}), deps)
+    assert issues == []
+    assert added[LOCAL_2]["labels"] == ["Tiddler"] and added[LOCAL_2]["properties"] == {"text": "x"}
+    assert added[LOCAL_2]["declared"] == {"labels": ["Thing"], "properties": {"title": "t", "rank": 1}}
+
+    added, issues = extensions(module("knowledge", "k", {**owned, "properties": {"rank": 2}}), deps)
+    assert added == {} and "'rank' is declared by owner" in issues[0]
+
+    schema = module("ontology", "onto", owned)
+    added, issues = extensions(module("knowledge", "k", {**owned, "labels": ["Thing", "Tiddler"]}),
+                               {LOCAL_2: [(schema, schema.nodes[0])]})
+    assert added == {} and "ontology onto cannot be extended" in issues[0]
+
+
 def test_is_taggable():
     from neuro.base.nfx import is_taggable
     assert all(is_taggable(n) for n in ("Metaontology", "some-system", "ISO-639", "a.b"))

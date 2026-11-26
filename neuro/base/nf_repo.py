@@ -130,6 +130,9 @@ def document_failures(idx, path) -> list[str]:
         failures.append(f"duplicate node nid {nid}")
     for r in report["duplicate_relationships"]:
         failures.append(f"duplicate {r.get('type', '?')} {r['from']} → {r['to']}")
+    if doc.type == "knowledge":
+        # What it adds to a dependency's node has to be its own to add.
+        failures.extend(f"extends {issue}" for issue in nfx.extensions(doc, tree.dependency_nodes())[1])
     for f in report["missing_required"]:
         failures.append(f"missing required top-level field {f!r}")
     if report["invalid_type"]:

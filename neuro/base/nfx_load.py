@@ -96,13 +96,14 @@ def import_document(nb, idx, path, on_import=None):
 
     `idx` resolves every pin of the document, so it has to see all types (an
     `NfxIndex`). For a knowledge module the nodes its dependencies declare are
-    passed on as owned elsewhere: a module that re-declares one as an edge
-    endpoint must not take it over from its owner.
+    passed on as owned elsewhere: a module that re-declares one - as an edge
+    endpoint, or to add a label and properties to it - must not take it over
+    from its owner.
     """
     doc = nfx.read(path)
     if doc.type == "knowledge":
         return write_document(nb, path, POLICIES["knowledge"],
-                              dependency_nids=idx.dependency_node_nids(path), index=idx)
+                              dependency_nodes=idx.dependency_nodes(path), index=idx)
     return nb.metaontology.import_nfx(path, index=idx, on_import=on_import)
 
 
@@ -161,21 +162,28 @@ def previous_document(nb, path, policy, doc) -> Previous:
     )
 
 
-def write_document(nb, path, policy, dependency_nids=None, index=None):
+def write_document(nb, path, policy, dependency_nids=None, index=None, dependency_nodes=None):
     """Reconcile the document at `path` into `nb` under `policy`.
 
     The document is anchored on a metadata node (its top-level `nid`), and
     `(anchor)-[:DEFINES]->(node)` records what it declares. Dependencies are
     not imported here; `dependency_nids` is every node nid they declare.
+    `dependency_nodes` (`NfxTree.dependency_nodes()`) says the same and what
+    they declare of each node, which is what lets a document *extend* a
+    dependency's node: without it a re-declared node is an endpoint only.
 
-    Returns the import report: `nodes`, and what left - `released` (every node
-    dropped), `reparented` (another document defines it now), `removed`
-    (nothing was left on it, so it is gone), `orphaned` (kept, with the number
-    of edges and instances holding it) and `edges_pruned`. `index`, when given,
-    is where the document's tree is looked up: its namespace token is recorded
-    on the anchor, since a module's name is unique inside its tree only.
+    Returns the import report: `nodes`, `extended` (nodes of a dependency this
+    document adds to), and what left - `released` (every node dropped),
+    `reparented` (another document defines it now), `removed` (nothing was
+    left on it, so it is gone), `orphaned` (kept, with the number of edges,
+    instances, labels and properties holding it) and `edges_pruned`. `index`,
+    when given, is where the document's tree is looked up: its namespace token
+    is recorded on the anchor, since a module's name is unique inside its tree
+    only.
     """
     doc = nfx.read(path)
+    if dependency_nodes is not None:
+        dependency_nids = set(dependency_nodes)
 
     # `nid` and `name` are what the anchor is built from, and every edge below
     # is written between nodes some anchor DEFINES. A document missing either
@@ -192,6 +200,7 @@ def write_document(nb, path, policy, dependency_nids=None, index=None):
     nb.nodes._validate_structure(doc, path, dependency_nids)
     if policy.shapes:
         nb.nodes._validate_relationship_shapes(doc, path)
+    extended = _extensions(nb, doc, path, dependency_nodes) if policy.stubs else {}
     # Before the first write: a refusal leaves the base as it was.
     previous = previous_document(nb, path, policy, doc)
 
@@ -214,11 +223,14 @@ def write_document(nb, path, policy, dependency_nids=None, index=None):
     claimed = {} if policy.stubs else nb.metaontology._claimed_nodes(doc.nid)
     for entry in doc.nodes:
         if entry["nid"] in foreign:
-            # A *foreign reference*: re-declared only so this document's own
-            # edges have an endpoint. Its properties are the owner's, and a
-            # `DEFINES` would make this anchor co-own it and later drop it.
+            # A *foreign reference*: re-declared so this document's own edges
+            # have an endpoint, or to add to it (`_extend`). What its owner
+            # says of it is the owner's, and a `DEFINES` would make this
+            # anchor co-own it and later drop it.
             continue
         _write_node(nb, doc, policy, entry, previous, before.get(entry["nid"]), claimed)
+    if policy.stubs and dependency_nodes:
+        _extend(nb, extended, previous, dependency_nodes)
 
     pruned = _retract_edges(nb, doc, policy, previous, declared)
     _write_edges(nb, doc, policy, previous)
@@ -226,12 +238,62 @@ def write_document(nb, path, policy, dependency_nids=None, index=None):
     removed, orphaned = _split(nb, [r for r in released if not r["claimed_by"]], previous)
     return {
         "nodes": len(declared),
+        "extended": len(extended),
         "released": [r["label"] for r in released],
         "reparented": [(r["label"], r["claimed_by"]) for r in released if r["claimed_by"]],
         "removed": removed,
         "orphaned": orphaned,
         "edges_pruned": pruned,
     }
+
+
+def _extensions(nb, doc, path, dependency_nodes):
+    """What `doc` adds to its dependencies' nodes (`nfx.extensions`), refused
+    when it sets a key a dependency sets otherwise, extends a node no knowledge
+    module declares, or leaves a node the ontology does not accept. The node
+    judged is the sum of what its declaring modules say of it - what the base
+    holds beside that was never validated and is not this document's to
+    answer for."""
+    from neuro.base.ontology import ObjectValidator
+    extended, issues = nfx.extensions(doc, dependency_nodes or {})
+    for nid, added in extended.items():
+        declared = added["declared"]
+        violations = ObjectValidator(nb, Node(
+            labels=[*declared["labels"], *added["labels"]],
+            properties={**declared["properties"], **added["properties"], "nid": nid},
+        )).get_violations()
+        if violations:
+            issues.append(f"{nid}: {violations}")
+    if issues:
+        raise exceptions.NfxViolation(
+            f"{path} extends a node of a dependency and cannot:\n" + "\n".join(f"  {i}" for i in issues)
+        )
+    return extended
+
+
+def _extend(nb, extended, previous, dependency_nodes):
+    """Write this document's contribution to the nodes it extends, and take
+    back what its previous version contributed and this one does not. The
+    owner's part is never touched: a contribution is by construction what no
+    dependency declares."""
+    before = nfx.extensions(previous.doc, dependency_nodes)[0] if previous.doc else {}
+    for nid in sorted(set(extended) | set(before)):
+        now, was = extended.get(nid), before.get(nid)
+        labels = now["labels"] if now else []
+        properties = now["properties"] if now else {}
+        dropped_labels = sorted(set(was["labels"]) - set(labels)) if was else []
+        dropped_keys = sorted(set(was["properties"]) - set(properties)) if was else []
+        nb.run_query(
+            f"""
+            MATCH (n:{_quoted((now or was)["declared"]["labels"][0])} {{nid: $nid}})
+            SET n += $props
+            SET n += $gone
+            SET n:$($labels)
+            REMOVE n:$($dropped)
+            """,
+            {"nid": nid, "props": properties, "gone": dict.fromkeys(dropped_keys),
+             "labels": labels, "dropped": dropped_labels},
+        )
 
 
 def _release(nb, policy, nid, declared):
@@ -257,7 +319,7 @@ def _release(nb, policy, nid, declared):
         RETURN elementId(n) AS eid, n.nid AS nid,
                coalesce(n.label, n.name, labels(n)[0] + ' ' + n.nid) AS label,
                n.label AS class_label, 'OntologyNode' IN labels(n) AS is_class,
-               claimed_by, own
+               labels(n) AS labels, keys(n) AS keys, claimed_by, own
         """,
         {"nid": nid, "declared": list(declared)},
     )
@@ -274,10 +336,15 @@ def _split(nb, orphans, previous):
     thousand instances isolated. A twin - another defined class of the same
     label - goes on defining them, and then they do not hold this one.
 
+    Against a released previous version a node is held, too, by every label
+    and property that version did not declare on it: another module's
+    extension, or state set by hand - not this document's to delete with it.
+
     Returns `(removed, orphaned)`: labels, and `(label, holders)` pairs.
     """
     if not orphans:
         return [], []
+    before = {n["nid"]: n for n in previous.doc.nodes} if previous.doc else {}
     own = orphans[0]["own"] if previous.graph else []
     held = {r["eid"]: r["edges"] for r in nb.get_data(
         f"""
@@ -291,6 +358,10 @@ def _split(nb, orphans, previous):
     removed, orphaned, doomed = [], [], []
     for row in orphans:
         holders = held.get(row["eid"], 0)
+        was = before.get(row["nid"])
+        if was is not None:
+            holders += len(set(row["labels"]) - set(was["labels"]))
+            holders += len(set(row["keys"]) - set(was.get("properties", {})) - {"nid"})
         if not holders and row["is_class"] and row["class_label"]:
             holders = _instances(nb, row["class_label"])
         if holders:

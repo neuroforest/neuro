@@ -430,6 +430,57 @@ def validate(doc: Nfx, dependency_nids: set[str] | None = None) -> dict:
     }
 
 
+def extensions(doc: Nfx, dependency_nodes: dict) -> tuple[dict, list[str]]:
+    """What `doc` adds to the nodes its dependencies declare.
+
+    A module may re-declare a dependency's node. Restating what the dependency
+    says of it - its labels, a property with the same value - makes the entry
+    an edge endpoint and nothing more. A label or a property key beyond that
+    is the module's *contribution*: an extension of a node it does not own.
+    `dependency_nodes` is `NfxTree.dependency_nodes()`.
+
+    Returns `(contributions, issues)`. `contributions` maps a nid to `labels`
+    and `properties` added and `declared`, the labels (the owner's class
+    first) and properties the dependencies hold on the node. `issues` are the
+    reasons to refuse the
+    document: a property key a dependency sets to another value (a key has one
+    declaring module per node - an override would change with import order),
+    and a contribution to a node no knowledge module declares.
+    """
+    contributions: dict[str, dict] = {}
+    issues: list[str] = []
+    for entry in doc.nodes:
+        owners = dependency_nodes.get(entry.get("nid"))
+        if not owners:
+            continue
+        labels = list(dict.fromkeys(label for _, o in owners for label in o.get("labels", ())))
+        values: dict[str, list] = {}
+        for owner, o in owners:
+            for key, value in o.get("properties", {}).items():
+                values.setdefault(key, []).append((owner, value))
+        added = {}
+        for key, value in entry.get("properties", {}).items():
+            clash = next((owner for owner, v in values.get(key, ()) if v != value), None)
+            if clash is not None:
+                issues.append(f"{entry['nid']}: property {key!r} is declared by {clash.name} "
+                              f"with another value")
+            elif key not in values:
+                added[key] = value
+        new_labels = [label for label in entry.get("labels", ()) if label not in labels]
+        if not new_labels and not added:
+            continue
+        schema = next((owner for owner, _ in owners if owner.type != "knowledge"), None)
+        if schema is not None:
+            issues.append(f"{entry['nid']}: a node of the {schema.type or 'ontology'} {schema.name} "
+                          f"cannot be extended ({', '.join(new_labels + sorted(added))})")
+            continue
+        contributions[entry["nid"]] = {
+            "labels": new_labels, "properties": added,
+            "declared": {"labels": labels, "properties": {k: v[0][1] for k, v in values.items()}},
+        }
+    return contributions, issues
+
+
 def lint_format(data: dict) -> dict:
     """Inspect a raw NFX dict for format-level issues.
 
@@ -571,6 +622,18 @@ class NfxTree:
             if nid != self.root.nid:
                 nids |= doc.node_nids
         return nids
+
+    def dependency_nodes(self) -> dict[str, list[tuple[Nfx, dict]]]:
+        """Every node the reachable dependencies declare, by nid, each with
+        the module declaring it - what `extensions` judges a re-declared node
+        against. Several entries under one nid are an owner and the modules
+        that extend its node."""
+        nodes: dict[str, list[tuple[Nfx, dict]]] = {}
+        for nid, doc in self.modules.items():
+            if nid != self.root.nid:
+                for entry in doc.nodes:
+                    nodes.setdefault(entry["nid"], []).append((doc, entry))
+        return nodes
 
     def topo_order(self) -> list[str]:
         """Topological order of `modules`: deps before dependents."""

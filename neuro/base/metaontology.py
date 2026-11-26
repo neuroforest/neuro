@@ -357,11 +357,9 @@ class Metaontology:
             dep_doc = nfx.read(dep_path)
             if dep_doc.type == "knowledge":
                 self._import_dependencies(dep_doc.dependencies, index, on_import, _depth=_depth + 1)
-                owned_elsewhere = nfx.NfxTree(
-                    dep_doc, self._resolver(index),
-                ).all_node_nids(scope="dependencies")
+                owned_elsewhere = nfx.NfxTree(dep_doc, self._resolver(index)).dependency_nodes()
                 nfx_load.write_document(self._nb, dep_path, nfx_load.POLICIES["knowledge"],
-                                        dependency_nids=owned_elsewhere, index=index)
+                                        dependency_nodes=owned_elsewhere, index=index)
             else:
                 self.import_nfx(dep_path, index=index, on_import=on_import, _depth=_depth)
             if on_import:

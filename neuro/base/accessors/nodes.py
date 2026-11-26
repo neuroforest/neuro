@@ -163,14 +163,17 @@ class NodeAccessor(Accessor):
             }
             self._nb.run_query(query, params)
 
-    def sync_nfx(self, path, dependency_nids=None, metadata_label="KnowledgeMetadata", index=None):
+    def sync_nfx(self, path, dependency_nids=None, metadata_label="KnowledgeMetadata", index=None,
+                 dependency_nodes=None):
         """Reconcile a knowledge file into NeuroBase and return the import
         report: `nfx_load.write_document` under the knowledge policy, which
         says what is added, released and retracted.
 
         A node whose nid is in `dependency_nids` is owned by a dependency and
-        only re-declared here to anchor this file's own edges; it is left
-        entirely untouched. `metadata_label` lets the same machinery anchor different metadata
+        re-declared here to anchor this file's own edges; it is left
+        untouched. With `dependency_nodes` (`NfxTree.dependency_nodes()`) in
+        its place the file may also add a label and properties to such a node.
+        `metadata_label` lets the same machinery anchor different metadata
         kinds (e.g. `OntologyMetadata`). `index`, when given, is where the
         file's tree is looked up: its namespace token is recorded on the
         anchor, since a module's name is unique inside its tree only.
@@ -178,6 +181,7 @@ class NodeAccessor(Accessor):
         policy = dataclasses.replace(nfx_load.POLICIES["knowledge"], anchor=metadata_label)
         return nfx_load.write_document(
             self._nb, path, policy, dependency_nids=dependency_nids, index=index,
+            dependency_nodes=dependency_nodes,
         )
 
     def _reconcile_internal_edges(self, nids, keep_triples, sources=None):
