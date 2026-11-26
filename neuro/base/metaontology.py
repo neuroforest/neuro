@@ -1,7 +1,7 @@
 import json
 import os
 
-from neuro.base import nfx, schema
+from neuro.base import nfx, nfx_load, schema
 from neuro.utils import exceptions, terminal_style
 
 
@@ -360,7 +360,8 @@ class Metaontology:
                 owned_elsewhere = nfx.NfxTree(
                     dep_doc, self._resolver(index),
                 ).all_node_nids(scope="dependencies")
-                self._nb.nodes.sync_nfx(dep_path, dependency_nids=owned_elsewhere, index=index)
+                nfx_load.write_document(self._nb, dep_path, nfx_load.POLICIES["knowledge"],
+                                        dependency_nids=owned_elsewhere, index=index)
             else:
                 self.import_nfx(dep_path, index=index, on_import=on_import, _depth=_depth)
             if on_import:
@@ -514,119 +515,13 @@ class Metaontology:
             raise exceptions.NfxViolation(
                 f"Dependency cycle for {path}: {' -> '.join(e.args[0])}"
             )
-        violations = nfx.validate(doc, tree.all_node_nids(scope="dependencies"))
-        if violations["unresolved"] or violations["foreign"]:
-            msgs = []
-            for rel in violations["unresolved"]:
-                msgs.append(f"  unresolved: {rel['from']} -> {rel['to']} ({rel['type']})")
-            for rel in violations["foreign"]:
-                msgs.append(f"  foreign: {rel['from']} -> {rel['to']} ({rel['type']})")
-            raise exceptions.NfxViolation(
-                f"NFX validation failed for {path}:\n" + "\n".join(msgs)
-            )
-
-        # `nid` and `name` are what the metadata node is built from, and every
-        # relationship below is written between two nodes some metadata node
-        # DEFINES. So a document missing either imports its nodes, writes no
-        # DEFINES, and then silently discards every edge it declares - nodes in
-        # the graph, the structure gone, exit status clean. Refuse instead: a
-        # headerless document has no legitimate caller, and the old skip made
-        # `ontology.export`'s broken output look importable.
-        missing = [f for f in ("nid", "name") if not getattr(doc, f)]
-        if missing:
-            raise exceptions.NfxViolation(
-                f"{path} declares no {', '.join(repr(f) for f in missing)} - without it no "
-                f"OntologyMetadata is minted, so no node would be DEFINES'd and all "
-                f"{len(doc.relationships)} relationship(s) would be dropped. Refusing to import."
-            )
-
-        # Reconcile this ontology's nodes. Never a blanket clear: see
-        # `_release_undeclared`.
-        declared = [entry["nid"] for entry in doc.nodes]
-        report = {"nodes": len(declared), "released": [], "reparented": [],
-                  "orphaned": [], "edges_pruned": 0}
-        report.update(self._release_undeclared(doc.nid, declared))
-        properties = {k: v for k, v in (
-            ("name", doc.name), ("version", doc.version), ("description", doc.description),
-            ("type", doc.type),
-        ) if v}
-        self._nb.run_query(
-            "MERGE (m:OntologyMetadata {nid: $nid}) SET m += $props",
-            {"nid": doc.nid, "props": properties},
+        # The write is the one every kind shares; an ontology differs from the
+        # others only by its policy (`nfx_load.POLICIES`).
+        policy = nfx_load.POLICIES["metaontology" if doc.type == "metaontology" else "ontology"]
+        return nfx_load.write_document(
+            self._nb, path, policy,
+            dependency_nids=tree.all_node_nids(scope="dependencies"), index=index,
         )
-        # Only an index knows which tree the file belongs to; without one the
-        # namespace already recorded stays as it is.
-        if index is not None:
-            self._nb.metadata.set_namespace("OntologyMetadata", doc.nid, index.namespace_for(doc.nid))
-        for dep_nid, _ in doc.dependencies:
-            self._nb.run_query(
-                """
-                MATCH (m:OntologyMetadata {nid: $nid})
-                MATCH (d:OntologyMetadata {nid: $dep_nid})
-                MERGE (m)-[:DEPENDS_ON]->(d)
-                """,
-                {"nid": doc.nid, "dep_nid": dep_nid},
-            )
-
-        claimed = self._claimed_nodes(doc.nid)
-        for entry in doc.nodes:
-            labels = entry["labels"]
-            params = {"nid": entry["nid"], "props": entry.get("properties", {}),
-                      "labels": labels}
-            eid = claimed.get(entry["nid"])
-            if eid:
-                params["eid"] = eid
-                anchor = "MATCH (n) WHERE elementId(n) = $eid"
-            else:
-                anchor = f"MERGE (n:{labels[0]} {{nid: $nid}})"
-            # `SET n =` (not `+=`): a property dropped from the file must go.
-            # The old clear achieved that by deleting the node first. Labels
-            # follow the same rule and for the same reason - the file is
-            # authoritative, so a label it stopped declaring is removed rather
-            # than left to accumulate. Both clauses take the label list as a
-            # *parameter* (Neo4j 5.26 dynamic labels), which is also what keeps
-            # a label out of the interpolated query text.
-            self._nb.run_query(
-                f"""
-                {anchor}
-                SET n = $props, n.nid = $nid
-                SET n:$($labels)
-                WITH n, [l IN labels(n) WHERE NOT l IN $labels] AS stale
-                REMOVE n:$(stale)
-                """,
-                params,
-            )
-            self._nb.run_query(
-                f"""
-                MATCH (m:OntologyMetadata {{nid: $ontology_nid}})
-                MATCH (n:{labels[0]} {{nid: $node_nid}})
-                MERGE (m)-[:DEFINES]->(n)
-                """,
-                {"ontology_nid": doc.nid, "node_nid": entry["nid"]},
-            )
-
-        # Prune edges this file used to declare and no longer does. Type-scoped
-        # and confined to the nids this file touches, so foreign edge types
-        # (APPLIES_TO, RENDERS) and other files' edges are never candidates.
-        keep = [(r["from"], r["to"], r["type"]) for r in doc.relationships]
-        scope = set(declared) | {nid for triple in keep for nid in triple[:2]}
-        report["edges_pruned"] = self._nb.nodes._reconcile_internal_edges(
-            scope, keep, sources=declared
-        )
-
-        for rel in doc.relationships:
-            self._nb.run_query(
-                f"""
-                MATCH (:OntologyMetadata)-[:DEFINES]->(a {{nid: $from_id}})
-                MATCH (:OntologyMetadata)-[:DEFINES]->(b {{nid: $to_id}})
-                MERGE (a)-[r:{rel["type"]}]->(b)
-                SET r += $props
-                """,
-                {"from_id": rel["from"], "to_id": rel["to"],
-                 "props": rel.get("properties", {})},
-            )
-
-        return report
 
     def is_ontology_valid(self):
         """Validate metaontology structure. Returns True if valid, False otherwise."""

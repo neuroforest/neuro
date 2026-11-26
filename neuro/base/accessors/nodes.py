@@ -1,6 +1,8 @@
+import dataclasses
+
 from neuro.core import Node
 from neuro.base.accessors import Accessor
-from neuro.base import nfx
+from neuro.base import nfx, nfx_load
 from neuro.base.schema import Metarelationships, Violations
 from neuro.utils import exceptions
 
@@ -186,74 +188,16 @@ class NodeAccessor(Accessor):
           so a file that declares stub nodes only to hang its own edge type off
           them can't reap the foreign structural edges among those nodes.
 
-        Extra labels added to retained nodes by curation are preserved.
-        `metadata_label` lets the same machinery anchor different metadata
+        The write itself is `nfx_load.write_document` under the knowledge
+        policy. `metadata_label` lets the same machinery anchor different metadata
         kinds (e.g. `OntologyMetadata`). `index`, when given, is where the
         file's tree is looked up: its namespace token is recorded on the
         anchor, since a module's name is unique inside its tree only.
         """
-        doc = nfx.read(path)
-        if not (doc.nid and doc.name):
-            raise exceptions.NfxViolation(
-                f"sync_nfx requires top-level nid and name "
-                f"(got nid={doc.nid!r}, name={doc.name!r})"
-            )
-
-        self._validate_structure(doc, path, dependency_nids)
-        self._validate_relationship_shapes(doc, path)
-
-        meta = self._nb.metadata
-        meta_props = {k: v for k, v in (
-            ("name", doc.name), ("version", doc.version),
-            ("description", doc.description), ("type", doc.type),
-        ) if v}
-        meta.upsert(
-            metadata_label, doc.nid, meta_props,
-            dependency_nids=[dep_nid for dep_nid, _ in doc.dependencies],
+        policy = dataclasses.replace(nfx_load.POLICIES["knowledge"], anchor=metadata_label)
+        return nfx_load.write_document(
+            self._nb, path, policy, dependency_nids=dependency_nids, index=index,
         )
-        if index is not None:
-            meta.set_namespace(metadata_label, doc.nid, index.namespace_for(doc.nid))
-
-        nfx_nids = list(doc.node_nids)
-        meta.prune(metadata_label, doc.nid, nfx_nids)
-
-        # A node whose nid belongs to a dependency is a *foreign reference* - the
-        # file re-declares it only so its own edges have a resolvable endpoint
-        # (and so the file validates standalone). Its properties are the owner's,
-        # not this file's: `replace=True` would strip whatever the file omits
-        # (e.g. the `color` an OntologyNode class carries), and `link_defines`
-        # would make this metadata co-own it and later prune it. So ensure it
-        # exists but touch nothing else - exactly how ontology import treats a
-        # cross-ontology reference. `_reconcile_internal_edges` still sees it via
-        # `nfx_nids`, so edges landing on it are managed as before.
-        foreign = set(dependency_nids or ())
-        for entry in doc.nodes:
-            if entry["nid"] in foreign:
-                continue
-            properties = dict(entry.get("properties", {}))
-            properties["nid"] = entry["nid"]
-            node = Node(labels=entry["labels"], properties=properties)
-            self._nb.objects.put(node, identifier_key="nid", replace=True)
-            meta.link_defines(metadata_label, doc.nid, entry["nid"])
-
-        self._reconcile_internal_edges(
-            nfx_nids,
-            [(r["from"], r["to"], r["type"]) for r in doc.relationships],
-        )
-        for rel in doc.relationships:
-            self._nb.run_query(
-                f"""
-                MATCH (a {{nid: $from_id}})
-                MATCH (b {{nid: $to_id}})
-                MERGE (a)-[r:{rel["type"]}]->(b)
-                SET r = $properties
-                """,
-                {
-                    "from_id": rel["from"],
-                    "to_id": rel["to"],
-                    "properties": rel.get("properties", {}),
-                },
-            )
 
     def _reconcile_internal_edges(self, nids, keep_triples, sources=None):
         """Delete every edge `(a)-[r]->(b)` where both endpoints have a `nid`

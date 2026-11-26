@@ -39,6 +39,24 @@ class MetadataAccessor(Accessor):
                 {"nid": nid, "dep_nid": dep_nid},
             )
 
+    def upsert_additive(self, label, nid, properties=None, dependency_nids=()):
+        """MERGE a metadata anchor and add its `DEPENDS_ON` edges, leaving the
+        ones already there. A dependency is linked only where an anchor of the
+        same label holds it."""
+        self._nb.run_query(
+            f"MERGE (m:{label} {{nid: $nid}}) SET m += $props",
+            {"nid": nid, "props": properties or {}},
+        )
+        for dep_nid in dependency_nids:
+            self._nb.run_query(
+                f"""
+                MATCH (m:{label} {{nid: $nid}})
+                MATCH (d:{label} {{nid: $dep_nid}})
+                MERGE (m)-[:DEPENDS_ON]->(d)
+                """,
+                {"nid": nid, "dep_nid": dep_nid},
+            )
+
     def set_namespace(self, label, nid, namespace):
         """Record the token of the tree a module was imported from.
 
